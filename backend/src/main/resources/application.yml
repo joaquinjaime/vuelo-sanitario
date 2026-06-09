@@ -1,0 +1,50 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/vuelos_sanitarios
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  websocket:
+    allowed-origins: ${FRONTEND_URL:http://localhost:5173}
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+jwt:
+  secret: ${JWT_SECRET:VuelosSanitariosSecretKey2024SuperSecureBase64EncodedString}
+  expiration: 86400000   # 24 horas en ms
+  refresh-expiration: 604800000  # 7 días en ms
+
+cors:
+  allowed-origins: ${FRONTEND_URL:http://localhost:5173}
+  allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+  allowed-headers: "*"
+  allow-credentials: true
+
+logging:
+  level:
+    com.vuelos.sanitarios: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
