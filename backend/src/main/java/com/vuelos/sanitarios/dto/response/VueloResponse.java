@@ -19,10 +19,11 @@ public class VueloResponse {
     private LocalDateTime updatedAt;
     private String solicitanteNombre;
     private String solicitanteRol;
+    private String observaciones;
 
     public VueloResponse() {}
 
-    public VueloResponse(Integer idVuelo, Integer idPeticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, EstadoVuelo estado, Boolean aprobacionCargada, String motivoCancelacion, LocalDateTime createdAt, LocalDateTime updatedAt, String solicitanteNombre, String solicitanteRol) {
+    public VueloResponse(Integer idVuelo, Integer idPeticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, EstadoVuelo estado, Boolean aprobacionCargada, String motivoCancelacion, LocalDateTime createdAt, LocalDateTime updatedAt, String solicitanteNombre, String solicitanteRol, String observaciones) {
         this.idVuelo = idVuelo;
         this.idPeticion = idPeticion;
         this.fechaVuelo = fechaVuelo;
@@ -35,6 +36,7 @@ public class VueloResponse {
         this.updatedAt = updatedAt;
         this.solicitanteNombre = solicitanteNombre;
         this.solicitanteRol = solicitanteRol;
+        this.observaciones = observaciones;
     }
 
     public Integer getIdVuelo() { return idVuelo; }
@@ -61,6 +63,8 @@ public class VueloResponse {
     public void setSolicitanteNombre(String solicitanteNombre) { this.solicitanteNombre = solicitanteNombre; }
     public String getSolicitanteRol() { return solicitanteRol; }
     public void setSolicitanteRol(String solicitanteRol) { this.solicitanteRol = solicitanteRol; }
+    public String getObservaciones() { return observaciones; }
+    public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
 
     public static Builder builder() { return new Builder(); }
 
@@ -77,6 +81,7 @@ public class VueloResponse {
         private LocalDateTime updatedAt;
         private String solicitanteNombre;
         private String solicitanteRol;
+        private String observaciones;
 
         public Builder idVuelo(Integer idVuelo) { this.idVuelo = idVuelo; return this; }
         public Builder idPeticion(Integer idPeticion) { this.idPeticion = idPeticion; return this; }
@@ -90,9 +95,10 @@ public class VueloResponse {
         public Builder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
         public Builder solicitanteNombre(String solicitanteNombre) { this.solicitanteNombre = solicitanteNombre; return this; }
         public Builder solicitanteRol(String solicitanteRol) { this.solicitanteRol = solicitanteRol; return this; }
+        public Builder observaciones(String observaciones) { this.observaciones = observaciones; return this; }
 
         public VueloResponse build() {
-            return new VueloResponse(idVuelo, idPeticion, fechaVuelo, horaDespegue, horaAterrizaje, estado, aprobacionCargada, motivoCancelacion, createdAt, updatedAt, solicitanteNombre, solicitanteRol);
+            return new VueloResponse(idVuelo, idPeticion, fechaVuelo, horaDespegue, horaAterrizaje, estado, aprobacionCargada, motivoCancelacion, createdAt, updatedAt, solicitanteNombre, solicitanteRol, observaciones);
         }
     }
 }

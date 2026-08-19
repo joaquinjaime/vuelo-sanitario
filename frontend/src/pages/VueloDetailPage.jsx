@@ -160,6 +160,19 @@ export default function VueloDetailPage() {
         </div>
       )}
 
+      {/* Observaciones de la petición */}
+      {vuelo.observaciones && (
+        <div className="card border-cyan-800/40 bg-cyan-900/10">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="text-cyan-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-cyan-400">Observaciones de la petición (DTS)</p>
+              <p className="text-sm text-slate-300 mt-0.5 whitespace-pre-wrap">{vuelo.observaciones}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Acciones por rol */}
       {isActive && (
         <div className="card">

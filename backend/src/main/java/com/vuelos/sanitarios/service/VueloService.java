@@ -178,6 +178,7 @@ public class VueloService {
                 .solicitanteNombre(solicitante.getPersona().getNombre()
                         + " " + solicitante.getPersona().getApellido())
                 .solicitanteRol(solicitante.getRol().getNombreRol().name())
+                .observaciones(peticion.getObservaciones())
                 .build();
     }
 }

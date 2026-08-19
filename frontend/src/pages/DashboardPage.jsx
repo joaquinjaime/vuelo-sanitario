@@ -1,30 +1,44 @@
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { PlaneTakeoff, Clock, CheckCircle, XCircle, BarChart2, Plus } from 'lucide-react'
+import { PlaneTakeoff, Clock, Plus, CalendarDays } from 'lucide-react'
 import { vueloApi } from '../api/vueloApi'
 import { useAuth } from '../context/AuthContext'
 import VueloCard from '../components/vuelo/VueloCard'
 import { ROLE_LABELS, ROLE_COLORS, canCreatePeticion } from '../utils/roleUtils'
 import clsx from 'clsx'
 
-const STAT_CARDS = [
-  { label: 'Planeamiento', estado: 'PLANEAMIENTO', icon: Clock,         color: 'text-blue-400',    bg: 'bg-blue-900/20' },
-  { label: 'Vigentes',     estado: 'VIGENTE',       icon: CheckCircle,   color: 'text-emerald-400', bg: 'bg-emerald-900/20' },
-  { label: 'En Ejecución', estado: 'EN_EJECUCION',  icon: PlaneTakeoff,  color: 'text-amber-400',   bg: 'bg-amber-900/20' },
-  { label: 'Cancelados',   estado: 'CANCELADO',     icon: XCircle,       color: 'text-red-400',     bg: 'bg-red-900/20' },
-]
-
 export default function DashboardPage() {
-  const { user, hasRole } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
+
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   const { data: vuelos = [], isLoading } = useQuery({
     queryKey: ['vuelos'],
     queryFn: () => vueloApi.listar(),
   })
 
-  const countByEstado = (estado) => vuelos.filter(v => v.estado === estado).length
-  const recientes = vuelos.slice(0, 6)
+  const vuelosFiltrados = useMemo(() => {
+    return vuelos.filter(v => {
+      if (!v.fechaVuelo) return false
+      const fecha = v.fechaVuelo // "YYYY-MM-DD"
+      if (fechaDesde && fecha < fechaDesde) return false
+      if (fechaHasta && fecha > fechaHasta) return false
+      return true
+    })
+  }, [vuelos, fechaDesde, fechaHasta])
+
+  const planeamiento = useMemo(
+    () => vuelosFiltrados.filter(v => v.estado === 'PLANEAMIENTO'),
+    [vuelosFiltrados]
+  )
+
+  const recientes = vuelosFiltrados.slice(0, 6)
+
+  const limpiarFiltros = () => { setFechaDesde(''); setFechaHasta('') }
+  const tieneFiltro = fechaDesde || fechaHasta
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -48,56 +62,78 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CARDS.map(stat => (
-          <div key={stat.estado}
-            onClick={() => navigate(`/vuelos?estado=${stat.estado}`)}
-            className="card hover:border-slate-600/70 cursor-pointer transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                {stat.label}
-              </span>
-              <div className={clsx('p-2 rounded-lg', stat.bg)}>
-                <stat.icon size={15} className={stat.color} />
-              </div>
-            </div>
-            {isLoading ? (
-              <div className="h-8 w-16 bg-slate-700 animate-pulse rounded" />
-            ) : (
-              <span className={clsx('text-3xl font-bold', stat.color)}>
-                {countByEstado(stat.estado)}
+      {/* Filtro de fechas */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDays size={16} className="text-slate-500" />
+          <h2 className="font-semibold text-sm text-slate-300">Filtrar por fecha</h2>
+          {tieneFiltro && (
+            <button onClick={limpiarFiltros}
+              className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              Limpiar
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Desde</label>
+            <input type="date" value={fechaDesde}
+              onChange={e => setFechaDesde(e.target.value)}
+              className="input text-sm !py-1.5" />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Hasta</label>
+            <input type="date" value={fechaHasta}
+              onChange={e => setFechaHasta(e.target.value)}
+              className="input text-sm !py-1.5" />
+          </div>
+          {tieneFiltro && (
+            <span className="text-xs text-slate-500">
+              {vuelosFiltrados.length} vuelo{vuelosFiltrados.length !== 1 ? 's' : ''} encontrado{vuelosFiltrados.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Vuelos en Planeamiento */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="text-blue-400" />
+            <h2 className="font-semibold text-slate-300">En Planeamiento</h2>
+            {!isLoading && (
+              <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                {planeamiento.length}
               </span>
             )}
           </div>
-        ))}
-      </div>
-
-      {/* Stats total */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart2 size={16} className="text-slate-500" />
-          <h2 className="font-semibold text-sm text-slate-300">Resumen total</h2>
+          <button onClick={() => navigate('/vuelos?estado=PLANEAMIENTO')}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+            Ver todos →
+          </button>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 bg-slate-800 rounded-full h-3 overflow-hidden flex">
-            {STAT_CARDS.map(stat => {
-              const count = countByEstado(stat.estado)
-              const pct = vuelos.length > 0 ? (count / vuelos.length) * 100 : 0
-              return (
-                <div key={stat.estado}
-                  style={{ width: `${pct}%` }}
-                  className={clsx('h-full transition-all', stat.bg.replace('/20', '/80'))}
-                  title={`${stat.label}: ${count}`}
-                />
-              )
-            })}
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="card h-28 animate-pulse bg-slate-800/40" />
+            ))}
           </div>
-          <span className="text-sm font-semibold text-slate-300">{vuelos.length} total</span>
-        </div>
+        ) : planeamiento.length === 0 ? (
+          <div className="card text-center py-10">
+            <Clock size={28} className="text-slate-700 mx-auto mb-2" />
+            <p className="text-slate-500 text-sm">
+              {tieneFiltro ? 'No hay vuelos en planeamiento en ese rango' : 'No hay vuelos en planeamiento'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {planeamiento.map(v => <VueloCard key={v.idVuelo} vuelo={v} />)}
+          </div>
+        )}
       </div>
 
-      {/* Recientes */}
+      {/* Vuelos recientes */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-300">Vuelos recientes</h2>
@@ -116,7 +152,9 @@ export default function DashboardPage() {
         ) : recientes.length === 0 ? (
           <div className="card text-center py-12">
             <PlaneTakeoff size={32} className="text-slate-700 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">No hay vuelos registrados</p>
+            <p className="text-slate-500 text-sm">
+              {tieneFiltro ? 'No hay vuelos en ese rango de fechas' : 'No hay vuelos registrados'}
+            </p>
             {canCreatePeticion(user?.rol) && (
               <button onClick={() => navigate('/nueva-peticion')}
                 className="btn-primary mt-4 mx-auto">

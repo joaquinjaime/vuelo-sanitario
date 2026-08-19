@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Upload, CheckCircle } from 'lucide-react'
 import { vueloApi } from '../../api/vueloApi'
 import { useAuth } from '../../context/AuthContext'
 import { canCargarInfo } from '../../utils/roleUtils'
+import { formatDateTime } from '../../utils/dateUtils'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -64,6 +65,15 @@ function SeccionInfo({ seccion, idVuelo, infoExistente, canEdit, isCancelado }) 
                   <p className="text-xs text-blue-400 mt-2">📎 PDF adjunto</p>
                 )}
               </div>
+              {infoExistente.usuario && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Última edición: {infoExistente.usuario.persona?.nombre} {infoExistente.usuario.persona?.apellido}
+                  {infoExistente.usuario.rol?.nombreRol && (
+                    <span className="ml-1 text-slate-600">({infoExistente.usuario.rol.nombreRol})</span>
+                  )}
+                  {' · '}{formatDateTime(infoExistente.updatedAt)}
+                </p>
+              )}
               {canEdit && !isCancelado && (
                 <button onClick={() => { setContenido(infoExistente.contenido ?? ''); setEditMode(true) }}
                   className="btn-secondary text-xs">
