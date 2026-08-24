@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 
@@ -57,14 +59,24 @@ public class NotificacionService {
                 .build();
         notificacionRepository.save(notif);
 
-        // WebSocket push
+        // WebSocket push — diferido al AFTER_COMMIT para que el receptor
+        // nunca refetchee datos que todavía no fueron commiteados
         NotificacionResponse dto = toResponse(notif);
-        messagingTemplate.convertAndSendToUser(
-                usuario.getUsername(),
-                "/queue/notificaciones",
-                dto
-        );
+        enviarWsDespuesDeCommit(usuario.getUsername(), "/queue/notificaciones", dto);
         log.debug("Notificación enviada a {}: {}", usuario.getUsername(), titulo);
+    }
+
+    private void enviarWsDespuesDeCommit(String username, String destino, NotificacionResponse dto) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    messagingTemplate.convertAndSendToUser(username, destino, dto);
+                }
+            });
+        } else {
+            messagingTemplate.convertAndSendToUser(username, destino, dto);
+        }
     }
 
     @Transactional(readOnly = true)

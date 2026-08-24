@@ -61,15 +61,15 @@ function SeccionInfo({ seccion, idVuelo, infoExistente, canEdit, isCancelado }) 
                 <p className="text-sm text-slate-300 whitespace-pre-wrap">
                   {infoExistente.contenido ?? '(Sin contenido de texto)'}
                 </p>
-                {infoExistente.pdf && (
+                {infoExistente.tienePdf && (
                   <p className="text-xs text-blue-400 mt-2">📎 PDF adjunto</p>
                 )}
               </div>
-              {infoExistente.usuario && (
+              {infoExistente.usuarioNombre && (
                 <p className="text-xs text-slate-500 mt-1">
-                  Última edición: {infoExistente.usuario.persona?.nombre} {infoExistente.usuario.persona?.apellido}
-                  {infoExistente.usuario.rol?.nombreRol && (
-                    <span className="ml-1 text-slate-600">({infoExistente.usuario.rol.nombreRol})</span>
+                  Última edición: {infoExistente.usuarioNombre}
+                  {infoExistente.usuarioRol && (
+                    <span className="ml-1 text-slate-600">({infoExistente.usuarioRol})</span>
                   )}
                   {' · '}{formatDateTime(infoExistente.updatedAt)}
                 </p>

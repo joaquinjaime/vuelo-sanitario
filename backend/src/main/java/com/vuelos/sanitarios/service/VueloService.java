@@ -151,8 +151,10 @@ public class VueloService {
     }
 
     @Transactional(readOnly = true)
-    public List<InfoVuelo> getInfoVuelo(Integer idVuelo) {
-        return infoVueloRepository.findByVueloIdVuelo(idVuelo);
+    public List<com.vuelos.sanitarios.dto.response.InfoVueloResponse> getInfoVuelo(Integer idVuelo) {
+        return infoVueloRepository.findByVueloIdVuelo(idVuelo).stream()
+                .map(com.vuelos.sanitarios.dto.response.InfoVueloResponse::from)
+                .toList();
     }
 
     // ── helpers ──────────────────────────────────────────────────

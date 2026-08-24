@@ -5,7 +5,6 @@ import com.vuelos.sanitarios.dto.request.InfoVueloRequest;
 import com.vuelos.sanitarios.dto.response.HistorialResponse;
 import com.vuelos.sanitarios.dto.response.VueloResponse;
 import com.vuelos.sanitarios.enums.EstadoVuelo;
-import com.vuelos.sanitarios.model.InfoVuelo;
 import com.vuelos.sanitarios.model.Usuario;
 import com.vuelos.sanitarios.service.HistorialService;
 import com.vuelos.sanitarios.service.VueloService;
@@ -71,7 +70,7 @@ public class VueloController {
 
     // ── Info del vuelo ──────────────────────────────────────────
     @GetMapping("/{id}/info")
-    public ResponseEntity<List<InfoVuelo>> getInfo(@PathVariable Integer id) {
+    public ResponseEntity<List<com.vuelos.sanitarios.dto.response.InfoVueloResponse>> getInfo(@PathVariable Integer id) {
         return ResponseEntity.ok(vueloService.getInfoVuelo(id));
     }
 
