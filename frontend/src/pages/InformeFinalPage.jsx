@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Save, FileText } from 'lucide-react'
+import { ArrowLeft, Save, FileText, Clock } from 'lucide-react'
 import { vueloApi } from '../api/vueloApi'
 import { useAuth } from '../context/AuthContext'
 import { formatDateTime } from '../utils/dateUtils'
@@ -22,6 +22,15 @@ export default function InformeFinalPage() {
     observacionesGenerales: '',
     archivosAdjuntos: '',
   })
+
+  const { data: vuelo } = useQuery({
+    queryKey: ['vuelo', id],
+    queryFn: () => vueloApi.getById(Number(id)),
+  })
+
+  // Plazo de 48 hs desde inicio de ejecución
+  const limiteInforme = vuelo?.fechaLimiteInforme ? new Date(vuelo.fechaLimiteInforme) : null
+  const plazoVencido = limiteInforme ? limiteInforme <= new Date() : false
 
   const { data: informe, isLoading, isError } = useQuery({
     queryKey: ['informe-final', id],
@@ -87,12 +96,31 @@ export default function InformeFinalPage() {
             </p>
           )}
         </div>
-        {canEdit && informe && !editMode && (
+        {canEdit && informe && !editMode && !plazoVencido && (
           <button onClick={startEdit} className="btn-secondary text-xs">
             ✏️ Editar
           </button>
         )}
       </div>
+
+      {/* Plazo */}
+      {limiteInforme && (
+        <div className={`card ${plazoVencido ? 'border-red-800/40 bg-red-900/10' : 'border-cyan-800/40 bg-cyan-900/10'}`}>
+          <div className="flex items-start gap-2">
+            <Clock size={16} className={`mt-0.5 flex-shrink-0 ${plazoVencido ? 'text-red-400' : 'text-cyan-400'}`} />
+            <div>
+              <p className={`text-sm font-medium ${plazoVencido ? 'text-red-400' : 'text-cyan-400'}`}>
+                {plazoVencido ? 'Plazo VENCIDO' : 'Plazo en curso'}
+              </p>
+              <p className="text-sm text-slate-400 mt-0.5">
+                {plazoVencido
+                  ? <>Venció el <span className="font-semibold text-slate-200">{formatDateTime(vuelo.fechaLimiteInforme)}</span>. No se puede cargar ni editar el informe final.</>
+                  : <>Vence el <span className="font-semibold text-slate-200">{formatDateTime(vuelo.fechaLimiteInforme)}</span> — 48 hs desde el inicio de ejecución.</>}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="card space-y-4">
@@ -108,7 +136,7 @@ export default function InformeFinalPage() {
           <FileText size={36} className="text-slate-700 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">Sin informe final</p>
           <p className="text-slate-600 text-sm mt-1">Este vuelo aún no tiene informe final cargado</p>
-          {canEdit && (
+          {canEdit && !plazoVencido && (
             <button onClick={() => setEditMode(true)} className="btn-primary mt-4 mx-auto">
               + Cargar Informe Final
             </button>

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -48,6 +49,8 @@ public class PeticionService {
                 .prioridad(req.getPrioridad() != null ? req.getPrioridad() : "NORMAL")
                 .observaciones(req.getObservaciones())
                 .build();
+
+        validarAntelacionMaxima(req.getFechaVuelo());
 
         peticion = peticionRepository.save(peticion);
 
@@ -138,23 +141,106 @@ public class PeticionService {
         return toResponse(peticion);
     }
 
+    /**
+     * OPS marca la fecha propuesta por DTS como no factible y propone una nueva.
+     * La petición queda en REVISADA_OPS hasta que DTS responda.
+     */
+    @Transactional
+    public PeticionResponse proponerNuevaFecha(Integer idPeticion, LocalDate nuevaFecha, String motivo, Integer idUsuario) {
+        Peticion peticion = getPeticionOrThrow(idPeticion);
+        Vuelo vuelo = peticion.getVuelo();
+        Usuario ops = usuarioRepository.findById(idUsuario).orElseThrow();
+
+        validarEstado(peticion, EstadoPeticion.PENDIENTE, "proponer nueva fecha");
+
+        if (nuevaFecha == null) {
+            throw new UnauthorizedActionException("La nueva fecha es obligatoria");
+        }
+        validarAntelacionMaxima(nuevaFecha);
+
+        String fechaAnterior = vuelo.getFechaVuelo() != null ? vuelo.getFechaVuelo().toString() : null;
+        vuelo.setFechaVuelo(nuevaFecha);
+        vueloRepository.save(vuelo);
+
+        peticion.setEstado(EstadoPeticion.REVISADA_OPS);
+        peticionRepository.save(peticion);
+
+        historialService.registrar(vuelo, ops, "FECHA_NO_FACTIBLE",
+                fechaAnterior, nuevaFecha.toString(),
+                "OPS consideró no factible la fecha y propuso: " + nuevaFecha + ". Motivo: " + motivo);
+
+        notificacionService.notificarTodasEntidades(vuelo,
+                "FECHA_PROPUESTA",
+                "Propuesta de nueva fecha de vuelo",
+                "Operaciones no considera factible el " + fechaAnterior
+                        + " y propone el " + nuevaFecha + ". El DTS debe aceptar o rechazar.");
+
+        return toResponse(peticion);
+    }
+
+    /**
+     * DTS acepta la fecha propuesta por OPS. La petición vuelve a PENDIENTE,
+     * habilitando a OPS para elevar al Comandante.
+     */
+    @Transactional
+    public PeticionResponse aceptarFechaPropuesta(Integer idPeticion, Integer idUsuario) {
+        Peticion peticion = getPeticionOrThrow(idPeticion);
+        Vuelo vuelo = peticion.getVuelo();
+        Usuario dts = usuarioRepository.findById(idUsuario).orElseThrow();
+
+        validarEstado(peticion, EstadoPeticion.REVISADA_OPS, "aceptar la fecha propuesta");
+
+        peticion.setEstado(EstadoPeticion.PENDIENTE);
+        peticionRepository.save(peticion);
+
+        historialService.registrar(vuelo, dts, "FECHA_ACEPTADA_DTS",
+                "REVISADA_OPS", "PENDIENTE",
+                "DTS aceptó la nueva fecha: " + vuelo.getFechaVuelo());
+
+        notificacionService.notificarTodasEntidades(vuelo,
+                "FECHA_ACEPTADA",
+                "Nueva fecha aceptada por DTS",
+                "El DTS aceptó la fecha " + vuelo.getFechaVuelo()
+                        + ". Operaciones puede elevar la petición al Comandante.");
+
+        return toResponse(peticion);
+    }
+
     @Transactional
     public PeticionResponse rechazar(Integer idPeticion, String motivo, Integer idUsuario) {
         Peticion peticion = getPeticionOrThrow(idPeticion);
         Vuelo vuelo = peticion.getVuelo();
         Usuario usuario = usuarioRepository.findById(idUsuario).orElseThrow();
 
+        EstadoPeticion estadoAnterior = peticion.getEstado();
+        if (estadoAnterior == EstadoPeticion.RECHAZADA || estadoAnterior == EstadoPeticion.CANCELADA) {
+            throw new UnauthorizedActionException("No se puede rechazar una petición " + estadoAnterior);
+        }
+
         peticion.setEstado(EstadoPeticion.RECHAZADA);
         peticion.setObservaciones(motivo);
         peticionRepository.save(peticion);
 
+        // Rechazar la petición mata el vuelo asociado
+        String estadoAnteriorVuelo = vuelo.getEstado().name();
+        if (vuelo.getEstado() != EstadoVuelo.FINALIZADO && vuelo.getEstado() != EstadoVuelo.CANCELADO) {
+            vuelo.setEstado(EstadoVuelo.CANCELADO);
+            vuelo.setMotivoCancelacion(motivo);
+            vuelo.setHoraCancelacion(LocalTime.now());
+            vueloRepository.save(vuelo);
+
+            historialService.registrar(vuelo, usuario, "VUELO_CANCELADO",
+                    estadoAnteriorVuelo, "CANCELADO", "Petición rechazada. " + motivo);
+        }
+
         historialService.registrar(vuelo, usuario, "PETICION_RECHAZADA",
-                peticion.getEstado().name(), "RECHAZADA", motivo);
+                estadoAnterior.name(), "RECHAZADA", motivo);
 
         notificacionService.notificarTodasEntidades(vuelo,
                 "PETICION_RECHAZADA",
                 "Petición rechazada",
-                "La petición #" + idPeticion + " fue rechazada. Motivo: " + motivo);
+                "La petición #" + idPeticion + " fue rechazada y el vuelo #" + vuelo.getIdVuelo()
+                        + " cancelado. Motivo: " + motivo);
 
         return toResponse(peticion);
     }
@@ -170,6 +256,17 @@ public class PeticionService {
     }
 
     // ── helpers ──────────────────────────────────────────────────
+    private static final int MAX_MESES_ANTELACION = 1;
+
+    private void validarAntelacionMaxima(LocalDate fechaVuelo) {
+        LocalDate limite = LocalDate.now().plusMonths(MAX_MESES_ANTELACION);
+        if (fechaVuelo.isAfter(limite)) {
+            throw new UnauthorizedActionException(
+                "El vuelo no puede solicitarse con más de " + MAX_MESES_ANTELACION
+                + " mes de antelación (máximo: " + limite + ")");
+        }
+    }
+
     private Peticion getPeticionOrThrow(Integer id) {
         return peticionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Petición no encontrada: " + id));

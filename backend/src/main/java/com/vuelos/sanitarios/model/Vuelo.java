@@ -46,6 +46,9 @@ public class Vuelo {
     @Column(name = "aprobacion_cargada")
     private Boolean aprobacionCargada;
 
+    @Column(name = "fecha_inicio_ejecucion")
+    private LocalDateTime fechaInicioEjecucion;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -73,7 +76,7 @@ public class Vuelo {
 
     public Vuelo() {}
 
-    public Vuelo(Integer idVuelo, Peticion peticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, LocalTime horaCancelacion, EstadoVuelo estado, String motivoCancelacion, Boolean aprobacionCargada, LocalDateTime createdAt, LocalDateTime updatedAt, List<Persona> personas, List<HistorialVuelo> historial, List<InfoVuelo> infoVuelos, InformeFinal informeFinal) {
+    public Vuelo(Integer idVuelo, Peticion peticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, LocalTime horaCancelacion, EstadoVuelo estado, String motivoCancelacion, Boolean aprobacionCargada, LocalDateTime fechaInicioEjecucion, LocalDateTime createdAt, LocalDateTime updatedAt, List<Persona> personas, List<HistorialVuelo> historial, List<InfoVuelo> infoVuelos, InformeFinal informeFinal) {
         this.idVuelo = idVuelo;
         this.peticion = peticion;
         this.fechaVuelo = fechaVuelo;
@@ -83,6 +86,7 @@ public class Vuelo {
         this.estado = estado;
         this.motivoCancelacion = motivoCancelacion;
         this.aprobacionCargada = aprobacionCargada;
+        this.fechaInicioEjecucion = fechaInicioEjecucion;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.personas = personas;
@@ -109,6 +113,8 @@ public class Vuelo {
     public void setMotivoCancelacion(String motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; }
     public Boolean getAprobacionCargada() { return aprobacionCargada; }
     public void setAprobacionCargada(Boolean aprobacionCargada) { this.aprobacionCargada = aprobacionCargada; }
+    public LocalDateTime getFechaInicioEjecucion() { return fechaInicioEjecucion; }
+    public void setFechaInicioEjecucion(LocalDateTime fechaInicioEjecucion) { this.fechaInicioEjecucion = fechaInicioEjecucion; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
@@ -134,6 +140,7 @@ public class Vuelo {
         private EstadoVuelo estado;
         private String motivoCancelacion;
         private Boolean aprobacionCargada;
+        private LocalDateTime fechaInicioEjecucion;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private List<Persona> personas = new ArrayList<>();
@@ -150,6 +157,7 @@ public class Vuelo {
         public Builder estado(EstadoVuelo estado) { this.estado = estado; return this; }
         public Builder motivoCancelacion(String motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; return this; }
         public Builder aprobacionCargada(Boolean aprobacionCargada) { this.aprobacionCargada = aprobacionCargada; return this; }
+        public Builder fechaInicioEjecucion(LocalDateTime fechaInicioEjecucion) { this.fechaInicioEjecucion = fechaInicioEjecucion; return this; }
         public Builder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
         public Builder personas(List<Persona> personas) { this.personas = personas; return this; }
@@ -158,7 +166,7 @@ public class Vuelo {
         public Builder informeFinal(InformeFinal informeFinal) { this.informeFinal = informeFinal; return this; }
 
         public Vuelo build() {
-            return new Vuelo(idVuelo, peticion, fechaVuelo, horaDespegue, horaAterrizaje, horaCancelacion, estado, motivoCancelacion, aprobacionCargada, createdAt, updatedAt, personas, historial, infoVuelos, informeFinal);
+            return new Vuelo(idVuelo, peticion, fechaVuelo, horaDespegue, horaAterrizaje, horaCancelacion, estado, motivoCancelacion, aprobacionCargada, fechaInicioEjecucion, createdAt, updatedAt, personas, historial, infoVuelos, informeFinal);
         }
     }
 }

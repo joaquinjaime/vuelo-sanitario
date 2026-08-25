@@ -14,6 +14,13 @@ export default function NuevaPeticionPage() {
     observaciones: '',
   })
 
+  // Máximo 1 mes de antelación
+  const maxDate = (() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 1)
+    return d.toISOString().split('T')[0]
+  })()
+
   const mut = useMutation({
     mutationFn: () => peticionApi.crear(form),
     onSuccess: (data) => {
@@ -27,6 +34,10 @@ export default function NuevaPeticionPage() {
     e.preventDefault()
     if (!form.fechaVuelo || !form.horaDespegueSolicitada) {
       toast.error('Completá fecha y hora de despegue')
+      return
+    }
+    if (form.fechaVuelo > maxDate) {
+      toast.error('El vuelo no puede solicitarse con más de 1 mes de antelación')
       return
     }
     mut.mutate()
@@ -58,7 +69,9 @@ export default function NuevaPeticionPage() {
               value={form.fechaVuelo}
               onChange={set('fechaVuelo')}
               min={new Date().toISOString().split('T')[0]}
+              max={maxDate}
             />
+            <p className="text-xs text-slate-500 mt-1">Máximo 1 mes de antelación</p>
           </div>
           <div>
             <label className="label">Hora de despegue *</label>

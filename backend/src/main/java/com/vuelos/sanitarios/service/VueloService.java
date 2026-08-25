@@ -3,6 +3,7 @@ package com.vuelos.sanitarios.service;
 import com.vuelos.sanitarios.dto.request.CancelarVueloRequest;
 import com.vuelos.sanitarios.dto.request.InfoVueloRequest;
 import com.vuelos.sanitarios.dto.response.VueloResponse;
+import com.vuelos.sanitarios.enums.EstadoPeticion;
 import com.vuelos.sanitarios.enums.EstadoVuelo;
 import com.vuelos.sanitarios.enums.TipoInfoVuelo;
 import com.vuelos.sanitarios.exception.ResourceNotFoundException;
@@ -12,6 +13,7 @@ import com.vuelos.sanitarios.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -19,13 +21,15 @@ import java.util.List;
 public class VueloService {
 
     private final VueloRepository vueloRepository;
+    private final PeticionRepository peticionRepository;
     private final UsuarioRepository usuarioRepository;
     private final InfoVueloRepository infoVueloRepository;
     private final HistorialService historialService;
     private final NotificacionService notificacionService;
 
-    public VueloService(VueloRepository vueloRepository, UsuarioRepository usuarioRepository, InfoVueloRepository infoVueloRepository, HistorialService historialService, NotificacionService notificacionService) {
+    public VueloService(VueloRepository vueloRepository, PeticionRepository peticionRepository, UsuarioRepository usuarioRepository, InfoVueloRepository infoVueloRepository, HistorialService historialService, NotificacionService notificacionService) {
         this.vueloRepository = vueloRepository;
+        this.peticionRepository = peticionRepository;
         this.usuarioRepository = usuarioRepository;
         this.infoVueloRepository = infoVueloRepository;
         this.historialService = historialService;
@@ -56,6 +60,18 @@ public class VueloService {
         vuelo.setMotivoCancelacion(req.getMotivoCancelacion());
         vuelo.setHoraCancelacion(LocalTime.now());
         vueloRepository.save(vuelo);
+
+        // Cancelar el vuelo también cierra la petición asociada
+        var peticion = vuelo.getPeticion();
+        if (peticion.getEstado() != EstadoPeticion.RECHAZADA
+                && peticion.getEstado() != EstadoPeticion.CANCELADA) {
+            String estadoAnteriorPeticion = peticion.getEstado().name();
+            peticion.setEstado(EstadoPeticion.CANCELADA);
+            peticionRepository.save(peticion);
+
+            historialService.registrar(vuelo, usuario, "PETICION_CANCELADA",
+                    estadoAnteriorPeticion, "CANCELADA", "Vuelo cancelado. " + req.getMotivoCancelacion());
+        }
 
         historialService.registrar(vuelo, usuario, "VUELO_CANCELADO",
                 estadoAnterior, "CANCELADO", req.getMotivoCancelacion());
@@ -92,10 +108,51 @@ public class VueloService {
         return toResponse(vuelo);
     }
 
+    /**
+     * Pone en EN_EJECUCION todos los vuelos VIGENTES cuya fecha y hora programada ya se alcanzaron.
+     * Lo invoca el scheduler; la entrada en ejecución no es manual.
+     */
+    @Transactional
+    public int iniciarEjecucionesVencidas() {
+        Usuario sistema = usuarioRepository.findByUsername("system").orElse(null);
+        if (sistema == null) return 0;
+
+        LocalDateTime ahora = LocalDateTime.now();
+        int iniciados = 0;
+
+        for (Vuelo vuelo : vueloRepository.findByEstado(EstadoVuelo.VIGENTE)) {
+            if (vuelo.getFechaVuelo() == null || vuelo.getHoraDespegue() == null) continue;
+
+            LocalDateTime programado = LocalDateTime.of(vuelo.getFechaVuelo(), vuelo.getHoraDespegue());
+            if (programado.isAfter(ahora)) continue;
+
+            vuelo.setEstado(EstadoVuelo.EN_EJECUCION);
+            vuelo.setHoraDespegue(LocalTime.now());
+            vuelo.setFechaInicioEjecucion(LocalDateTime.now());
+            vueloRepository.save(vuelo);
+
+            historialService.registrar(vuelo, sistema, "INICIO_EJECUCION_AUTOMATICO",
+                    "VIGENTE", "EN_EJECUCION",
+                    "Inicio automático al alcanzar la fecha y hora programada del vuelo");
+
+            notificacionService.notificarTodasEntidades(vuelo,
+                    "CAMBIO_ESTADO",
+                    "Vuelo #" + vuelo.getIdVuelo() + " → EN_EJECUCION",
+                    "El vuelo entró en ejecución automáticamente al alcanzarse su horario programado.");
+            iniciados++;
+        }
+        return iniciados;
+    }
+
     @Transactional
     public VueloResponse cambiarEstado(Integer idVuelo, EstadoVuelo nuevoEstado, Integer idUsuario) {
         Vuelo vuelo = getVueloOrThrow(idVuelo);
         Usuario usuario = usuarioRepository.findById(idUsuario).orElseThrow();
+
+        if (nuevoEstado == EstadoVuelo.EN_EJECUCION) {
+            throw new UnauthorizedActionException(
+                "La entrada en ejecución es automática: ocurre al alcanzar el vuelo su fecha y hora programada");
+        }
 
         if (!vuelo.getEstado().puedeTransicionarA(nuevoEstado)) {
             throw new UnauthorizedActionException(
@@ -107,6 +164,7 @@ public class VueloService {
 
         if (nuevoEstado == EstadoVuelo.EN_EJECUCION) {
             vuelo.setHoraDespegue(LocalTime.now());
+            vuelo.setFechaInicioEjecucion(LocalDateTime.now());
         } else if (nuevoEstado == EstadoVuelo.FINALIZADO) {
             vuelo.setHoraAterrizaje(LocalTime.now());
         }
@@ -173,7 +231,11 @@ public class VueloService {
                 .horaDespegue(v.getHoraDespegue())
                 .horaAterrizaje(v.getHoraAterrizaje())
                 .estado(v.getEstado())
+                .estadoPeticion(peticion.getEstado())
                 .aprobacionCargada(v.getAprobacionCargada())
+                .fechaLimiteInforme(v.getFechaInicioEjecucion() != null
+                        ? v.getFechaInicioEjecucion().plusHours(48)
+                        : null)
                 .motivoCancelacion(v.getMotivoCancelacion())
                 .createdAt(v.getCreatedAt())
                 .updatedAt(v.getUpdatedAt())

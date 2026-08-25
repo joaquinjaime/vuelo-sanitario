@@ -16,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 @RestController
@@ -34,6 +36,19 @@ public class InformeFinalController {
         this.usuarioRepo = usuarioRepo;
         this.historialService = historialService;
         this.notificacionService = notificacionService;
+    }
+
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /** Plazo de 48 horas desde el inicio de ejecución para cargar el informe final. */
+    private static void validarPlazoInforme(Vuelo vuelo) {
+        if (vuelo.getFechaInicioEjecucion() == null) return; // vuelos previos al plazo: sin límite
+        LocalDateTime limite = vuelo.getFechaInicioEjecucion().plusHours(48);
+        if (LocalDateTime.now().isAfter(limite)) {
+            throw new UnauthorizedActionException(
+                "El plazo de 48 horas venció el " + limite.format(FMT)
+                + ". No se puede cargar ni editar el informe final.");
+        }
     }
 
     @GetMapping
@@ -57,6 +72,7 @@ public class InformeFinalController {
         if (vuelo.getEstado() != EstadoVuelo.FINALIZADO) {
             throw new UnauthorizedActionException("Solo se puede cargar informe final en vuelos FINALIZADOS");
         }
+        validarPlazoInforme(vuelo);
         if (informeFinalRepo.existsByVueloIdVuelo(idVuelo)) {
             throw new UnauthorizedActionException("Ya existe un informe final para este vuelo");
         }
@@ -89,6 +105,8 @@ public class InformeFinalController {
 
         InformeFinal informe = informeFinalRepo.findByVueloIdVuelo(idVuelo)
                 .orElseThrow(() -> new ResourceNotFoundException("Informe final no encontrado"));
+
+        validarPlazoInforme(informe.getVuelo());
 
         informe.setCambiosOcurridos(body.getOrDefault("cambiosOcurridos", informe.getCambiosOcurridos()));
         informe.setAjustesRealizados(body.getOrDefault("ajustesRealizados", informe.getAjustesRealizados()));

@@ -7,5 +7,7 @@ export const peticionApi = {
   aprobar:               (id) => api.patch(`/peticiones/${id}/aprobar`).then(r => r.data),
   confirmarFactibilidad: (id) => api.patch(`/peticiones/${id}/confirmar-factibilidad`).then(r => r.data),
   confirmarDts:          (id) => api.patch(`/peticiones/${id}/confirmar-dts`).then(r => r.data),
+  proponerFecha:         (id, nuevaFecha, motivo) => api.patch(`/peticiones/${id}/proponer-fecha`, { nuevaFecha, motivo }).then(r => r.data),
+  aceptarFecha:          (id) => api.patch(`/peticiones/${id}/aceptar-fecha`).then(r => r.data),
   rechazar:              (id, motivo) => api.patch(`/peticiones/${id}/rechazar`, { motivo }).then(r => r.data),
 }

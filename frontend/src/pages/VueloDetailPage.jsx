@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, History, FileText, CheckCircle, XCircle, Play, Flag, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, History, FileText, CheckCircle, XCircle, Play, Flag, AlertTriangle, Clock } from 'lucide-react'
 import { vueloApi } from '../api/vueloApi'
 import { peticionApi } from '../api/peticionApi'
 import { useAuth } from '../context/AuthContext'
 import StatusBadge from '../components/common/StatusBadge'
 import ConfirmModal from '../components/common/ConfirmModal'
 import InfoVueloSection from '../components/vuelo/InfoVueloSection'
-import { formatDate, formatTime } from '../utils/dateUtils'
+import { formatDate, formatTime, formatDateTime } from '../utils/dateUtils'
 import { ROLE_LABELS, ROLE_COLORS } from '../utils/roleUtils'
 import { ESTADO_PETICION_CONFIG } from '../utils/estadoUtils'
 import toast from 'react-hot-toast'
@@ -20,9 +20,11 @@ export default function VueloDetailPage() {
   const { user, hasRole } = useAuth()
   const qc = useQueryClient()
 
-  const [modal, setModal] = useState(null) // 'cancelar' | 'aprobar' | 'ejecutar' | 'finalizar' | 'confirmar' | 'rechazar'
+  const [modal, setModal] = useState(null) // 'cancelar' | 'aprobar' | 'ejecutar' | 'finalizar' | 'confirmar' | 'rechazar' | 'proponerFecha'
   const [motivoCancelacion, setMotivoCancelacion] = useState('')
   const [motivoRechazo, setMotivoRechazo]         = useState('')
+  const [nuevaFecha, setNuevaFecha]               = useState('')
+  const [motivoPropuesta, setMotivoPropuesta]     = useState('')
 
   const { data: vuelo, isLoading } = useQuery({
     queryKey: ['vuelo', id],
@@ -61,6 +63,18 @@ export default function VueloDetailPage() {
     onError:   (e) => toast.error(e?.response?.data?.message ?? 'Error'),
   })
 
+  const proponerFechaMut = useMutation({
+    mutationFn: () => peticionApi.proponerFecha(vuelo.idPeticion, nuevaFecha, motivoPropuesta),
+    onSuccess: () => { toast.success('Nueva fecha propuesta — esperando respuesta del DTS'); setModal(null); invalidate() },
+    onError:   (e) => toast.error(e?.response?.data?.message ?? 'Error'),
+  })
+
+  const aceptarFechaMut = useMutation({
+    mutationFn: () => peticionApi.aceptarFecha(vuelo.idPeticion),
+    onSuccess: () => { toast.success('Fecha aceptada — OPS ya puede elevar al Comandante'); setModal(null); invalidate() },
+    onError:   (e) => toast.error(e?.response?.data?.message ?? 'Error'),
+  })
+
   const confirmarDtsMut = useMutation({
     mutationFn: () => peticionApi.confirmarDts(vuelo.idPeticion),
     onSuccess: () => { toast.success('Confirmado'); setModal(null); invalidate() },
@@ -81,12 +95,17 @@ export default function VueloDetailPage() {
   if (!vuelo) return <div className="text-center text-slate-500 py-16">Vuelo no encontrado</div>
 
   const estado = vuelo.estado
+  const estadoPeticion = vuelo.estadoPeticion
   const isPlaneamiento = estado === 'PLANEAMIENTO'
   const isVigente      = estado === 'VIGENTE'
   const isEjecucion    = estado === 'EN_EJECUCION'
   const isFinalizado   = estado === 'FINALIZADO'
   const isCancelado    = estado === 'CANCELADO'
   const isActive       = !isFinalizado && !isCancelado
+
+  // Plazo de 48 hs para el informe final (desde inicio de ejecución)
+  const limiteInforme = vuelo.fechaLimiteInforme ? new Date(vuelo.fechaLimiteInforme) : null
+  const plazoVencido = limiteInforme ? limiteInforme <= new Date() : false
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -102,6 +121,11 @@ export default function VueloDetailPage() {
               Vuelo <span className="font-mono text-blue-400">#{String(vuelo.idVuelo).padStart(4,'0')}</span>
             </h1>
             <StatusBadge estado={estado} />
+            {estadoPeticion && (
+              <span className={clsx('badge border border-slate-700 bg-slate-800/50', ESTADO_PETICION_CONFIG[estadoPeticion]?.color)}>
+                Petición: {ESTADO_PETICION_CONFIG[estadoPeticion]?.label ?? estadoPeticion}
+              </span>
+            )}
             {vuelo.aprobacionCargada && (
               <span className="badge bg-emerald-900/30 text-emerald-400 border border-emerald-800/30">
                 ✓ Aprobado por OPS
@@ -160,6 +184,42 @@ export default function VueloDetailPage() {
         </div>
       )}
 
+      {/* Fecha propuesta por OPS esperando respuesta del DTS */}
+      {isActive && estadoPeticion === 'REVISADA_OPS' && (
+        <div className="card border-amber-800/40 bg-amber-900/10">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-400">Nueva fecha propuesta por Operaciones</p>
+              <p className="text-sm text-slate-300 mt-0.5">
+                OPS no considera factible la fecha original y propone el{' '}
+                <span className="font-semibold">{formatDate(vuelo.fechaVuelo)}</span>.
+                El DTS debe aceptar o rechazar para continuar.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plazo de 48 hs para el informe final */}
+      {vuelo.fechaLimiteInforme && (isEjecucion || isFinalizado) && (
+        <div className={clsx('card', plazoVencido ? 'border-red-800/40 bg-red-900/10' : 'border-cyan-800/40 bg-cyan-900/10')}>
+          <div className="flex items-start gap-2">
+            <Clock size={16} className={clsx('mt-0.5 flex-shrink-0', plazoVencido ? 'text-red-400' : 'text-cyan-400')} />
+            <div>
+              <p className={clsx('text-sm font-medium', plazoVencido ? 'text-red-400' : 'text-cyan-400')}>
+                {plazoVencido ? 'Plazo del informe final VENCIDO' : 'Plazo del informe final en curso'}
+              </p>
+              <p className="text-sm text-slate-400 mt-0.5">
+                {plazoVencido
+                  ? <>Venció el <span className="font-semibold text-slate-200">{formatDateTime(vuelo.fechaLimiteInforme)}</span>. No se puede cargar ni editar el informe final.</>
+                  : <>Vence el <span className="font-semibold text-slate-200">{formatDateTime(vuelo.fechaLimiteInforme)}</span> — 48 hs desde el inicio de ejecución.</>}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Observaciones de la petición */}
       {vuelo.observaciones && (
         <div className="card border-cyan-800/40 bg-cyan-900/10">
@@ -179,16 +239,41 @@ export default function VueloDetailPage() {
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Acciones disponibles</p>
           <div className="flex flex-wrap gap-2">
 
-            {/* DTS: confirmar oferta */}
-            {hasRole('DTS') && isPlaneamiento && (
+            {/* OPS: fecha no factible → proponer nueva (solo con petición PENDIENTE) */}
+            {hasRole('OPERACIONES') && isPlaneamiento && estadoPeticion === 'PENDIENTE' && (
+              <button onClick={() => setModal('proponerFecha')} className="btn-secondary">
+                <AlertTriangle size={14} />
+                Fecha no factible — Proponer nueva
+              </button>
+            )}
+
+            {/* DTS: aceptar fecha propuesta por OPS (petición REVISADA_OPS) */}
+            {hasRole('DTS') && isPlaneamiento && estadoPeticion === 'REVISADA_OPS' && (
+              <button onClick={() => aceptarFechaMut.mutate()} disabled={aceptarFechaMut.isPending}
+                className="btn-success">
+                <CheckCircle size={14} />
+                Aceptar nueva fecha
+              </button>
+            )}
+
+            {/* DTS: rechazar propuesta de OPS → petición RECHAZADA */}
+            {hasRole('DTS') && isPlaneamiento && estadoPeticion === 'REVISADA_OPS' && (
+              <button onClick={() => setModal('rechazar')} className="btn-danger">
+                <XCircle size={14} />
+                Rechazar propuesta
+              </button>
+            )}
+
+            {/* DTS: confirmar oferta (solo cuando el Comandante ya la declaró FACTIBLE) */}
+            {hasRole('DTS') && isPlaneamiento && estadoPeticion === 'FACTIBLE' && (
               <button onClick={() => setModal('confirmarDts')} className="btn-success">
                 <CheckCircle size={14} />
                 Confirmar oferta
               </button>
             )}
 
-            {/* OPS: elevar al comandante */}
-            {hasRole('OPERACIONES') && isPlaneamiento && (
+            {/* OPS: elevar al comandante (habilitado solo si no hay propuesta de fecha pendiente) */}
+            {hasRole('OPERACIONES') && isPlaneamiento && estadoPeticion === 'PENDIENTE' && (
               <button onClick={() => aprobarOps.mutate()} disabled={aprobarOps.isPending}
                 className="btn-primary">
                 <Play size={14} />
@@ -196,29 +281,23 @@ export default function VueloDetailPage() {
               </button>
             )}
 
-            {/* COMANDANTE: confirmar factibilidad */}
-            {hasRole('COMANDANTE') && isPlaneamiento && (
+            {/* COMANDANTE: confirmar factibilidad (solo petición ELEVADA_COMANDANTE) */}
+            {hasRole('COMANDANTE') && isPlaneamiento && estadoPeticion === 'ELEVADA_COMANDANTE' && (
               <button onClick={() => setModal('confirmar')} className="btn-success">
                 <CheckCircle size={14} />
                 Confirmar Factibilidad
               </button>
             )}
 
-            {/* OPS: aprobar formulario */}
-            {hasRole('OPERACIONES') && isPlaneamiento && !vuelo.aprobacionCargada && (
+            {/* OPS: aprobar formulario (recién cuando DTS confirmó) */}
+            {hasRole('OPERACIONES') && isPlaneamiento && estadoPeticion === 'CONFIRMADA_DTS' && !vuelo.aprobacionCargada && (
               <button onClick={() => setModal('aprobar')} className="btn-success">
                 <Flag size={14} />
                 Aprobar formulario
               </button>
             )}
 
-            {/* OPS: cambiar a EN_EJECUCION */}
-            {hasRole('OPERACIONES') && isVigente && (
-              <button onClick={() => cambiarEstadoMut.mutate('EN_EJECUCION')} className="btn-primary">
-                <Play size={14} />
-                Iniciar ejecución
-              </button>
-            )}
+            {/* La entrada en ejecución es automática al alcanzarse el horario programado */}
 
             {/* OPS: finalizar */}
             {hasRole('OPERACIONES') && isEjecucion && (
@@ -228,19 +307,22 @@ export default function VueloDetailPage() {
               </button>
             )}
 
-            {/* COMANDANTE/OPS: rechazar */}
-            {(hasRole('COMANDANTE') || hasRole('OPERACIONES')) && isPlaneamiento && (
+            {/* COMANDANTE/OPS: rechazar petición (antes de que DTS confirme) */}
+            {(hasRole('COMANDANTE') || hasRole('OPERACIONES')) && isPlaneamiento
+              && (estadoPeticion === 'PENDIENTE' || estadoPeticion === 'ELEVADA_COMANDANTE') && (
               <button onClick={() => setModal('rechazar')} className="btn-danger">
                 <XCircle size={14} />
                 Rechazar
               </button>
             )}
 
-            {/* Todos: cancelar */}
-            <button onClick={() => setModal('cancelar')} className="btn-danger ml-auto">
-              <XCircle size={14} />
-              Cancelar vuelo
-            </button>
+            {/* Todos: cancelar (fuera de PLANEAMIENTO; en planeamiento el rechazo ya cancela) */}
+            {!isPlaneamiento && (
+              <button onClick={() => setModal('cancelar')} className="btn-danger ml-auto">
+                <XCircle size={14} />
+                Cancelar vuelo
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -273,6 +355,24 @@ export default function VueloDetailPage() {
         message="Aceptás las condiciones del vuelo propuesto por Operaciones."
         onCancel={() => setModal(null)}
         onConfirm={() => confirmarDtsMut.mutate()} />
+
+      <ConfirmModal open={modal === 'proponerFecha'} title="Proponer nueva fecha" danger
+        onCancel={() => { setModal(null); setNuevaFecha(''); setMotivoPropuesta('') }}
+        onConfirm={() => proponerFechaMut.mutate()}>
+        <p className="text-sm text-slate-400 mb-4">
+          La fecha actual (<span className="font-semibold text-slate-200">{formatDate(vuelo.fechaVuelo)}</span>) quedará marcada
+          como no factible. El DTS deberá aceptar o rechazar la nueva fecha.
+        </p>
+        <label className="label">Nueva fecha prevista *</label>
+        <input type="date" className="input"
+          value={nuevaFecha}
+          onChange={e => setNuevaFecha(e.target.value)} />
+        <label className="label mt-3">Motivo *</label>
+        <textarea className="input resize-none" rows={3}
+          value={motivoPropuesta}
+          onChange={e => setMotivoPropuesta(e.target.value)}
+          placeholder="¿Por qué no es factible la fecha actual?" />
+      </ConfirmModal>
 
       <ConfirmModal open={modal === 'rechazar'} title="Rechazar petición" danger
         onCancel={() => { setModal(null); setMotivoRechazo('') }}

@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -67,8 +68,27 @@ public class PeticionController {
         return ResponseEntity.ok(peticionService.confirmarDts(id, usuario.getIdUsuario()));
     }
 
+    @PatchMapping("/{id}/proponer-fecha")
+    @PreAuthorize("hasRole('OPERACIONES')")
+    public ResponseEntity<PeticionResponse> proponerFecha(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal Usuario usuario) {
+        LocalDate nuevaFecha = LocalDate.parse(body.get("nuevaFecha"));
+        return ResponseEntity.ok(
+                peticionService.proponerNuevaFecha(id, nuevaFecha, body.get("motivo"), usuario.getIdUsuario()));
+    }
+
+    @PatchMapping("/{id}/aceptar-fecha")
+    @PreAuthorize("hasRole('DTS')")
+    public ResponseEntity<PeticionResponse> aceptarFecha(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(peticionService.aceptarFechaPropuesta(id, usuario.getIdUsuario()));
+    }
+
     @PatchMapping("/{id}/rechazar")
-    @PreAuthorize("hasRole('OPERACIONES') or hasRole('COMANDANTE')")
+    @PreAuthorize("hasRole('OPERACIONES') or hasRole('COMANDANTE') or hasRole('DTS')")
     public ResponseEntity<PeticionResponse> rechazar(
             @PathVariable Integer id,
             @RequestBody Map<String, String> body,

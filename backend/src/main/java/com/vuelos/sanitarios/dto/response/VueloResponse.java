@@ -1,5 +1,6 @@
 package com.vuelos.sanitarios.dto.response;
 
+import com.vuelos.sanitarios.enums.EstadoPeticion;
 import com.vuelos.sanitarios.enums.EstadoVuelo;
 
 import java.time.LocalDate;
@@ -13,7 +14,9 @@ public class VueloResponse {
     private LocalTime horaDespegue;
     private LocalTime horaAterrizaje;
     private EstadoVuelo estado;
+    private EstadoPeticion estadoPeticion;
     private Boolean aprobacionCargada;
+    private LocalDateTime fechaLimiteInforme;
     private String motivoCancelacion;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -23,14 +26,16 @@ public class VueloResponse {
 
     public VueloResponse() {}
 
-    public VueloResponse(Integer idVuelo, Integer idPeticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, EstadoVuelo estado, Boolean aprobacionCargada, String motivoCancelacion, LocalDateTime createdAt, LocalDateTime updatedAt, String solicitanteNombre, String solicitanteRol, String observaciones) {
+    public VueloResponse(Integer idVuelo, Integer idPeticion, LocalDate fechaVuelo, LocalTime horaDespegue, LocalTime horaAterrizaje, EstadoVuelo estado, EstadoPeticion estadoPeticion, Boolean aprobacionCargada, LocalDateTime fechaLimiteInforme, String motivoCancelacion, LocalDateTime createdAt, LocalDateTime updatedAt, String solicitanteNombre, String solicitanteRol, String observaciones) {
         this.idVuelo = idVuelo;
         this.idPeticion = idPeticion;
         this.fechaVuelo = fechaVuelo;
         this.horaDespegue = horaDespegue;
         this.horaAterrizaje = horaAterrizaje;
         this.estado = estado;
+        this.estadoPeticion = estadoPeticion;
         this.aprobacionCargada = aprobacionCargada;
+        this.fechaLimiteInforme = fechaLimiteInforme;
         this.motivoCancelacion = motivoCancelacion;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -51,8 +56,12 @@ public class VueloResponse {
     public void setHoraAterrizaje(LocalTime horaAterrizaje) { this.horaAterrizaje = horaAterrizaje; }
     public EstadoVuelo getEstado() { return estado; }
     public void setEstado(EstadoVuelo estado) { this.estado = estado; }
+    public EstadoPeticion getEstadoPeticion() { return estadoPeticion; }
+    public void setEstadoPeticion(EstadoPeticion estadoPeticion) { this.estadoPeticion = estadoPeticion; }
     public Boolean getAprobacionCargada() { return aprobacionCargada; }
     public void setAprobacionCargada(Boolean aprobacionCargada) { this.aprobacionCargada = aprobacionCargada; }
+    public LocalDateTime getFechaLimiteInforme() { return fechaLimiteInforme; }
+    public void setFechaLimiteInforme(LocalDateTime fechaLimiteInforme) { this.fechaLimiteInforme = fechaLimiteInforme; }
     public String getMotivoCancelacion() { return motivoCancelacion; }
     public void setMotivoCancelacion(String motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -75,7 +84,9 @@ public class VueloResponse {
         private LocalTime horaDespegue;
         private LocalTime horaAterrizaje;
         private EstadoVuelo estado;
+        private EstadoPeticion estadoPeticion;
         private Boolean aprobacionCargada;
+        private LocalDateTime fechaLimiteInforme;
         private String motivoCancelacion;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
@@ -89,7 +100,9 @@ public class VueloResponse {
         public Builder horaDespegue(LocalTime horaDespegue) { this.horaDespegue = horaDespegue; return this; }
         public Builder horaAterrizaje(LocalTime horaAterrizaje) { this.horaAterrizaje = horaAterrizaje; return this; }
         public Builder estado(EstadoVuelo estado) { this.estado = estado; return this; }
+        public Builder estadoPeticion(EstadoPeticion estadoPeticion) { this.estadoPeticion = estadoPeticion; return this; }
         public Builder aprobacionCargada(Boolean aprobacionCargada) { this.aprobacionCargada = aprobacionCargada; return this; }
+        public Builder fechaLimiteInforme(LocalDateTime fechaLimiteInforme) { this.fechaLimiteInforme = fechaLimiteInforme; return this; }
         public Builder motivoCancelacion(String motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; return this; }
         public Builder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
@@ -98,7 +111,7 @@ public class VueloResponse {
         public Builder observaciones(String observaciones) { this.observaciones = observaciones; return this; }
 
         public VueloResponse build() {
-            return new VueloResponse(idVuelo, idPeticion, fechaVuelo, horaDespegue, horaAterrizaje, estado, aprobacionCargada, motivoCancelacion, createdAt, updatedAt, solicitanteNombre, solicitanteRol, observaciones);
+            return new VueloResponse(idVuelo, idPeticion, fechaVuelo, horaDespegue, horaAterrizaje, estado, estadoPeticion, aprobacionCargada, fechaLimiteInforme, motivoCancelacion, createdAt, updatedAt, solicitanteNombre, solicitanteRol, observaciones);
         }
     }
 }
