@@ -1,0 +1,156 @@
+erDiagram
+    persons ||--o| users : "person_id (UQ)"
+    persons ||--o| patients : "person_id (UQ)"
+    users ||--o{ user_roles : user_id
+    roles ||--o{ user_roles : role_id
+    patients ||--o{ flights : patient_id
+    users ||--o{ flights : solicitado_por_id
+    users o|--o{ flights : evaluado_por_id
+    users o|--o{ flights : comandante_id
+    users o|--o{ flights : cancelado_por_id
+    flight_statuses ||--o{ flights : status_id
+    flight_priorities o|--o{ flights : priority_id
+    aircraft o|--o{ flights : aircraft_id
+    airports o|--o{ flights : origen_id
+    airports o|--o{ flights : destino_id
+    flights ||--o| flight_medical_info : "flight_id (UQ)"
+    flights ||--o{ flight_crew : flight_id
+    users ||--o{ flight_crew : user_id
+    users o|--o{ flight_crew : asignado_por_id
+    crew_roles ||--o{ flight_crew : crew_role_id
+    flights ||--o{ weather_snapshots : flight_id
+    users ||--o{ weather_snapshots : consultado_por_id
+    flights ||--o{ flight_routes : flight_id
+    users ||--o{ flight_routes : creado_por_id
+    flights ||--o{ hangar_info : flight_id
+    users ||--o{ hangar_info : registrado_por_id
+    flights ||--o{ aa2000_coordination : flight_id
+    users ||--o{ aa2000_coordination : registrado_por_id
+    flights ||--o{ flight_final_reports : flight_id
+    users ||--o{ flight_final_reports : creado_por_id
+    flights ||--o{ flight_document_items : flight_id
+    document_types ||--o{ flight_document_items : document_type_id
+    flight_document_items ||--o{ flight_documents : document_item_id
+    users ||--o{ flight_documents : creado_por_id
+    flights o|--o{ audit_events : flight_id
+    users o|--o{ audit_events : actor_user_id
+    flights ||--o{ flight_audit_log : flight_id
+    users o|--o{ flight_audit_log : usuario_id
+    users ||--o{ notifications : user_id
+    flights o|--o{ notifications : flight_id
+
+    persons {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR dni UK
+    }
+    users {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER person_id FK
+      NVARCHAR username UK
+      NVARCHAR email UK
+    }
+    patients {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER person_id FK
+    }
+    roles {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+    }
+    user_roles {
+      UNIQUEIDENTIFIER user_id PK, FK
+      UNIQUEIDENTIFIER role_id PK, FK
+    }
+    airports {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo_oaci UK
+      NVARCHAR codigo_iata UK
+    }
+    aircraft {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR matricula UK
+    }
+    crew_roles {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+    }
+    flight_statuses {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+    }
+    flight_priorities {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+    }
+    document_types {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+    }
+    flights {
+      UNIQUEIDENTIFIER id PK
+      NVARCHAR codigo UK
+      UNIQUEIDENTIFIER patient_id FK
+      UNIQUEIDENTIFIER status_id FK
+      UNIQUEIDENTIFIER aircraft_id FK
+      UNIQUEIDENTIFIER comandante_id FK
+    }
+    flight_medical_info {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK, UK
+    }
+    flight_crew {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      UNIQUEIDENTIFIER user_id FK
+      UNIQUEIDENTIFIER crew_role_id FK
+    }
+    weather_snapshots {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+    }
+    flight_routes {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      INT version UK
+    }
+    hangar_info {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      INT version UK
+    }
+    aa2000_coordination {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      INT version UK
+    }
+    flight_final_reports {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      INT version UK
+    }
+    flight_document_items {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER flight_id FK
+      UNIQUEIDENTIFIER document_type_id FK
+      ROWVERSION row_version
+    }
+    flight_documents {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER document_item_id FK
+      INT version UK
+    }
+    audit_events {
+      BIGINT id PK
+      UNIQUEIDENTIFIER flight_id FK
+      UNIQUEIDENTIFIER actor_user_id FK
+    }
+    flight_audit_log {
+      BIGINT id PK
+      UNIQUEIDENTIFIER flight_id FK
+      UNIQUEIDENTIFIER usuario_id FK
+    }
+    notifications {
+      UNIQUEIDENTIFIER id PK
+      UNIQUEIDENTIFIER user_id FK
+      UNIQUEIDENTIFIER flight_id FK
+    }

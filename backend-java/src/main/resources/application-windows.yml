@@ -1,0 +1,9 @@
+# Perfil de desarrollo para autenticación integrada de SQL Server en Windows.
+# Requiere que el DLL mssql-jdbc_auth correspondiente a la arquitectura de
+# Java esté disponible en java.library.path (por ejemplo mediante PATH).
+spring:
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=vuelos_sanitarios;encrypt=true;trustServerCertificate=true;integratedSecurity=true;authenticationScheme=NativeAuthentication
+    username:
+    password:
+

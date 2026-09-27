@@ -1,0 +1,26 @@
+# Secrets and local runtime data
+.env
+.env.*
+!.env.example
+data/
+uploads/
+*.key
+*.pem
+
+# Build artifacts and dependencies
+**/target/
+**/node_modules/
+**/dist/
+*.log
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.iml
+
+# Local SQL Server authentication libraries / database files
+mssql-jdbc_auth*.dll
+*.mdf
+*.ldf

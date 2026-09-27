@@ -1,0 +1,11 @@
+# Perfil exclusivo del contenedor. No utiliza autenticación integrada de Windows.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios;encrypt=true;trustServerCertificate=true}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+app:
+  cors:
+    # El navegador usa el mismo origen mediante el proxy Nginx /api.
+    allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost}
