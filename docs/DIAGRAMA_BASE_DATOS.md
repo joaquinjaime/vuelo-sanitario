@@ -34,3 +34,12 @@ erDiagram
 ```
 
 La relación N:M de tripulación está materializada por `vuelos_tripulantes`; la relación N:M de roles de usuarios, por `usuarios_roles`.
+# V11 — cuentas y contactos
+
+```text
+personas 1 ── N correos_electronicos
+personas 1 ── N telefonos
+personas 1 ── 1 usuarios 1 ── N activaciones_cuenta
+usuarios N ── N roles
+```
+

@@ -24,3 +24,9 @@ Fuente: catálogos `sys.tables`, `sys.columns`, `sys.key_constraints`, `sys.fore
 Las columnas físicas de negocio usan español en `snake_case`. Las columnas de control relevantes son `extrema_urgencia`, `fecha_limite_traslado`, `prorroga_utilizada`, `estado`, `es_actual`, `fecha_creacion` y `version_fila`.
 
 Índices de consulta relevantes: disponibilidad de aeronave/comandante por rango de fechas (`vuelos`), cola de extrema urgencia (`vuelos`), obligaciones por comandante/estado/vencimiento, documentos activos por vuelo, notificaciones no leídas y auditoría por vuelo/fecha.
+# Extensión V11: identidad y activación
+
+`personas` representa la identidad; `usuarios` representa su acceso al sistema. Los contactos ya no pertenecen a la cuenta: `correos_electronicos` y `telefonos` son relaciones 1:N de Persona y poseen un único principal por persona mediante índices filtrados. El correo no tiene unicidad global: una dirección puede ser compartida cuando el caso de negocio lo requiera.
+
+`activaciones_cuenta` guarda únicamente el hash BCrypt del código aleatorio. Cada código dura exactamente 24 horas, se consume al activarse y se invalida al regenerarse. `usuarios.estado_cuenta` toma `PENDIENTE_ACTIVACION`, `ACTIVO` o `DESACTIVADO`; `debe_cambiar_contrasena` marca una contraseña temporal.
+

@@ -20,13 +20,10 @@ import java.util.Set;
 @Table(name = "usuarios")
 public class User extends BaseEntity {
 
-@Column(name = "nombre_usuario", nullable = false, unique = true, length = 50)
+@Column(name = "nombre_usuario", unique = true, length = 50)
     private String username;
 
-@Column(name = "correo_electronico", nullable = false, unique = true, length = 150)
-    private String email;
-
-@Column(name = "hash_contrasena", nullable = false, length = 255)
+@Column(name = "hash_contrasena", length = 255)
     private String passwordHash;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
@@ -38,6 +35,12 @@ public class User extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
+
+    @Column(name = "estado_cuenta", nullable = false, length = 24)
+    private String estadoCuenta = "PENDIENTE_ACTIVACION";
+
+    @Column(name = "debe_cambiar_contrasena", nullable = false)
+    private Boolean debeCambiarContrasena = false;
 
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
@@ -56,9 +59,6 @@ public class User extends BaseEntity {
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
@@ -70,6 +70,10 @@ public class User extends BaseEntity {
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
+    public String getEstadoCuenta() { return estadoCuenta; }
+    public void setEstadoCuenta(String estadoCuenta) { this.estadoCuenta = estadoCuenta; }
+    public Boolean getDebeCambiarContrasena() { return debeCambiarContrasena; }
+    public void setDebeCambiarContrasena(Boolean value) { debeCambiarContrasena = value; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

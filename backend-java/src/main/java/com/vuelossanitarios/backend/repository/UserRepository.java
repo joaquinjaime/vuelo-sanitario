@@ -8,5 +8,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findWithRolesByUsername(@Param("username") String username);
     @Query("select distinct u from User u join u.userRoles ur join ur.role r where r.codigo = :role and u.activo = true")
     List<User> findActiveByRoleCode(@Param("role") String role);
-    boolean existsByUsername(String username); boolean existsByEmail(String email);
+    boolean existsByUsername(String username);
+    @Query("select distinct u from User u join fetch u.person left join fetch u.userRoles ur left join fetch ur.role")
+    List<User> findAllWithPersonAndRoles();
+    @Query("select u from User u join fetch u.person where u.id=:id") Optional<User> findWithPersonById(@Param("id") UUID id);
 }

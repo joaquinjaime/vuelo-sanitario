@@ -41,7 +41,10 @@ function Urgency({ flight, detail = false }) {
 function Login({ set }) {
   const [u, su] = useState(""),
     [p, sp] = useState(""),
-    [e, se] = useState("");
+    [e, se] = useState(""),
+    [activate, setActivate] = useState(false),
+    [form, setForm] = useState({ dni: "", codigo: "", username: "", password: "", confirmacionPassword: "" });
+  const change = (key, value) => setForm({ ...form, [key]: value });
   return (
     <main className="login">
       <section>
@@ -53,6 +56,10 @@ function Login({ set }) {
         onSubmit={async (x) => {
           x.preventDefault();
           try {
+            if (activate) {
+              await api("/auth/activar-cuenta", { method: "POST", body: JSON.stringify(form) });
+              setActivate(false); se("Cuenta activada. Ya podés iniciar sesión."); return;
+            }
             let r = await api("/auth/login", {
               method: "POST",
               body: JSON.stringify({ username: u, password: p }),
@@ -60,7 +67,7 @@ function Login({ set }) {
             localStorage.setItem("vs-token", r.accessToken);
             localStorage.setItem(
               "vs-session",
-              JSON.stringify({ username: r.username, roles: r.roles }),
+              JSON.stringify({ username: r.username, roles: r.roles, debeCambiarContrasena: r.debeCambiarContrasena }),
             );
             set({ username: r.username, roles: r.roles });
           } catch (x) {
@@ -68,13 +75,13 @@ function Login({ set }) {
           }
         }}
       >
-        <h2>Ingresar</h2>
+        <h2>{activate ? "Activar cuenta" : "Ingresar"}</h2>
         {e && <p className="error">{e}</p>}
-        <label>
+        {!activate && <label>
           Usuario
           <input value={u} onChange={(x) => su(x.target.value)} required />
-        </label>
-        <label>
+        </label>}
+        {!activate && <label>
           Contraseña
           <input
             type="password"
@@ -82,8 +89,18 @@ function Login({ set }) {
             onChange={(x) => sp(x.target.value)}
             required
           />
-        </label>
-        <button>Iniciar sesión</button>
+        </label>}
+        {activate && <>
+          <label>DNI<input required value={form.dni} onChange={(x) => change("dni", x.target.value)} /></label>
+          <label>Código de activación<input required value={form.codigo} onChange={(x) => change("codigo", x.target.value)} /></label>
+          <label>Nombre de usuario<input required value={form.username} onChange={(x) => change("username", x.target.value)} /></label>
+          <label>Contraseña<input required type="password" value={form.password} onChange={(x) => change("password", x.target.value)} /></label>
+          <label>Confirmar contraseña<input required type="password" value={form.confirmacionPassword} onChange={(x) => change("confirmacionPassword", x.target.value)} /></label>
+        </>}
+        <button>{activate ? "Activar cuenta" : "Iniciar sesión"}</button>
+        <button type="button" className="link-button" onClick={() => { setActivate(!activate); se(""); }}>
+          {activate ? "Volver a iniciar sesión" : "Activar cuenta"}
+        </button>
       </form>
     </main>
   );
@@ -651,7 +668,7 @@ function OperationsReports({ msg }) {
     </section>
   );
 }
-function App() {
+function OperationalApp() {
   const [session, setSession] = useState(() => {
       try {
         return JSON.parse(localStorage.getItem("vs-session"));
@@ -842,4 +859,36 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+function MyAccount({ user, reload, notify }) {
+  const [email, setEmail] = useState(""), [phone, setPhone] = useState(""), [password, setPassword] = useState({ passwordActual: "", nuevaPassword: "", confirmacionPassword: "" });
+  const call = async (path, options = {}) => { try { await api(path, options); await reload(); notify("Cambios guardados"); } catch (e) { notify(e.message, true); } };
+  return <section className="card"><h2>Mi cuenta</h2><p>{user.nombre} {user.apellido} · DNI {user.dni || "—"}</p>
+    <div className="account-columns"><div><h3>Correos</h3>{user.correos.map(x => <p className="contact" key={x.id}>{x.valor} {x.principal && <strong>Principal</strong>} {!x.principal && <button onClick={() => call(`/auth/me/correos/${x.id}/principal`, { method: "POST" })}>Principal</button>} {user.correos.length > 1 && <button onClick={() => call(`/auth/me/correos/${x.id}`, { method: "DELETE" })}>Eliminar</button>}</p>)}<form onSubmit={e => {e.preventDefault(); call("/auth/me/correos", {method:"POST",body:JSON.stringify({direccion:email})});setEmail("");}}><input type="email" required placeholder="nuevo correo" value={email} onChange={e=>setEmail(e.target.value)}/><button>Agregar</button></form></div>
+    <div><h3>Teléfonos</h3>{user.telefonos.map(x => <p className="contact" key={x.id}>{x.valor} {x.principal && <strong>Principal</strong>} {!x.principal && <button onClick={() => call(`/auth/me/telefonos/${x.id}/principal`, { method: "POST" })}>Principal</button>} {user.telefonos.length > 1 && <button onClick={() => call(`/auth/me/telefonos/${x.id}`, { method: "DELETE" })}>Eliminar</button>}</p>)}<form onSubmit={e => {e.preventDefault(); call("/auth/me/telefonos", {method:"POST",body:JSON.stringify({numero:phone})});setPhone("");}}><input required placeholder="nuevo teléfono" value={phone} onChange={e=>setPhone(e.target.value)}/><button>Agregar</button></form></div></div>
+    <h3>Cambiar contraseña</h3><form className="grid-form" onSubmit={e=>{e.preventDefault();call("/auth/me/password",{method:"POST",body:JSON.stringify(password)});}}>{[["passwordActual","Contraseña actual"],["nuevaPassword","Nueva contraseña"],["confirmacionPassword","Confirmar contraseña"]].map(([key,label])=><label key={key}>{label}<input type="password" required value={password[key]} onChange={e=>setPassword({...password,[key]:e.target.value})}/></label>)}<button>Actualizar contraseña</button></form>
+  </section>;
+}
+function PasswordRequired({ setSession }) {
+ const [form,setForm]=useState({passwordActual:"",nuevaPassword:"",confirmacionPassword:""}),[error,setError]=useState("");
+ return <main className="login"><section><p className="eyebrow">SEGURIDAD DE LA CUENTA</p><h1>Actualizá tu contraseña</h1><p>La contraseña temporal sólo permite este cambio antes de continuar.</p></section><form onSubmit={async e=>{e.preventDefault();try{await api("/auth/me/password",{method:"POST",body:JSON.stringify(form)});localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}catch(x){setError(x.message);}}}><h2>Nueva contraseña</h2>{error&&<p className="error">{error}</p>}{[["passwordActual","Contraseña temporal"],["nuevaPassword","Nueva contraseña"],["confirmacionPassword","Confirmar contraseña"]].map(([key,label])=><label key={key}>{label}<input type="password" required value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}<button>Guardar y volver a ingresar</button></form></main>;
+}
+function AdminUsers({ users, reload, notify }) {
+ const [query,setQuery]=useState(""),[role,setRole]=useState(""),[state,setState]=useState(""),[open,setOpen]=useState(false),[code,setCode]=useState(""),[form,setForm]=useState({nombre:"",apellido:"",dni:"",fechaNacimiento:"",licenciaAeronautica:"",roles:[],correos:[{direccion:"",tipo:"PERSONAL"}],telefonos:[{numero:"",tipo:"PERSONAL"}]});
+ const allRoles=["ADMINISTRADOR","DTS","OPERACIONES","COMANDANTE"];
+ const toggle=(r)=>setForm({...form,roles:form.roles.includes(r)?form.roles.filter(x=>x!==r):[...form.roles,r]});
+ const create=async e=>{e.preventDefault();try{const r=await api("/auth/users",{method:"POST",body:JSON.stringify({...form,fechaNacimiento:form.fechaNacimiento||null})});setCode(r.codigo);setOpen(false);reload();}catch(x){notify(x.message,true);}};
+ const shown=users.filter(x=>(!query||`${x.nombre} ${x.apellido} ${x.dni} ${x.username||""}`.toLowerCase().includes(query.toLowerCase()))&&(!role||x.roles.includes(role))&&(!state||x.estado===state));
+ return <><section className="card"><div className="section-title"><div><p className="eyebrow">ADMINISTRACIÓN</p><h1>Gestión de usuarios</h1><p>{users.length} personas con cuenta en el sistema</p></div><button onClick={()=>setOpen(!open)}>Nuevo usuario</button></div>{code&&<p className="success activation-code">Código de activación (se muestra una sola vez): <code>{code}</code> <button onClick={()=>navigator.clipboard?.writeText(code)}>Copiar</button></p>}
+  {open&&<form className="grid-form form-panel" onSubmit={create}><label>Nombre<input required value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label><label>Apellido<input required value={form.apellido} onChange={e=>setForm({...form,apellido:e.target.value})}/></label><label>DNI<input required value={form.dni} onChange={e=>setForm({...form,dni:e.target.value})}/></label><label>Fecha de nacimiento<input type="date" value={form.fechaNacimiento} onChange={e=>setForm({...form,fechaNacimiento:e.target.value})}/></label><label>Correo principal<input type="email" required value={form.correos[0].direccion} onChange={e=>setForm({...form,correos:[{direccion:e.target.value,tipo:"PERSONAL"}]})}/></label><label>Teléfono principal<input required value={form.telefonos[0].numero} onChange={e=>setForm({...form,telefonos:[{numero:e.target.value,tipo:"PERSONAL"}]})}/></label><fieldset className="wide"><legend>Roles</legend>{allRoles.map(r=><label className="check" key={r}><input type="checkbox" checked={form.roles.includes(r)} onChange={()=>toggle(r)}/>{r}</label>)}</fieldset><button>Crear cuenta pendiente</button></form>}
+  <div className="filters"><input placeholder="Buscar por nombre, DNI o usuario" value={query} onChange={e=>setQuery(e.target.value)}/><select value={role} onChange={e=>setRole(e.target.value)}><option value="">Todos los roles</option>{allRoles.map(x=><option key={x}>{x}</option>)}</select><select value={state} onChange={e=>setState(e.target.value)}><option value="">Todos los estados</option><option>PENDIENTE_ACTIVACION</option><option>ACTIVO</option><option>DESACTIVADO</option></select></div>
+  <table><thead><tr><th>Nombre completo</th><th>DNI</th><th>Usuario</th><th>Correo principal</th><th>Roles</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{shown.map(x=><tr key={x.id}><td>{x.nombre} {x.apellido}</td><td>{x.dni}</td><td>{x.username||"—"}</td><td>{x.correos.find(c=>c.principal)?.valor||"—"}</td><td>{[...x.roles].join(", ")}</td><td><span className={s(x.estado)}>{x.estado}</span></td><td><button onClick={async()=>{try{const r=await api(`/auth/users/${x.id}/activation-code`,{method:"POST"});setCode(r.codigo);reload();}catch(e){notify(e.message,true)}}} disabled={x.estado!=="PENDIENTE_ACTIVACION"}>Regenerar código</button></td></tr>)}</tbody></table></section></>;
+}
+function AdminApp() {
+ const [session,setSession]=useState(()=>{try{return JSON.parse(localStorage.getItem("vs-session"));}catch{return null;}}),[users,setUsers]=useState([]),[me,setMe]=useState(null),[page,setPage]=useState(location.hash==="#/admin/mi-cuenta"?"account":"users"),[note,setNote]=useState(""),[dark,setDark]=useState(()=>localStorage.getItem("vs-theme")==="dark");
+ const load=async()=>{try{const [u,m]=await Promise.all([api("/auth/users"),api("/auth/me")]);setUsers(u);setMe(m);}catch(e){setNote(e.message);}};
+ useEffect(()=>{if(session)load();},[session]); useEffect(()=>{document.documentElement.dataset.theme=dark?"dark":"light";document.body.dataset.theme=dark?"dark":"light";localStorage.setItem("vs-theme",dark?"dark":"light");},[dark]);
+ if(!session)return <Login set={setSession}/>; if(session.debeCambiarContrasena)return <PasswordRequired setSession={setSession}/>; if(!session.roles.includes("ADMINISTRADOR"))return <OperationalApp/>;
+ const nav=(target)=>{setPage(target);history.replaceState(null,"",target==="account"?"#/admin/mi-cuenta":"#/admin/usuarios");}; const notify=(text,bad)=>setNote((bad?"":"✓ ")+text);
+ return <div className="shell admin-shell"><aside><div className="brand">✈ <span>Vuelos<br/>Sanitarios</span></div><nav><a className={page==="users"?"active":""} onClick={()=>nav("users")}>Gestión de usuarios</a><a className={page==="account"?"active":""} onClick={()=>nav("account")}>Mi cuenta</a></nav><button className="secondary" onClick={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}>Cerrar sesión</button></aside><main className="content"><header><div><p className="eyebrow">PANEL ADMINISTRADOR</p><h1>{page==="users"?"Gestión de usuarios":"Mi cuenta"}</h1></div><button className="icon" onClick={()=>setDark(!dark)} aria-label="Cambiar tema">{dark?"☀":"◐"}</button></header>{note&&<p className={note.startsWith("✓")?"success":"error"}>{note}</p>}{page==="users"?<AdminUsers users={users} reload={load} notify={notify}/>:me&&<MyAccount user={me} reload={load} notify={notify}/>}</main></div>;
+}
+createRoot(document.getElementById("root")).render(<AdminApp />);
