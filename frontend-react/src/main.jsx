@@ -718,10 +718,9 @@ function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{}
   useEffect(() => {
     if (session) load();
   }, [session]);
-  useEffect(
-    () => (document.body.dataset.theme = dark ? "dark" : "light"),
-    [dark],
-  );
+  useEffect(() => {
+    document.body.dataset.theme = dark ? "dark" : "light";
+  }, [dark]);
   if (!session) return <Login set={setSession} />;
   let msg = (x, bad) => setNote((bad ? "" : "✓ ") + x);
   return (
@@ -888,8 +887,8 @@ export function AdminUsers({ users, reload, notify }) {
   <div className="filters"><input placeholder="Buscar por nombre, DNI o usuario" value={query} onChange={e=>setQuery(e.target.value)}/><select value={role} onChange={e=>setRole(e.target.value)}><option value="">Todos los roles</option>{allRoles.map(x=><option key={x}>{x}</option>)}</select><select value={state} onChange={e=>setState(e.target.value)}><option value="">Todos los estados</option><option>PENDIENTE_ACTIVACION</option><option>ACTIVO</option><option>DESACTIVADO</option></select></div>
   <table><thead><tr><th>Nombre completo</th><th>DNI</th><th>Usuario</th><th>Correo principal</th><th>Roles</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{shown.map(x=><tr key={x.id}><td>{x.nombre} {x.apellido}</td><td>{x.dni}</td><td>{x.username||"—"}</td><td>{x.correos.find(c=>c.principal)?.valor||"—"}</td><td>{[...x.roles].join(", ")}</td><td><span className={s(x.estado)}>{x.estado}</span></td><td><button onClick={async()=>{try{const r=await api(`/auth/users/${x.id}/activation-code`,{method:"POST"});setCode(r.codigo);reload();}catch(e){notify(e.message,true)}}} disabled={x.estado!=="PENDIENTE_ACTIVACION"}>Regenerar código</button></td></tr>)}</tbody></table></section></>;
 }
-function WorkspaceSelector({workspaces,select}){return <main className="login"><section><p className="eyebrow">ÁREAS HABILITADAS</p><h1>Seleccione el área de trabajo</h1></section><div className="card">{workspaces.map(x=><button key={x.id} onClick={()=>select(x.id)}>{x.label}</button>)}</div></main>;}
-function AdminApp() {
+export function WorkspaceSelector({workspaces,select}){return <main className="login"><section><p className="eyebrow">ÁREAS HABILITADAS</p><h1>Seleccione el área de trabajo</h1></section><div className="card">{workspaces.map(x=><button key={x.id} onClick={()=>select(x.id)}>{x.label}</button>)}</div></main>;}
+export function AdminApp() {
  const [session,setSession]=useState(()=>{try{return JSON.parse(localStorage.getItem("vs-session"));}catch{return null;}}),[users,setUsers]=useState([]),[me,setMe]=useState(null),[page,setPage]=useState(location.hash==="#/admin/mi-cuenta"?"account":"users"),[note,setNote]=useState(""),[dark,setDark]=useState(()=>localStorage.getItem("vs-theme")==="dark"),[workspace,setWorkspace]=useState(null);
  const load=async()=>{try{const [u,m]=await Promise.all([api("/auth/users"),api("/auth/me")]);setUsers(u);setMe(m);}catch(e){setNote(e.message);}};
  useEffect(()=>{if(session)load();},[session]); useEffect(()=>{document.documentElement.dataset.theme=dark?"dark":"light";document.body.dataset.theme=dark?"dark":"light";localStorage.setItem("vs-theme",dark?"dark":"light");},[dark]);
@@ -897,4 +896,5 @@ function AdminApp() {
  const nav=(target)=>{setPage(target);history.replaceState(null,"",target==="account"?"#/admin/mi-cuenta":"#/admin/usuarios");}; const notify=(text,bad)=>setNote((bad?"":"✓ ")+text);
  return <div className="shell admin-shell"><aside><div className="brand">✈ <span>Vuelos<br/>Sanitarios</span></div><nav><a className={page==="users"?"active":""} onClick={()=>nav("users")}>Gestión de usuarios</a><a className={page==="account"?"active":""} onClick={()=>nav("account")}>Mi cuenta</a></nav><button className="secondary" onClick={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}>Cerrar sesión</button></aside><main className="content"><header><div><p className="eyebrow">PANEL ADMINISTRADOR</p><h1>{page==="users"?"Gestión de usuarios":"Mi cuenta"}</h1></div>{workspaces.length>1&&<button className="secondary-action" onClick={()=>setWorkspace(null)}>Cambiar área</button>}<button className="icon" onClick={()=>setDark(!dark)} aria-label="Cambiar tema">{dark?"☀":"◐"}</button></header>{note&&<p className={note.startsWith("✓")?"success":"error"}>{note}</p>}{page==="users"?<AdminUsers users={users} reload={load} notify={notify}/>:me&&<MyAccount user={me} reload={load} notify={notify}/>}</main></div>;
 }
-createRoot(document.getElementById("root")).render(<AdminApp />);
+const root=document.getElementById("root");
+if(root)createRoot(root).render(<AdminApp />);

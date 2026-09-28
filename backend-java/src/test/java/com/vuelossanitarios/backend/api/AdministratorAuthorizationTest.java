@@ -30,6 +30,8 @@ class AdministratorAuthorizationTest {
  }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanReachUserManagementEndpoint() throws Exception { mvc.perform(get("/api/auth/users")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"COMANDANTE","OPERACIONES"}) void validOperationalMultiRoleKeepsOperationalAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); }
+ @Test @WithMockUser(roles={"ADMINISTRADOR","CENTRO_OPERACIONES"}) void administratorWithOperationsKeepsOperationsAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
+ @Test @WithMockUser(roles={"ADMINISTRADOR","COMANDANTE"}) void administratorWithCommanderKeepsCommanderAccess() throws Exception { mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
  @Test void activationEndpointReturnsNoContentForTheFrontendClient() throws Exception {
   mvc.perform(post("/api/auth/activar-cuenta").contentType("application/json").content("{\"dni\":\"30111222\",\"codigo\":\"codigo\",\"username\":\"ana\",\"password\":\"NuevaClave123\",\"confirmacionPassword\":\"NuevaClave123\"}"))
    .andExpect(status().isNoContent()).andExpect(content().string(""));

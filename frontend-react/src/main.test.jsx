@@ -51,3 +51,31 @@ test("an administrator can open a clean form and create another pending person",
  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
  expect(vi.mocked(api).mock.calls.filter(([path, options]) => path === "/auth/users" && options?.method === "POST")).toHaveLength(2);
 });
+test("workspace selector only renders enabled areas", async () => {
+ const { WorkspaceSelector } = await import("./main.jsx");
+ const select=vi.fn();
+ render(<WorkspaceSelector workspaces={[{id:"COMANDANTE",label:"Comandante"},{id:"OPERACIONES",label:"Centro de Operaciones"}]} select={select}/>);
+ fireEvent.click(screen.getByRole("button",{name:"Comandante"}));
+ expect(select).toHaveBeenCalledWith("COMANDANTE");
+ expect(screen.queryByRole("button",{name:"Administración"})).toBeNull();
+});
+test("changing area preserves the session and moves from administration to operations", async () => {
+ const { AdminApp } = await import("./main.jsx");
+ localStorage.setItem("vs-token","unchanged-token");
+ localStorage.setItem("vs-session",JSON.stringify({username:"admin-op",roles:["ADMINISTRADOR","CENTRO_OPERACIONES"]}));
+ vi.mocked(api).mockImplementation((path) => {
+   if(path==="/auth/users")return Promise.resolve([]);
+   if(path==="/auth/me")return Promise.resolve({nombre:"Admin",apellido:"Op",dni:null,correos:[],telefonos:[]});
+   if(path==="/notifications")return Promise.resolve({content:[]});
+   return Promise.resolve([]);
+ });
+ render(<AdminApp/>);
+ fireEvent.click(await screen.findByRole("button",{name:"Administración"}));
+ expect((await screen.findAllByText("Gestión de usuarios")).length).toBeGreaterThan(0);
+ expect(screen.queryByText("Vuelos visibles")).toBeNull();
+ fireEvent.click(screen.getByRole("button",{name:"Cambiar área"}));
+ fireEvent.click(await screen.findByRole("button",{name:"Centro de Operaciones"}));
+ expect(await screen.findByText("Vuelos visibles")).toBeInTheDocument();
+ expect(localStorage.getItem("vs-token")).toBe("unchanged-token");
+ expect(JSON.parse(localStorage.getItem("vs-session")).roles).toEqual(["ADMINISTRADOR","CENTRO_OPERACIONES"]);
+});
