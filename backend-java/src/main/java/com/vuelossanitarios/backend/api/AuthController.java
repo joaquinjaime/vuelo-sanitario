@@ -22,7 +22,7 @@ import java.util.*;
  @PostMapping("/me/telefonos/{id}/principal") public void mainPhone(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.makePrimaryPhone(u.id(),id);}
  @GetMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<UserView> users(){return service.listUsers();}
  @PostMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse create(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody CreatePendingUserRequest r){return service.createPending(r,u.id());}
- @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@PathVariable UUID id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r);}
+ @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
  @PostMapping("/users/{id}/activation-code") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse regenerate(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){return service.regenerate(id,u.id());}
  @PostMapping("/users/{id}/temporary-password") @PreAuthorize("hasRole('ADMINISTRADOR')") public void temporary(@PathVariable UUID id,@Valid @RequestBody TemporaryPasswordRequest r){service.setTemporaryPassword(id,r);}
 }

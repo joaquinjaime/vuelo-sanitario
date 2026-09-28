@@ -5,6 +5,7 @@ Fuente: catálogos `sys.tables`, `sys.columns`, `sys.key_constraints`, `sys.fore
 | Tabla | Propósito | Clave y relaciones principales |
 |---|---|---|
 | `personas` | Identidad compartida | PK `id`; base de usuarios y pacientes |
+| `perfiles_comandante` | Información profesional de comandante | PK/FK `persona_id`; licencia alfanumérica canónica y única |
 | `usuarios` | Cuentas y perfiles operativos | PK `id`; UQ nombre/correo/persona; FK persona |
 | `roles`, `usuarios_roles` | Autorización | N:M usuario–rol; PK compuesta en la tabla puente |
 | `pacientes` | Datos clínicos del paciente | PK `id`; UQ/FK `persona_id` |

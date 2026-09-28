@@ -30,8 +30,6 @@ public class User extends BaseEntity {
 @JoinColumn(name = "persona_id", nullable = false, unique = true)
     private Person person;
 
-    @Column(name = "licencia_aeronautica", length = 50)
-    private String licenciaAeronautica;
 
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
@@ -64,9 +62,6 @@ public class User extends BaseEntity {
 
     public Person getPerson() { return person; }
     public void setPerson(Person person) { this.person = person; }
-
-    public String getLicenciaAeronautica() { return licenciaAeronautica; }
-    public void setLicenciaAeronautica(String licenciaAeronautica) { this.licenciaAeronautica = licenciaAeronautica; }
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }

@@ -15,7 +15,7 @@ test("the license input follows the COMANDANTE role without clearing the form", 
  const { AdminUsers } = await import("./main.jsx");
  render(<AdminUsers users={[]} reload={vi.fn()} notify={vi.fn()} />);
  fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
- fireEvent.click(screen.getByLabelText("OPERACIONES"));
+ fireEvent.click(screen.getByLabelText("CENTRO_OPERACIONES"));
  expect(screen.queryByLabelText("Número de licencia")).toBeNull();
  fireEvent.click(screen.getByLabelText("COMANDANTE"));
  const license = screen.getByLabelText("Número de licencia");

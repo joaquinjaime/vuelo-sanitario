@@ -5,6 +5,7 @@ Generado a partir del catálogo de `vuelos_sanitarios` en SQL Server luego de Fl
 ```mermaid
 erDiagram
   personas ||--o| usuarios : identifica
+  personas ||--o| perfiles_comandante : perfil_profesional
   personas ||--o| pacientes : identifica
   usuarios ||--o{ usuarios_roles : tiene
   roles ||--o{ usuarios_roles : asigna

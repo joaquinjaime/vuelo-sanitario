@@ -2,6 +2,7 @@ package com.vuelossanitarios.backend.repository;
 import com.vuelossanitarios.backend.domain.user.User;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 import java.util.*;
 public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select u from User u left join fetch u.userRoles ur left join fetch ur.role where u.username = :username")
@@ -13,4 +14,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findAllWithPersonAndRoles();
     @Query("select u from User u join fetch u.person where u.id=:id") Optional<User> findWithPersonById(@Param("id") UUID id);
     @Query("select u from User u join fetch u.person p where p.dni=:dni") Optional<User> findWithPersonByDni(@Param("dni") String dni);
+    @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select distinct u from User u join fetch u.userRoles ur join ur.role r where r.codigo='ADMINISTRADOR' and u.activo=true and u.estadoCuenta='ACTIVO'") List<User> lockActiveAdministrators();
 }
