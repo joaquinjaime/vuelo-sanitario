@@ -45,11 +45,25 @@ test("an administrator can open a clean form and create another pending person",
  fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
  completeAndSubmit("30111222");
  await waitFor(() => expect(screen.queryByLabelText("DNI")).toBeNull());
+ expect(screen.getByText(/Código de activación/)).toBeInTheDocument();
+ expect(screen.getByText("codigo-prueba")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Cerrar aviso"}));
+ expect(screen.queryByText(/Código de activación/)).toBeNull();
  fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
  expect(screen.getByLabelText("DNI")).toHaveValue("");
  completeAndSubmit("30222333");
  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
  expect(vi.mocked(api).mock.calls.filter(([path, options]) => path === "/auth/users" && options?.method === "POST")).toHaveLength(2);
+});
+test("regeneration displays its one-time response and can be dismissed", async () => {
+ const { AdminUsers } = await import("./main.jsx");
+ const pending={id:"user-pending",nombre:"Ana",apellido:"Pérez",dni:"47355303",username:null,estado:"PENDIENTE_ACTIVACION",roles:["DTS"],correos:[]};
+ vi.mocked(api).mockImplementation((path,options) => path==="/auth/users/user-pending/activation-code"&&options?.method==="POST" ? Promise.resolve({codigo:"codigo-regenerado"}) : Promise.resolve([]));
+ render(<AdminUsers users={[pending]} reload={vi.fn()} notify={vi.fn()} />);
+ fireEvent.click(screen.getByRole("button",{name:"Regenerar código"}));
+ expect(await screen.findByText("codigo-regenerado")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Cerrar aviso"}));
+ expect(screen.queryByText("codigo-regenerado")).toBeNull();
 });
 test("workspace selector only renders enabled areas", async () => {
  const { WorkspaceSelector } = await import("./main.jsx");
