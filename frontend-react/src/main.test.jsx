@@ -26,11 +26,12 @@ test("the license input follows the COMANDANTE role without clearing the form", 
  fireEvent.click(screen.getByLabelText("COMANDANTE"));
  expect(screen.getByLabelText("Número de licencia")).toHaveValue("LIC-42");
 });
-test("an administrator can open a clean form and create another pending person", async () => {
+test("consecutive pending creations keep each code modal independent from the reset form", async () => {
  const { AdminUsers } = await import("./main.jsx");
  const reload = vi.fn().mockResolvedValue(undefined);
+ let created=0;
  vi.mocked(api).mockImplementation((path, options) => {
-   if (path === "/auth/users" && options?.method === "POST") return Promise.resolve({ codigo: "codigo-prueba" });
+   if (path === "/auth/users" && options?.method === "POST") return Promise.resolve({ codigo: ++created===1 ? "codigo-uno" : "codigo-dos" });
    return Promise.resolve([]);
  });
  render(<AdminUsers users={[]} reload={reload} notify={vi.fn()} />);
@@ -40,19 +41,28 @@ test("an administrator can open a clean form and create another pending person",
    fireEvent.change(screen.getByLabelText("DNI"), { target: { value: dni } });
    fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: `${dni}@example.test` } });
    fireEvent.change(screen.getByLabelText("Teléfono principal"), { target: { value: "3815555555" } });
+   fireEvent.click(screen.getByLabelText("DTS"));
    fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
  };
  fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
  completeAndSubmit("30111222");
  await waitFor(() => expect(screen.queryByLabelText("DNI")).toBeNull());
  expect(screen.getByText(/Código de activación/)).toBeInTheDocument();
- expect(screen.getByText("codigo-prueba")).toBeInTheDocument();
+ expect(screen.getByRole("dialog")).toBeInTheDocument();
+ expect(screen.getByText("codigo-uno")).toBeInTheDocument();
  fireEvent.click(screen.getByRole("button",{name:"Cerrar aviso"}));
  expect(screen.queryByText(/Código de activación/)).toBeNull();
  fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+ expect(screen.getByLabelText("Nombre")).toHaveValue("");
+ expect(screen.getByLabelText("Apellido")).toHaveValue("");
  expect(screen.getByLabelText("DNI")).toHaveValue("");
+ expect(screen.getByLabelText("Correo principal")).toHaveValue("");
+ expect(screen.getByLabelText("Teléfono principal")).toHaveValue("");
+ expect(screen.getByLabelText("DTS")).not.toBeChecked();
  completeAndSubmit("30222333");
  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+ expect(screen.getByRole("dialog")).toBeInTheDocument();
+ expect(screen.getByText("codigo-dos")).toBeInTheDocument();
  expect(vi.mocked(api).mock.calls.filter(([path, options]) => path === "/auth/users" && options?.method === "POST")).toHaveLength(2);
 });
 test("regeneration displays its one-time response and can be dismissed", async () => {

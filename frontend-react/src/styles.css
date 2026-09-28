@@ -294,6 +294,10 @@ button {
 .contact { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .contact button, .activation-code button { padding: .35rem .55rem; font-size: .8rem; }
 .activation-code { overflow-wrap: anywhere; }
+.activation-modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 1rem; background: rgb(10 25 41 / .62); }
+.activation-modal { width: min(100%, 34rem); display: grid; gap: 1rem; padding: 1.5rem; border-radius: 12px; background: var(--card); color: var(--ink); box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .3); }
+.activation-modal h2, .activation-modal p { margin: 0; }
+.activation-modal code { overflow-wrap: anywhere; padding: .85rem; border-radius: 8px; background: var(--soft); color: var(--ink); font-size: 1.05rem; }
 .form-panel { border-top: 1px solid var(--line); padding-top: 1rem; }
 .status-pendiente_activacion { background: #fff4cd; color: #765400; }
 .status-activo { background: #dff8ef; color: #11784f; }
