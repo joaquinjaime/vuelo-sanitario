@@ -46,14 +46,14 @@ class AccountActivationIntegrationTest {
  @Autowired PasswordEncoder encoder;
 
  @BeforeEach void seedRole(){
-  if(roles.findByCodigo("CENTRO_OPERACIONES").isEmpty()){
-   Role role=new Role(); role.setCodigo("CENTRO_OPERACIONES"); role.setNombre("Centro de Operaciones"); roles.save(role);
+  if(roles.findByCodigo("OPERACIONES").isEmpty()){
+   Role role=new Role(); role.setCodigo("OPERACIONES"); role.setNombre("Centro de Operaciones"); roles.save(role);
   }
  }
 
  @Test void createdPendingAccountActivatesOverHttpAndCanThenLogIn() throws Exception {
   ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
-   "Ana","Pérez","30111222",null,null,Set.of("CENTRO_OPERACIONES"),
+   "Ana","Pérez","30111222",null,null,Set.of("OPERACIONES"),
    List.of(new ContactRequest("ana@example.test","PERSONAL")),
    List.of(new PhoneRequest("3815555555","PERSONAL"))), null);
 
