@@ -28,8 +28,16 @@ import java.util.*;
  @Transactional public ActivationCodeResponse regenerate(UUID userId, UUID actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(LocalDateTime.now())); return new ActivationCodeResponse(newActivation(u,actorId),"24 horas"); }
  @Transactional public void activate(ActivateAccountRequest r){
   if(!r.password().equals(r.confirmacionPassword()))throw new ApiException(HttpStatus.BAD_REQUEST,"Las contraseñas no coinciden");
-  List<AccountActivation> candidates=activations.findOpenByDni(r.dni().trim()); if(candidates.size()!=1)throw new ApiException(HttpStatus.BAD_REQUEST,"Código de activación inválido"); AccountActivation a=candidates.getFirst(); User u=a.getUser();
-  if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta())||!Boolean.TRUE.equals(u.getActivo())||a.getExpiresAt().isBefore(LocalDateTime.now())||!encoder.matches(r.codigo(),a.getTokenHash()))throw new ApiException(HttpStatus.BAD_REQUEST,"Código de activación inválido o vencido");
+  String dni=r.dni().trim(); List<AccountActivation> candidates=activations.findOpenByDni(dni);
+  if(candidates.isEmpty()){
+   User existing=users.findWithPersonByDni(dni).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"DNI inexistente"));
+   if("ACTIVO".equals(existing.getEstadoCuenta()))throw new ApiException(HttpStatus.CONFLICT,"La cuenta ya está activada");
+   throw new ApiException(HttpStatus.BAD_REQUEST,"No hay un código de activación vigente");
+  }
+  if(candidates.size()!=1)throw new ApiException(HttpStatus.BAD_REQUEST,"Código de activación inválido"); AccountActivation a=candidates.getFirst(); User u=a.getUser();
+  if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta())||!Boolean.TRUE.equals(u.getActivo()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está disponible para activación");
+  if(a.getExpiresAt().isBefore(LocalDateTime.now()))throw new ApiException(HttpStatus.BAD_REQUEST,"El código de activación venció");
+  if(!encoder.matches(r.codigo(),a.getTokenHash()))throw new ApiException(HttpStatus.BAD_REQUEST,"El código de activación es incorrecto");
   if(users.existsByUsername(r.username().trim()))throw new ApiException(HttpStatus.CONFLICT,"El nombre de usuario ya existe"); u.setUsername(r.username().trim());u.setPasswordHash(encoder.encode(r.password()));u.setEstadoCuenta("ACTIVO");u.setDebeCambiarContrasena(false);a.setUsedAt(LocalDateTime.now());
  }
  @Transactional(readOnly=true) public List<UserView> listUsers(){return users.findAllWithPersonAndRoles().stream().map(this::view).toList();}

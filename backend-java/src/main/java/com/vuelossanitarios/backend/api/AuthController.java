@@ -5,12 +5,13 @@ import com.vuelossanitarios.backend.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 @RestController @RequestMapping("/api/auth") public class AuthController {
  private final AuthService service; public AuthController(AuthService s){service=s;}
  @PostMapping("/login") public TokenResponse login(@Valid @RequestBody LoginRequest request){return service.login(request);}
- @PostMapping("/activar-cuenta") public void activate(@Valid @RequestBody ActivateAccountRequest r){service.activate(r);}
+ @PostMapping("/activar-cuenta") @ResponseStatus(HttpStatus.NO_CONTENT) public void activate(@Valid @RequestBody ActivateAccountRequest r){service.activate(r);}
  @GetMapping("/me") public UserView me(@AuthenticationPrincipal CurrentUser u){return service.myAccount(u.id());}
  @PostMapping("/me/password") public void password(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ChangePasswordRequest r){service.changePassword(u.id(),r);}
  @PostMapping("/me/correos") public ContactView email(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ContactRequest r){return service.addEmail(u.id(),r);}

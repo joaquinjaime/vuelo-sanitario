@@ -12,4 +12,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select distinct u from User u join fetch u.person left join fetch u.userRoles ur left join fetch ur.role")
     List<User> findAllWithPersonAndRoles();
     @Query("select u from User u join fetch u.person where u.id=:id") Optional<User> findWithPersonById(@Param("id") UUID id);
+    @Query("select u from User u join fetch u.person p where p.dni=:dni") Optional<User> findWithPersonByDni(@Param("dni") String dni);
 }

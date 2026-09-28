@@ -11,7 +11,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @WebMvcTest(controllers={FlightController.class,PatientController.class,NotificationController.class,FinalReportController.class,DocumentController.class,CatalogController.class,AuthController.class})
 @Import({SecurityConfig.class,JwtAuthenticationFilter.class})
@@ -28,4 +30,8 @@ class AdministratorAuthorizationTest {
  }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanReachUserManagementEndpoint() throws Exception { mvc.perform(get("/api/auth/users")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"COMANDANTE","OPERACIONES"}) void validOperationalMultiRoleKeepsOperationalAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); }
+ @Test void activationEndpointReturnsNoContentForTheFrontendClient() throws Exception {
+  mvc.perform(post("/api/auth/activar-cuenta").contentType("application/json").content("{\"dni\":\"30111222\",\"codigo\":\"codigo\",\"username\":\"ana\",\"password\":\"NuevaClave123\",\"confirmacionPassword\":\"NuevaClave123\"}"))
+   .andExpect(status().isNoContent()).andExpect(content().string(""));
+ }
 }
