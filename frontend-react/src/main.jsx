@@ -127,13 +127,19 @@ export function Login({ set }) {
     </main>
   );
 }
-function DTS({ d, done, msg }) {
+const locationLabel = (location) => location ? `${location.nombre}, ${location.provincia}` : "—";
+function LocalityPicker({ title, provinces, provinceId, setProvinceId, selected, setSelected }) {
+  const [query, setQuery] = useState(""), [options, setOptions] = useState([]), [loading, setLoading] = useState(false), [open, setOpen] = useState(false);
+  useEffect(() => { setSelected(null); setQuery(""); setOptions([]); }, [provinceId]);
+  useEffect(() => { if (!provinceId) return; const timer = setTimeout(async () => { try { setLoading(true); setOptions(await api(`/catalogs/localities?provinceId=${provinceId}&q=${encodeURIComponent(query)}`)); } catch { setOptions([]); } finally { setLoading(false); } }, 250); return () => clearTimeout(timer); }, [provinceId, query]);
+  return <fieldset className="wide locality-picker"><legend>{title}</legend><label>Provincia<select aria-label={`Provincia ${title.toLowerCase()}`} required value={provinceId} onChange={e => setProvinceId(e.target.value)}><option value="">Seleccionar provincia</option>{provinces.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label><label>Localidad<input aria-label={`Buscar localidad ${title.toLowerCase()}`} disabled={!provinceId} value={query} placeholder="Buscar localidad..." onFocus={() => setOpen(true)} onChange={e => { setQuery(e.target.value); setSelected(null); setOpen(true); }} onKeyDown={e => { if (e.key === "Escape") setOpen(false); }} />{selected && <small className="success">Seleccionada: {locationLabel(selected)} <button type="button" className="link-button" onClick={() => { setSelected(null); setQuery(""); }}>Limpiar</button></small>}{provinceId && open && <div className="autocomplete" role="listbox">{loading ? <small>Cargando...</small> : options.length ? options.map(x => <button type="button" role="option" key={x.id} onMouseDown={e => e.preventDefault()} onClick={() => { setSelected(x); setQuery(x.nombre); setOpen(false); }}>{locationLabel(x)}</button>) : <small>Sin resultados.</small>}</div>}</label>{!selected && <small className="hint">Busque y seleccione una localidad de la lista.</small>}</fieldset>;
+}
+export function DTS({ d, done, msg }) {
   const [p, setP] = useState(""),
+    [provinces, setProvinces] = useState([]), [originProvince, setOriginProvince] = useState(""), [destinationProvince, setDestinationProvince] = useState(""), [origin, setOrigin] = useState(null), [destination, setDestination] = useState(null), [locationError, setLocationError] = useState(""),
     [f, setF] = useState({
       nombre: "",
       apellido: "",
-      origen: "",
-      destino: "",
       prioridad: "ALTA",
       motivo: "",
       diagnostico: "",
@@ -145,6 +151,7 @@ function DTS({ d, done, msg }) {
     });
   let change = (k, v) => setF({ ...f, [k]: v });
   let todayOrTomorrow = isTodayOrTomorrow(f.solicitada);
+  useEffect(() => { api("/catalogs/provinces").then(setProvinces).catch(x => msg(x.message, true)); }, []);
   return (
     <section className="card">
       <h2>Nueva solicitud DTS</h2>
@@ -162,6 +169,7 @@ function DTS({ d, done, msg }) {
         className="grid-form"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!origin || !destination) { setLocationError("Seleccione una localidad válida de origen y destino."); return; }
           try {
             let id = p;
             if (!id)
@@ -178,8 +186,8 @@ function DTS({ d, done, msg }) {
               method: "POST",
               body: JSON.stringify({
                 patientId: id,
-                ciudadOrigenSolicitada: f.origen,
-                ciudadDestinoSolicitada: f.destino,
+                localidadOrigenId: origin.id,
+                localidadDestinoId: destination.id,
                 priorityCode: f.prioridad,
                 motivoSolicitud: f.motivo,
                 fechaSolicitada: f.solicitada,
@@ -234,22 +242,9 @@ function DTS({ d, done, msg }) {
             </label>
           </>
         )}
-        <label>
-          Ciudad origen
-          <input
-            required
-            value={f.origen}
-            onChange={(e) => change("origen", e.target.value)}
-          />
-        </label>
-        <label>
-          Ciudad destino
-          <input
-            required
-            value={f.destino}
-            onChange={(e) => change("destino", e.target.value)}
-          />
-        </label>
+        <LocalityPicker title="Origen" provinces={provinces} provinceId={originProvince} setProvinceId={setOriginProvince} selected={origin} setSelected={setOrigin} />
+        <LocalityPicker title="Destino" provinces={provinces} provinceId={destinationProvince} setProvinceId={setDestinationProvince} selected={destination} setSelected={setDestination} />
+        {locationError && <p className="error wide">{locationError}</p>}
         <label>
           Fecha y hora solicitada
           <input
@@ -349,9 +344,9 @@ export function Ops({ d, done, msg }) {
   return (
     <section className="card">
       <div className="section-title"><div><h2>Solicitudes recibidas</h2><p className="hint">Seleccione una solicitud para revisar sus datos clínicos y ejecutar la acción disponible.</p></div></div>
-      {d.flights.length ? <table><thead><tr><th>Solicitud</th><th>Paciente</th><th>Origen → destino</th><th>Solicitada</th><th>Prioridad</th><th>Estado</th><th /></tr></thead><tbody>{d.flights.map((x) => <tr className={x.extremaUrgencia ? "urgent-row" : ""} key={x.id}><td>{x.extremaUrgencia && "⚠ "}{x.codigo}</td><td>{x.paciente || "—"}</td><td>{x.ciudadOrigenSolicitada} → {x.ciudadDestinoSolicitada}</td><td>{dt(x.solicitada)}</td><td>{x.prioridad}</td><td><span className={s(x.estado)}>{x.estado}</span></td><td><button onClick={() => setId(x.id)}>Ver detalle</button></td></tr>)}</tbody></table> : <p className="empty">No hay solicitudes para operar.</p>}
+      {d.flights.length ? <table><thead><tr><th>Solicitud</th><th>Paciente</th><th>Origen → destino</th><th>Solicitada</th><th>Prioridad</th><th>Estado</th><th /></tr></thead><tbody>{d.flights.map((x) => <tr className={x.extremaUrgencia ? "urgent-row" : ""} key={x.id}><td>{x.extremaUrgencia && "⚠ "}{x.codigo}</td><td>{x.paciente || "—"}</td><td>{locationLabel(x.origen)} → {locationLabel(x.destino)}</td><td>{dt(x.solicitada)}</td><td>{x.prioridad}</td><td><span className={s(x.estado)}>{x.estado}</span></td><td><button onClick={() => setId(x.id)}>Ver detalle</button></td></tr>)}</tbody></table> : <p className="empty">No hay solicitudes para operar.</p>}
       {f && <section className="flight-detail"><div className="section-title"><div><h3>{f.codigo}</h3><p>Estado: <span className={s(f.estado)}>{f.estado}</span> · Prioridad: {f.prioridad}</p></div><button className="secondary-action" onClick={() => setId("")}>Cerrar detalle</button></div><Urgency flight={f} detail />
-        <div className="detail-grid"><div><h4>Traslado</h4><p>{f.ciudadOrigenSolicitada} → {f.ciudadDestinoSolicitada}</p><p>Solicitado: {dt(f.solicitada)}</p><p>Motivo: {detail.motivoSolicitud || "—"}</p></div><div><h4>Paciente</h4><p>{detail.paciente.nombre} {detail.paciente.apellido}</p><p>DNI: {detail.paciente.dni || "—"}</p></div><div><h4>Información médica</h4><p>Diagnóstico: {detail.medical?.diagnostico || "—"}</p><p>Condición: {detail.medical?.condicionMedica || "—"}</p><p>Equipamiento especial: {detail.medical?.requiereEquipamientoEspecial ? "Sí" : "No"}</p><p>{detail.medical?.observaciones || ""}</p></div></div>
+        <div className="detail-grid"><div><h4>Traslado</h4><p>{locationLabel(f.origen)} → {locationLabel(f.destino)}</p><p>Solicitado: {dt(f.solicitada)}</p><p>Motivo: {detail.motivoSolicitud || "—"}</p></div><div><h4>Paciente</h4><p>{detail.paciente.nombre} {detail.paciente.apellido}</p><p>DNI: {detail.paciente.dni || "—"}</p></div><div><h4>Información médica</h4><p>Diagnóstico: {detail.medical?.diagnostico || "—"}</p><p>Condición: {detail.medical?.condicionMedica || "—"}</p><p>Equipamiento especial: {detail.medical?.requiereEquipamientoEspecial ? "Sí" : "No"}</p><p>{detail.medical?.observaciones || ""}</p></div></div>
         {f.estado === "RECHAZADO" && <p className="error">Motivo del rechazo: {detail.motivoRechazo}</p>}
         {f.estado === "SOLICITADO" && <div className="detail-actions"><button onClick={() => call(`/flights/${id}/evaluation`, { aprobar: true, priorityCode: f.prioridad }, "Solicitud aprobada")}>Aprobar solicitud</button><label>Motivo del rechazo<textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Indique el motivo obligatorio" /></label><button className="secondary-action" disabled={!reason.trim()} onClick={() => call(`/flights/${id}/evaluation`, { aprobar: false, motivoRechazo: reason }, "Solicitud rechazada")}>Rechazar solicitud</button></div>}
         {f.estado === "APROBADO" && <div className="detail-actions">{detail.recursos.aircraftId && detail.recursos.commanderId ? <p className="success">Recursos asignados: {detail.recursos.aircraftMatricula} · {detail.recursos.commanderNombre} {detail.recursos.commanderApellido} · Licencia {detail.recursos.commanderLicencia}</p> : <><label>Aeronave<select value={a} onChange={(e) => setA(e.target.value)}><option value="">Seleccionar aeronave</option>{d.aircraft.map((x) => <option key={x.id} value={x.id}>{x.matricula} · {x.modelo}</option>)}</select></label><label>Comandante<select value={c} onChange={(e) => setC(e.target.value)}><option value="">Seleccionar comandante</option>{d.commanders.map((x) => <option key={x.id} value={x.id}>{x.nombre} {x.apellido} · Licencia {x.licencia}</option>)}</select></label><button disabled={!a || !c} onClick={() => call(`/flights/${id}/resources`, { aircraftId: a, comandanteId: c }, "Aeronave y comandante asignados")}>Asignar recursos</button></>}</div>}
@@ -776,7 +771,7 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
                     <td>{x.prioridad}</td>
                     <td>{dt(x.solicitada)}</td>
                     <td>
-                      {x.ciudadOrigenSolicitada} → {x.ciudadDestinoSolicitada}
+                      {locationLabel(x.origen)} → {locationLabel(x.destino)}
                     </td>
                     <td>
                       <span className={s(x.estado)}>{x.estado}</span>

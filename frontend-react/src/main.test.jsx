@@ -86,7 +86,7 @@ test("Centro de Operaciones loads its workspace without the administrative users
 test("operations opens a pending request, requires a rejection reason, and approves it", async () => {
  const { Ops } = await import("./main.jsx");
  const done = vi.fn().mockResolvedValue(undefined), msg = vi.fn();
- const flight = { id:"flight-1",codigo:"VS-001",estado:"SOLICITADO",paciente:"Ana Pérez",prioridad:"ALTA",ciudadOrigenSolicitada:"Tucumán",ciudadDestinoSolicitada:"Salta",solicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00" };
+ const flight = { id:"flight-1",codigo:"VS-001",estado:"SOLICITADO",paciente:"Ana Pérez",prioridad:"ALTA",origen:{id:"loc-tuc",nombre:"San Miguel de Tucumán",provincia:"Tucumán"},destino:{id:"loc-sal",nombre:"Salta",provincia:"Salta"},solicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00" };
  const detail = { vuelo:flight,paciente:{nombre:"Ana",apellido:"Pérez",dni:"30111222"},medical:{diagnostico:"Diagnóstico",condicionMedica:"ESTABLE",requiereEquipamientoEspecial:true,observaciones:"Oxígeno"},motivoSolicitud:"Traslado",motivoRechazo:null,recursos:{} };
  vi.mocked(api).mockImplementation((path, options) => path==="/flights/flight-1"&&options?.method!=="POST" ? Promise.resolve(detail) : Promise.resolve(flight));
  render(<Ops d={{flights:[flight],aircraft:[],commanders:[]}} done={done} msg={msg} />);

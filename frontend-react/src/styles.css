@@ -307,4 +307,10 @@ button {
 .status-desactivado { background: #e6e9ee; color: #40536a; }
 body[data-theme="dark"] .urgent-row, body[data-theme="dark"] .report-blocked { background: #3a2629; }
 body[data-theme="dark"] .link-button { color: #8fc8ff; }
+.locality-picker { position: relative; border: 1px solid var(--line); border-radius: 8px; padding: .8rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.locality-picker legend { padding: 0 .4rem; font-weight: 700; }
+.autocomplete { position: absolute; z-index: 4; background: var(--card); border: 1px solid var(--line); border-radius: 6px; max-height: 11rem; overflow: auto; padding: .25rem; min-width: 16rem; box-shadow: 0 .5rem 1.25rem #0002; }
+.autocomplete button { display: block; width: 100%; text-align: left; background: transparent; color: var(--ink); border: 0; padding: .5rem; }
+.autocomplete button:hover, .autocomplete button:focus { background: var(--soft); }
+.locality-picker .success { display: block; margin-top: .25rem; }
 @media (max-width: 760px) { .filters, .account-columns { grid-template-columns: 1fr; } }

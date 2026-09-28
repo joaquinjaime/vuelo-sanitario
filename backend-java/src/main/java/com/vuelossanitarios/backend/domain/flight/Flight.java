@@ -4,6 +4,7 @@ import com.vuelossanitarios.backend.domain.catalog.Aircraft;
 import com.vuelossanitarios.backend.domain.catalog.Airport;
 import com.vuelossanitarios.backend.domain.catalog.FlightStatus;
 import com.vuelossanitarios.backend.domain.catalog.FlightPriority;
+import com.vuelossanitarios.backend.domain.catalog.Locality;
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import com.vuelossanitarios.backend.domain.patient.Patient;
 import com.vuelossanitarios.backend.domain.user.User;
@@ -70,6 +71,16 @@ public class Flight extends BaseEntity {
 
     @Column(name = "ciudad_destino_solicitada", length = 100)
     private String ciudadDestinoSolicitada;
+
+    /** Texto legacy para vuelos anteriores a V15. No se usa en nuevas solicitudes. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "localidad_origen_id")
+    private Locality localidadOrigenSolicitada;
+
+    /** Texto legacy para vuelos anteriores a V15. No se usa en nuevas solicitudes. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "localidad_destino_id")
+    private Locality localidadDestinoSolicitada;
 
     @ManyToOne(fetch = FetchType.LAZY)
 @JoinColumn(name = "evaluado_por_usuario_id")
@@ -166,6 +177,10 @@ public class Flight extends BaseEntity {
     public void setCiudadOrigenSolicitada(String value) { ciudadOrigenSolicitada = value; }
     public String getCiudadDestinoSolicitada() { return ciudadDestinoSolicitada; }
     public void setCiudadDestinoSolicitada(String value) { ciudadDestinoSolicitada = value; }
+    public Locality getLocalidadOrigenSolicitada() { return localidadOrigenSolicitada; }
+    public void setLocalidadOrigenSolicitada(Locality value) { localidadOrigenSolicitada = value; }
+    public Locality getLocalidadDestinoSolicitada() { return localidadDestinoSolicitada; }
+    public void setLocalidadDestinoSolicitada(Locality value) { localidadDestinoSolicitada = value; }
 
     public User getEvaluadoPor() { return evaluadoPor; }
     public void setEvaluadoPor(User evaluadoPor) { this.evaluadoPor = evaluadoPor; }

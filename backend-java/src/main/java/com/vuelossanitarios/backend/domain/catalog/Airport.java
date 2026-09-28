@@ -4,12 +4,18 @@ import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "aeropuertos")
 public class Airport extends BaseEntity {
+
+    @Column(name = "codigo_oficial", length = 20)
+    private String codigoOficial;
 
     @Column(name = "codigo_oaci", unique = true, length = 4)
     private String codigoOaci;
@@ -26,6 +32,17 @@ public class Airport extends BaseEntity {
     @Column(name = "provincia", length = 100)
     private String provincia;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "provincia_id")
+    private Province provinciaReferencial;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "localidad_id")
+    private Locality localidad;
+
+    @Column(name = "tipo", length = 30)
+    private String tipo;
+
     @Column(name = "pais", nullable = false, length = 100)
     private String pais = "Argentina";
 
@@ -41,6 +58,9 @@ public class Airport extends BaseEntity {
     public Airport() {
     }
 
+    public String getCodigoOficial() { return codigoOficial; }
+    public void setCodigoOficial(String codigoOficial) { this.codigoOficial = codigoOficial; }
+
     public String getCodigoOaci() { return codigoOaci; }
     public void setCodigoOaci(String codigoOaci) { this.codigoOaci = codigoOaci; }
 
@@ -55,6 +75,13 @@ public class Airport extends BaseEntity {
 
     public String getProvincia() { return provincia; }
     public void setProvincia(String provincia) { this.provincia = provincia; }
+
+    public Province getProvinciaReferencial() { return provinciaReferencial; }
+    public void setProvinciaReferencial(Province provinciaReferencial) { this.provinciaReferencial = provinciaReferencial; }
+    public Locality getLocalidad() { return localidad; }
+    public void setLocalidad(Locality localidad) { this.localidad = localidad; }
+    public String getTipo() { return tipo; }
+    public void setTipo(String tipo) { this.tipo = tipo; }
 
     public String getPais() { return pais; }
     public void setPais(String pais) { this.pais = pais; }
