@@ -39,13 +39,27 @@ function Urgency({ flight, detail = false }) {
     </div>
   ) : null;
 }
-function Login({ set }) {
+const activationErrors = (form) => {
+  const errors = {};
+  if (!form.password) errors.password = "La contraseña es obligatoria.";
+  else if (form.password.length < 12) errors.password = "La contraseña debe tener al menos 12 caracteres.";
+  else if (form.password.length > 100) errors.password = "La contraseña no puede tener más de 100 caracteres.";
+  if (!form.confirmacionPassword) errors.confirmacionPassword = "La confirmación de contraseña es obligatoria.";
+  else if (form.password !== form.confirmacionPassword) errors.confirmacionPassword = "Las contraseñas no coinciden.";
+  return errors;
+};
+
+export function Login({ set }) {
   const [u, su] = useState(""),
     [p, sp] = useState(""),
     [e, se] = useState(""),
     [activate, setActivate] = useState(false),
+    [activationSubmitted, setActivationSubmitted] = useState(false),
     [form, setForm] = useState({ dni: "", codigo: "", username: "", password: "", confirmacionPassword: "" });
-  const change = (key, value) => setForm({ ...form, [key]: value });
+  const change = (key, value) => { setForm({ ...form, [key]: value }); if (activate) se(""); };
+  const errors = activate ? activationErrors(form) : {};
+  const showPasswordError = activationSubmitted || form.password.length > 0;
+  const showConfirmationError = activationSubmitted || form.confirmacionPassword.length > 0;
   return (
     <main className="login">
       <section>
@@ -58,6 +72,8 @@ function Login({ set }) {
           x.preventDefault();
           try {
             if (activate) {
+              setActivationSubmitted(true);
+              if (Object.keys(errors).length) return;
               await api("/auth/activar-cuenta", { method: "POST", body: JSON.stringify(form) });
               setActivate(false); se("Cuenta activada. Ya podés iniciar sesión."); return;
             }
@@ -95,11 +111,16 @@ function Login({ set }) {
           <label>DNI<input required value={form.dni} onChange={(x) => change("dni", x.target.value)} /></label>
           <label>Código de activación<input required value={form.codigo} onChange={(x) => change("codigo", x.target.value)} /></label>
           <label>Nombre de usuario<input required value={form.username} onChange={(x) => change("username", x.target.value)} /></label>
-          <label>Contraseña<input required type="password" value={form.password} onChange={(x) => change("password", x.target.value)} /></label>
-          <label>Confirmar contraseña<input required type="password" value={form.confirmacionPassword} onChange={(x) => change("confirmacionPassword", x.target.value)} /></label>
+          <label>Contraseña<input required type="password" minLength="12" maxLength="100" value={form.password} onChange={(x) => change("password", x.target.value)} aria-describedby={showPasswordError && errors.password ? "password-hint password-error" : "password-hint"} aria-invalid={Boolean(showPasswordError && errors.password)} />
+            <small id="password-hint" className="hint">La contraseña debe tener al menos 12 caracteres.</small>
+            {showPasswordError && errors.password && <small id="password-error" className="error">{errors.password}</small>}
+          </label>
+          <label>Confirmar contraseña<input required type="password" value={form.confirmacionPassword} onChange={(x) => change("confirmacionPassword", x.target.value)} aria-describedby={showConfirmationError && errors.confirmacionPassword ? "confirmation-error" : undefined} aria-invalid={Boolean(showConfirmationError && errors.confirmacionPassword)} />
+            {showConfirmationError && errors.confirmacionPassword && <small id="confirmation-error" className="error">{errors.confirmacionPassword}</small>}
+          </label>
         </>}
         <button>{activate ? "Activar cuenta" : "Iniciar sesión"}</button>
-        <button type="button" className="link-button" onClick={() => { setActivate(!activate); se(""); }}>
+        <button type="button" className="link-button" onClick={() => { setActivate(!activate); setActivationSubmitted(false); se(""); }}>
           {activate ? "Volver a iniciar sesión" : "Activar cuenta"}
         </button>
       </form>

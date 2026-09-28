@@ -4,11 +4,58 @@ import "@testing-library/jest-dom/vitest";
 import { api } from "./api";
 vi.mock("./api", () => ({ api: vi.fn((path) => path === "/auth/users" ? Promise.resolve([]) : path === "/auth/me" ? Promise.resolve({ nombre:"Admin", apellido:"Inicial", dni:null, correos:[], telefonos:[] }) : Promise.resolve({})) }));
 beforeEach(() => { localStorage.clear(); document.body.innerHTML = '<div id="root"></div>'; });
+const openActivationForm = async () => {
+ const { Login } = await import("./main.jsx");
+ render(<Login set={vi.fn()} />);
+ fireEvent.click(screen.getByRole("button", { name: "Activar cuenta" }));
+};
+const fillActivationFields = ({ password = "ClaveValida12", confirmation = password } = {}) => {
+ fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30111222" } });
+ fireEvent.change(screen.getByLabelText("Código de activación"), { target: { value: "codigo-valido" } });
+ fireEvent.change(screen.getByLabelText("Nombre de usuario"), { target: { value: "ana.operaciones" } });
+ fireEvent.change(screen.getByLabelText(/^Contraseña/), { target: { value: password } });
+ fireEvent.change(screen.getByLabelText("Confirmar contraseña"), { target: { value: confirmation } });
+};
 test("admin only renders user management and never operational navigation", async () => {
  localStorage.setItem("vs-session", JSON.stringify({ username:"admin", roles:["ADMINISTRADOR"] }));
  await import("./main.jsx");
  expect((await screen.findAllByText("Gestión de usuarios")).length).toBeGreaterThan(0);
  expect(screen.queryByText("Vuelos")).toBeNull(); expect(screen.queryByText(/Notificaciones/)).toBeNull(); expect(document.querySelector(".icon")?.textContent).not.toContain("🔔");
+});
+test("activation rejects an 11-character password without sending a request", async () => {
+ vi.mocked(api).mockReset();
+ await openActivationForm();
+ fillActivationFields({ password: "claveonce1", confirmation: "claveonce1" });
+ expect(screen.getAllByText("La contraseña debe tener al menos 12 caracteres.")).toHaveLength(2);
+ fireEvent.click(screen.getByRole("button", { name: "Activar cuenta" }));
+ expect(vi.mocked(api)).not.toHaveBeenCalled();
+});
+test("activation accepts passwords with at least 12 characters", async () => {
+ vi.mocked(api).mockReset();
+ await openActivationForm();
+ fillActivationFields({ password: "ClaveValida12", confirmation: "ClaveValida12" });
+ expect(screen.getAllByText("La contraseña debe tener al menos 12 caracteres.")).toHaveLength(1);
+ expect(screen.queryByText("La contraseña no puede tener más de 100 caracteres.")).toBeNull();
+ expect(screen.queryByText("La contraseña es obligatoria.")).toBeNull();
+});
+test("activation rejects different password confirmation without sending a request", async () => {
+ vi.mocked(api).mockReset();
+ await openActivationForm();
+ fillActivationFields({ password: "ClaveValida12", confirmation: "OtraClave123" });
+ expect(screen.getByText("Las contraseñas no coinciden.")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name: "Activar cuenta" }));
+ expect(vi.mocked(api)).not.toHaveBeenCalled();
+});
+test("activation sends the request when password and confirmation are valid", async () => {
+ vi.mocked(api).mockReset();
+ vi.mocked(api).mockResolvedValue(null);
+ await openActivationForm();
+ fillActivationFields({ password: "ClaveValida12", confirmation: "ClaveValida12" });
+ fireEvent.submit(screen.getByRole("button", { name: "Activar cuenta" }).closest("form"));
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/activar-cuenta", {
+   method: "POST",
+   body: JSON.stringify({ dni: "30111222", codigo: "codigo-valido", username: "ana.operaciones", password: "ClaveValida12", confirmacionPassword: "ClaveValida12" }),
+ }));
 });
 test("saved dark preference is applied before app rendering", () => { localStorage.setItem("vs-theme", "dark"); document.documentElement.dataset.theme="dark"; expect(document.documentElement.dataset.theme).toBe("dark"); });
 test("the license input follows the COMANDANTE role without clearing the form", async () => {
