@@ -52,11 +52,11 @@ const activationErrors = (form) => {
 export function Login({ set }) {
   const [u, su] = useState(""),
     [p, sp] = useState(""),
-    [e, se] = useState(""),
+    [e, se] = useState(null),
     [activate, setActivate] = useState(false),
     [activationSubmitted, setActivationSubmitted] = useState(false),
     [form, setForm] = useState({ dni: "", codigo: "", username: "", password: "", confirmacionPassword: "" });
-  const change = (key, value) => { setForm({ ...form, [key]: value }); if (activate) se(""); };
+  const change = (key, value) => { setForm({ ...form, [key]: value }); if (activate) se(null); };
   const errors = activate ? activationErrors(form) : {};
   const showPasswordError = activationSubmitted || form.password.length > 0;
   const showConfirmationError = activationSubmitted || form.confirmacionPassword.length > 0;
@@ -75,7 +75,7 @@ export function Login({ set }) {
               setActivationSubmitted(true);
               if (Object.keys(errors).length) return;
               await api("/auth/activar-cuenta", { method: "POST", body: JSON.stringify(form) });
-              setActivate(false); se("Cuenta activada. Ya podés iniciar sesión."); return;
+              setActivate(false); se({ type: "success", text: "Cuenta activada correctamente. Ya puede iniciar sesión." }); return;
             }
             let r = await api("/auth/login", {
               method: "POST",
@@ -88,12 +88,12 @@ export function Login({ set }) {
             );
             set({ username: r.username, roles: r.roles });
           } catch (x) {
-            se(x.message);
+            se({ type: "error", text: x.message });
           }
         }}
       >
         <h2>{activate ? "Activar cuenta" : "Ingresar"}</h2>
-        {e && <p className="error">{e}</p>}
+        {e && <p className={e.type === "success" ? "success" : "error"}>{e.text}</p>}
         {!activate && <label>
           Usuario
           <input value={u} onChange={(x) => su(x.target.value)} required />
@@ -120,7 +120,7 @@ export function Login({ set }) {
           </label>
         </>}
         <button>{activate ? "Activar cuenta" : "Iniciar sesión"}</button>
-        <button type="button" className="link-button" onClick={() => { setActivate(!activate); setActivationSubmitted(false); se(""); }}>
+        <button type="button" className="link-button" onClick={() => { setActivate(!activate); setActivationSubmitted(false); se(null); }}>
           {activate ? "Volver a iniciar sesión" : "Activar cuenta"}
         </button>
       </form>
@@ -396,9 +396,7 @@ function Ops({ d, done, msg }) {
                   Comandante
                   <select value={c} onChange={(e) => setC(e.target.value)}>
                     <option />{" "}
-                    {d.users
-                      .filter((x) => x.roles.includes("COMANDANTE"))
-                      .map((x) => (
+                    {d.commanders.map((x) => (
                         <option key={x.id} value={x.id}>
                           {x.username}
                         </option>
@@ -690,7 +688,7 @@ function OperationsReports({ msg }) {
     </section>
   );
 }
-function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{} }) {
+export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{} }) {
   const [session, setSession] = useState(() => {
       try {
         return JSON.parse(localStorage.getItem("vs-session"));
@@ -704,7 +702,7 @@ function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{}
       priorities: [],
       aircraft: [],
       airports: [],
-      users: [],
+      commanders: [],
       notifications: [],
     }),
     [note, setNote] = useState(""),
@@ -720,8 +718,7 @@ function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{}
         api("/catalogs/airports"),
         api("/notifications"),
       ];
-      if (has("OPERACIONES") || has("CENTRO_OPERACIONES") || has("ADMINISTRADOR"))
-        calls.push(api("/auth/users"));
+      if (has("OPERACIONES") || has("CENTRO_OPERACIONES")) calls.push(api("/auth/users/commanders"));
       let [a, b, c, e, f, n, u = []] = await Promise.all(calls);
       setD({
         flights: a,
@@ -730,7 +727,7 @@ function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{}
         aircraft: e,
         airports: f,
         notifications: n.content || [],
-        users: u,
+        commanders: u,
       });
     } catch (x) {
       setNote(x.message);

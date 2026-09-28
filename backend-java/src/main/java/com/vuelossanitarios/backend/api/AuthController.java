@@ -21,6 +21,7 @@ import java.util.*;
  @DeleteMapping("/me/telefonos/{id}") public void deletePhone(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.deletePhone(u.id(),id);}
  @PostMapping("/me/telefonos/{id}/principal") public void mainPhone(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.makePrimaryPhone(u.id(),id);}
  @GetMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<UserView> users(){return service.listUsers();}
+ @GetMapping("/users/commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<CommanderView> commanders(){return service.listActiveCommanders();}
  @PostMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse create(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody CreatePendingUserRequest r){return service.createPending(r,u.id());}
  @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
  @PostMapping("/users/{id}/activation-code") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse regenerate(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){return service.regenerate(id,u.id());}

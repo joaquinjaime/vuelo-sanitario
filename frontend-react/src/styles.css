@@ -254,6 +254,9 @@ button {
 .error {
   color: #b42318;
 }
+.success {
+  color: #11784f;
+}
 .empty {
   text-align: center;
   padding: 3rem;

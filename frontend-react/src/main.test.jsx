@@ -56,6 +56,32 @@ test("activation sends the request when password and confirmation are valid", as
    method: "POST",
    body: JSON.stringify({ dni: "30111222", codigo: "codigo-valido", username: "ana.operaciones", password: "ClaveValida12", confirmacionPassword: "ClaveValida12" }),
  }));
+ expect(await screen.findByText("Cuenta activada correctamente. Ya puede iniciar sesión.")).toHaveClass("success");
+ expect(screen.getByText("Cuenta activada correctamente. Ya puede iniciar sesión.")).not.toHaveClass("error");
+ expect(screen.getByRole("heading", { name: "Ingresar" })).toBeInTheDocument();
+});
+test("activation errors remain styled as errors", async () => {
+ vi.mocked(api).mockReset();
+ vi.mocked(api).mockRejectedValue(new Error("Código de activación inválido"));
+ await openActivationForm();
+ fillActivationFields({ password: "ClaveValida12", confirmation: "ClaveValida12" });
+ fireEvent.submit(screen.getByRole("button", { name: "Activar cuenta" }).closest("form"));
+ expect(await screen.findByText("Código de activación inválido")).toHaveClass("error");
+ expect(screen.getByText("Código de activación inválido")).not.toHaveClass("success");
+});
+test("Centro de Operaciones loads its workspace without the administrative users request or an access-denied banner", async () => {
+ const { OperationalApp } = await import("./main.jsx");
+ localStorage.setItem("vs-session", JSON.stringify({ username: "operaciones", roles: ["CENTRO_OPERACIONES"] }));
+ vi.mocked(api).mockImplementation((path) => {
+   if (path === "/auth/users") return Promise.reject(new Error("Acceso denegado"));
+   if (path === "/auth/users/commanders") return Promise.resolve([]);
+   if (path === "/notifications") return Promise.resolve({ content: [] });
+   return Promise.resolve([]);
+ });
+ render(<OperationalApp workspace="OPERACIONES" />);
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/users/commanders"));
+ expect(vi.mocked(api)).not.toHaveBeenCalledWith("/auth/users");
+ expect(screen.queryByText("Acceso denegado")).toBeNull();
 });
 test("saved dark preference is applied before app rendering", () => { localStorage.setItem("vs-theme", "dark"); document.documentElement.dataset.theme="dark"; expect(document.documentElement.dataset.theme).toBe("dark"); });
 test("the license input follows the COMANDANTE role without clearing the form", async () => {

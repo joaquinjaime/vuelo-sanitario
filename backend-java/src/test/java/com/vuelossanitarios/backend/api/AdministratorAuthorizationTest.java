@@ -25,11 +25,13 @@ class AdministratorAuthorizationTest {
   mvc.perform(get("/api/patients")).andExpect(status().isForbidden());
   mvc.perform(get("/api/notifications")).andExpect(status().isForbidden());
   mvc.perform(get("/api/final-reports/mine")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isForbidden());
   mvc.perform(get("/api/documents/00000000-0000-0000-0000-000000000001/versions")).andExpect(status().isForbidden());
   mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isForbidden());
  }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanReachUserManagementEndpoint() throws Exception { mvc.perform(get("/api/auth/users")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"COMANDANTE","OPERACIONES"}) void validOperationalMultiRoleKeepsOperationalAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); }
+ @Test @WithMockUser(roles="CENTRO_OPERACIONES") void operationsCenterCanLoadCommandersForResourceAssignment() throws Exception { mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"ADMINISTRADOR","CENTRO_OPERACIONES"}) void administratorWithOperationsKeepsOperationsAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"ADMINISTRADOR","COMANDANTE"}) void administratorWithCommanderKeepsCommanderAccess() throws Exception { mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
  @Test void activationEndpointReturnsNoContentForTheFrontendClient() throws Exception {
