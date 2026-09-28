@@ -15,6 +15,6 @@ public final class AuthDtos { private AuthDtos(){}
  public record ChangePasswordRequest(@NotBlank String passwordActual,@NotBlank @Size(min=12,max=100) String nuevaPassword,@NotBlank String confirmacionPassword) {}
  public record ContactView(UUID id,String valor,String tipo,boolean principal) {}
  public record UserView(UUID id,String nombre,String apellido,String dni,String username,String estado,boolean activo,Set<String> roles,List<ContactView> correos,List<ContactView> telefonos) {}
- public record CommanderView(UUID id,String username) {}
+ public record CommanderView(UUID id,String username,String nombre,String apellido,String licencia) {}
  public record ActivationCodeResponse(String codigo, String expiraEn) {}
 }

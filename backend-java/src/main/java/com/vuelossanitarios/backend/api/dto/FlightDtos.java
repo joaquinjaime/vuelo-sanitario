@@ -12,5 +12,8 @@ public final class FlightDtos { private FlightDtos(){}
  public record Cancel(@NotBlank @Size(max=10000) String motivo){}
  public record Crew(@NotNull UUID userId,@NotBlank String crewRoleCode){}
  public record FinalReport(@DecimalMin("0.0") BigDecimal horasVuelo,@DecimalMin("0.0") BigDecimal combustibleConsumidoLitros,@Size(max=10000) String incidentes,@Size(max=10000) String resumen){}
- public record FlightView(UUID id,String codigo,String estado,UUID patientId,String prioridad,String ciudadOrigenSolicitada,String ciudadDestinoSolicitada,LocalDateTime solicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,LocalDateTime salida,LocalDateTime llegada){}
+ public record FlightView(UUID id,String codigo,String estado,UUID patientId,String paciente,String prioridad,String ciudadOrigenSolicitada,String ciudadDestinoSolicitada,LocalDateTime solicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,LocalDateTime salida,LocalDateTime llegada){}
+ public record PatientDetail(UUID id,String nombre,String apellido,String dni){}
+ public record ResourceAssignment(UUID aircraftId,String aircraftMatricula,UUID commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia){}
+ public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,String motivoSolicitud,String motivoRechazo,ResourceAssignment recursos){}
 }

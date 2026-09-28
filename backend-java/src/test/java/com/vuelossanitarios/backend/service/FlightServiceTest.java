@@ -1,0 +1,30 @@
+package com.vuelossanitarios.backend.service;
+
+import com.vuelossanitarios.backend.api.ApiException;
+import com.vuelossanitarios.backend.api.dto.FlightDtos.*;
+import com.vuelossanitarios.backend.domain.catalog.*;
+import com.vuelossanitarios.backend.domain.flight.*;
+import com.vuelossanitarios.backend.domain.patient.Patient;
+import com.vuelossanitarios.backend.domain.person.*;
+import com.vuelossanitarios.backend.domain.user.*;
+import com.vuelossanitarios.backend.repository.*;
+import java.time.LocalDateTime;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class FlightServiceTest {
+ @Mock FlightRepository flights; @Mock PatientRepository patients; @Mock UserRepository users; @Mock FlightStatusRepository statuses; @Mock FlightPriorityRepository priorities; @Mock AircraftRepository aircraft; @Mock AirportRepository airports; @Mock CrewRoleRepository crewRoles; @Mock FlightCrewRepository crews; @Mock FlightMedicalInfoRepository medical; @Mock FlightFinalReportRepository reports; @Mock AuditService audit; @Mock FlightAuthorizationService access; @Mock NotificationService notifications; @Mock FlightUrgencyPolicy urgency; @Mock FinalReportWorkflowService workflow; @Mock CommanderReportAccessService commanderAccess;
+ FlightService service; User operations, commander; Patient patient;
+ @BeforeEach void init(){MockitoAnnotations.openMocks(this);service=new FlightService(flights,patients,users,statuses,priorities,aircraft,airports,crewRoles,crews,medical,reports,audit,access,notifications,urgency,workflow,commanderAccess);operations=user("op",Set.of("CENTRO_OPERACIONES"),false);commander=user("cmd",Set.of("COMANDANTE","CENTRO_OPERACIONES"),true);patient=new Patient();patient.setId(UUID.randomUUID());Person patientPerson=new Person();patientPerson.setNombre("Paciente");patientPerson.setApellido("Prueba");patient.setPerson(patientPerson);when(users.findById(operations.getId())).thenReturn(Optional.of(operations));when(users.findById(commander.getId())).thenReturn(Optional.of(commander));when(users.findWithRolesByUsername("op")).thenReturn(Optional.of(operations));when(users.findWithRolesByUsername("cmd")).thenReturn(Optional.of(commander));when(statuses.findByCodigo(anyString())).thenAnswer(i->Optional.of(status(i.getArgument(0))));when(priorities.findByCodigoAndActivoTrue(anyString())).thenAnswer(i->Optional.of(priority(i.getArgument(0))));}
+ @Test void dtsCanCreateSolicitadoWithMedicalInformation(){User dts=user("dts",Set.of("DTS"),false);when(users.findById(dts.getId())).thenReturn(Optional.of(dts));when(patients.findById(patient.getId())).thenReturn(Optional.of(patient));when(flights.save(any())).thenAnswer(i->{Flight f=i.getArgument(0);f.setId(UUID.randomUUID());return f;});FlightView created=service.create(new CreateFlight(patient.getId(),"Tucumán","Salta","ALTA","Traslado",LocalDateTime.now().plusDays(3),false,null,null,new Medical("Diagnóstico","ESTABLE",true,"Oxígeno")),dts.getId());assertEquals("SOLICITADO",created.estado());verify(medical).save(any(FlightMedicalInfo.class));}
+ @Test void operationsCenterCanApprovePendingOnlyOnce(){Flight f=flight("SOLICITADO");when(flights.lockById(f.getId())).thenReturn(Optional.of(f));assertEquals("APROBADO",service.evaluate(f.getId(),new Evaluation(true,null,"ALTA"),operations.getId()).estado());ApiException error=assertThrows(ApiException.class,()->service.evaluate(f.getId(),new Evaluation(true,null,"ALTA"),operations.getId()));assertTrue(error.getMessage().contains("Transición no permitida"));}
+ @Test void rejectionRequiresMeaningfulReason(){Flight f=flight("SOLICITADO");when(flights.lockById(f.getId())).thenReturn(Optional.of(f));assertThrows(ApiException.class,()->service.evaluate(f.getId(),new Evaluation(false,"   ",null),operations.getId()));assertEquals("SOLICITADO",f.getStatus().getCodigo());service.evaluate(f.getId(),new Evaluation(false,"No hay disponibilidad",null),operations.getId());assertEquals("RECHAZADO",f.getStatus().getCodigo());assertEquals("No hay disponibilidad",f.getMotivoRechazo());}
+ @Test void operationsCenterCanAssignActiveLicensedMultiRoleCommanderAndAircraft(){Flight f=flight("APROBADO");Aircraft plane=new Aircraft();plane.setId(UUID.randomUUID());plane.setActivo(true);CrewRole role=new CrewRole();role.setCodigo("COMANDANTE");when(flights.lockById(f.getId())).thenReturn(Optional.of(f));when(aircraft.findById(plane.getId())).thenReturn(Optional.of(plane));when(flights.activeAircraftAssignments(eq(plane.getId()),any())).thenReturn(List.of());when(crewRoles.findByCodigo("COMANDANTE")).thenReturn(Optional.of(role));when(crews.existsByFlightIdAndUserId(f.getId(),commander.getId())).thenReturn(false);service.assign(f.getId(),new AssignResources(plane.getId(),commander.getId()),operations.getId());assertSame(plane,f.getAircraft());assertSame(commander,f.getComandante());verify(crews).save(any(FlightCrew.class));verify(notifications).create(eq(commander),eq(f),anyString(),anyString());}
+ private Flight flight(String state){Flight f=new Flight();f.setId(UUID.randomUUID());f.setCodigo("VS-TEST");f.setPatient(patient);f.setStatus(status(state));f.setPriority(priority("ALTA"));f.setSolicitadoPor(operations);return f;}
+ private User user(String username,Set<String> roles,boolean profile){Person p=new Person();p.setId(UUID.randomUUID());p.setNombre("Ana");p.setApellido("Pérez");if(profile){CommanderProfile cp=new CommanderProfile();cp.setPerson(p);cp.setLicenseNumber("LIC-123");p.setCommanderProfile(cp);}User u=new User();u.setId(UUID.randomUUID());u.setUsername(username);u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("ACTIVO");Set<UserRole> assigned=new HashSet<>();for(String code:roles){Role r=new Role();r.setCodigo(code);assigned.add(new UserRole(u,r));}u.setUserRoles(assigned);return u;}
+ private FlightStatus status(String code){FlightStatus s=new FlightStatus();s.setCodigo(code);s.setNombre(code);return s;} private FlightPriority priority(String code){FlightPriority p=new FlightPriority();p.setCodigo(code);return p;}
+}

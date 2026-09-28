@@ -11,7 +11,7 @@ import java.util.*;
  private final FlightService service; public FlightController(FlightService s){service=s;}
  @PostMapping @PreAuthorize("hasRole('DTS')") public FlightView create(@Valid @RequestBody CreateFlight r,@AuthenticationPrincipal CurrentUser u){return service.create(r,u.id());}
  @GetMapping @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public List<FlightView> list(@AuthenticationPrincipal CurrentUser u){return service.list(u.id());}
- @GetMapping("/{id}") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public FlightView get(@PathVariable UUID id,@AuthenticationPrincipal CurrentUser u){return service.get(id,u.id());}
+ @GetMapping("/{id}") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public FlightDetailView get(@PathVariable UUID id,@AuthenticationPrincipal CurrentUser u){return service.get(id,u.id());}
  @PostMapping("/{id}/evaluation") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView evaluate(@PathVariable UUID id,@Valid @RequestBody Evaluation r,@AuthenticationPrincipal CurrentUser u){return service.evaluate(id,r,u.id());}
  @PostMapping("/{id}/resources") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView assign(@PathVariable UUID id,@Valid @RequestBody AssignResources r,@AuthenticationPrincipal CurrentUser u){return service.assign(id,r,u.id());}
  @PostMapping("/{id}/plan") @PreAuthorize("hasRole('COMANDANTE')") public FlightView plan(@PathVariable UUID id,@Valid @RequestBody Plan r,@AuthenticationPrincipal CurrentUser u){return service.plan(id,r,u.id());}

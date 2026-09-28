@@ -83,6 +83,20 @@ test("Centro de Operaciones loads its workspace without the administrative users
  expect(vi.mocked(api)).not.toHaveBeenCalledWith("/auth/users");
  expect(screen.queryByText("Acceso denegado")).toBeNull();
 });
+test("operations opens a pending request, requires a rejection reason, and approves it", async () => {
+ const { Ops } = await import("./main.jsx");
+ const done = vi.fn().mockResolvedValue(undefined), msg = vi.fn();
+ const flight = { id:"flight-1",codigo:"VS-001",estado:"SOLICITADO",paciente:"Ana Pérez",prioridad:"ALTA",ciudadOrigenSolicitada:"Tucumán",ciudadDestinoSolicitada:"Salta",solicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00" };
+ const detail = { vuelo:flight,paciente:{nombre:"Ana",apellido:"Pérez",dni:"30111222"},medical:{diagnostico:"Diagnóstico",condicionMedica:"ESTABLE",requiereEquipamientoEspecial:true,observaciones:"Oxígeno"},motivoSolicitud:"Traslado",motivoRechazo:null,recursos:{} };
+ vi.mocked(api).mockImplementation((path, options) => path==="/flights/flight-1"&&options?.method!=="POST" ? Promise.resolve(detail) : Promise.resolve(flight));
+ render(<Ops d={{flights:[flight],aircraft:[],commanders:[]}} done={done} msg={msg} />);
+ fireEvent.click(screen.getByRole("button", { name:"Ver detalle" }));
+ expect(await screen.findByText("Información médica")).toBeInTheDocument();
+ expect(screen.getByRole("button", { name:"Rechazar solicitud" })).toBeDisabled();
+ fireEvent.click(screen.getByRole("button", { name:"Aprobar solicitud" }));
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/flight-1/evaluation", expect.objectContaining({ method:"POST", body:JSON.stringify({aprobar:true,priorityCode:"ALTA"}) })));
+ expect(msg).toHaveBeenCalledWith("Solicitud aprobada");
+});
 test("saved dark preference is applied before app rendering", () => { localStorage.setItem("vs-theme", "dark"); document.documentElement.dataset.theme="dark"; expect(document.documentElement.dataset.theme).toBe("dark"); });
 test("the license input follows the COMANDANTE role without clearing the form", async () => {
  const { AdminUsers } = await import("./main.jsx");

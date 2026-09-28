@@ -11,5 +11,6 @@ public interface FlightRepository extends JpaRepository<Flight, UUID> {
     List<Flight> overlappingAircraft(@Param("aircraftId") UUID aircraftId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     @Query("select f from Flight f where f.comandante.id = :commanderId and f.fechaPlanificadaSalida < :end and f.fechaPlanificadaLlegada > :start and f.status.codigo in ('APROBADO','PLANIFICADO','EN_CURSO')")
     List<Flight> overlappingCommander(@Param("commanderId") UUID commanderId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    @Query("select f from Flight f where f.aircraft.id = :aircraftId and f.status.codigo in :states") List<Flight> activeAircraftAssignments(@Param("aircraftId") UUID aircraftId,@Param("states") Collection<String> states);
     List<Flight> findBySolicitadoPorId(UUID userId); List<Flight> findByComandanteId(UUID userId);
 }

@@ -40,7 +40,7 @@ import java.util.*;
   if(users.existsByUsername(r.username().trim()))throw new ApiException(HttpStatus.CONFLICT,"El nombre de usuario ya existe"); u.setUsername(r.username().trim());u.setPasswordHash(encoder.encode(r.password()));u.setEstadoCuenta("ACTIVO");u.setDebeCambiarContrasena(false);a.setUsedAt(LocalDateTime.now());
  }
  @Transactional(readOnly=true) public List<UserView> listUsers(){return users.findAllWithPersonAndRoles().stream().map(this::view).toList();}
- @Transactional(readOnly=true) public List<CommanderView> listActiveCommanders(){return users.findActiveByRoleCode("COMANDANTE").stream().filter(u->"ACTIVO".equals(u.getEstadoCuenta())&&u.getUsername()!=null).map(u->new CommanderView(u.getId(),u.getUsername())).toList();}
+ @Transactional(readOnly=true) public List<CommanderView> listActiveCommanders(){return users.findActiveByRoleCode("COMANDANTE").stream().filter(u->"ACTIVO".equals(u.getEstadoCuenta())&&u.getUsername()!=null&&u.getPerson().getCommanderProfile()!=null&&!u.getPerson().getCommanderProfile().getLicenseNumber().isBlank()).map(u->new CommanderView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),u.getPerson().getCommanderProfile().getLicenseNumber())).toList();}
  @Transactional(readOnly=true) public UserView myAccount(UUID id){return view(user(id));}
  @Transactional public UserView updateUser(UUID id,UpdateUserRequest r,UUID actorId){
   User u=user(id); Set<String> old=roleCodes(u); Set<String> next=new TreeSet<>(r.roles());

@@ -330,105 +330,32 @@ function DTS({ d, done, msg }) {
     </section>
   );
 }
-function Ops({ d, done, msg }) {
-  const [id, setId] = useState(""),
-    [a, setA] = useState(""),
-    [c, setC] = useState(""),
-    f = d.flights.find((x) => x.id === id),
-    call = async (path, body) => {
-      try {
-        await api(path, { method: "POST", body: body && JSON.stringify(body) });
-        msg("Operación registrada");
-        done();
-      } catch (x) {
-        msg(x.message, true);
-      }
-    };
+export function Ops({ d, done, msg }) {
+  const [id, setId] = useState(""), [detail, setDetail] = useState(null), [a, setA] = useState(""), [c, setC] = useState(""), [reason, setReason] = useState("");
+  const loadDetail = async (flightId = id) => {
+    if (!flightId) return;
+    try { setDetail(await api(`/flights/${flightId}`)); } catch (x) { msg(x.message, true); }
+  };
+  useEffect(() => { setDetail(null); setA(""); setC(""); setReason(""); loadDetail(); }, [id]);
+  const call = async (path, body, success) => {
+    try {
+      await api(path, { method: "POST", body: body && JSON.stringify(body) });
+      msg(success);
+      await done();
+      await loadDetail();
+    } catch (x) { msg(x.message, true); }
+  };
+  const f = detail?.vuelo;
   return (
     <section className="card">
-      <h2>Operaciones</h2>
-      <div className="grid-form">
-        <label>
-          Vuelo
-          <select value={id} onChange={(e) => setId(e.target.value)}>
-            <option value="">Seleccionar</option>
-            {d.flights.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.extremaUrgencia ? "⚠ " : ""}
-                {x.codigo} — {x.estado}
-              </option>
-            ))}
-          </select>
-        </label>
-        {f && (
-          <>
-            <Urgency flight={f} detail />
-            <p>
-              Estado: <span className={s(f.estado)}>{f.estado}</span> ·
-              Prioridad operativa: {f.prioridad}
-            </p>
-            {f.estado === "SOLICITADO" && (
-              <button
-                onClick={() =>
-                  call(`/flights/${id}/evaluation`, {
-                    aprobar: true,
-                    priorityCode: f.prioridad,
-                  })
-                }
-              >
-                Aprobar
-              </button>
-            )}
-            {f.estado === "APROBADO" && (
-              <>
-                <label>
-                  Aeronave
-                  <select value={a} onChange={(e) => setA(e.target.value)}>
-                    <option />{" "}
-                    {d.aircraft.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.matricula}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Comandante
-                  <select value={c} onChange={(e) => setC(e.target.value)}>
-                    <option />{" "}
-                    {d.commanders.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.username}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <button
-                  disabled={!a || !c}
-                  onClick={() =>
-                    call(`/flights/${id}/resources`, {
-                      aircraftId: a,
-                      comandanteId: c,
-                    })
-                  }
-                >
-                  Asignar
-                </button>
-              </>
-            )}
-            {f.estado === "PLANIFICADO" && (
-              <button onClick={() => call(`/flights/${id}/start`)}>
-                Registrar inicio
-              </button>
-            )}
-            {f.estado === "EN_CURSO" && (
-              <button onClick={() => call(`/flights/${id}/finish`)}>
-                Finalizar vuelo
-              </button>
-            )}
-          </>
-        )}
-      </div>
+      <div className="section-title"><div><h2>Solicitudes recibidas</h2><p className="hint">Seleccione una solicitud para revisar sus datos clínicos y ejecutar la acción disponible.</p></div></div>
+      {d.flights.length ? <table><thead><tr><th>Solicitud</th><th>Paciente</th><th>Origen → destino</th><th>Solicitada</th><th>Prioridad</th><th>Estado</th><th /></tr></thead><tbody>{d.flights.map((x) => <tr className={x.extremaUrgencia ? "urgent-row" : ""} key={x.id}><td>{x.extremaUrgencia && "⚠ "}{x.codigo}</td><td>{x.paciente || "—"}</td><td>{x.ciudadOrigenSolicitada} → {x.ciudadDestinoSolicitada}</td><td>{dt(x.solicitada)}</td><td>{x.prioridad}</td><td><span className={s(x.estado)}>{x.estado}</span></td><td><button onClick={() => setId(x.id)}>Ver detalle</button></td></tr>)}</tbody></table> : <p className="empty">No hay solicitudes para operar.</p>}
+      {f && <section className="flight-detail"><div className="section-title"><div><h3>{f.codigo}</h3><p>Estado: <span className={s(f.estado)}>{f.estado}</span> · Prioridad: {f.prioridad}</p></div><button className="secondary-action" onClick={() => setId("")}>Cerrar detalle</button></div><Urgency flight={f} detail />
+        <div className="detail-grid"><div><h4>Traslado</h4><p>{f.ciudadOrigenSolicitada} → {f.ciudadDestinoSolicitada}</p><p>Solicitado: {dt(f.solicitada)}</p><p>Motivo: {detail.motivoSolicitud || "—"}</p></div><div><h4>Paciente</h4><p>{detail.paciente.nombre} {detail.paciente.apellido}</p><p>DNI: {detail.paciente.dni || "—"}</p></div><div><h4>Información médica</h4><p>Diagnóstico: {detail.medical?.diagnostico || "—"}</p><p>Condición: {detail.medical?.condicionMedica || "—"}</p><p>Equipamiento especial: {detail.medical?.requiereEquipamientoEspecial ? "Sí" : "No"}</p><p>{detail.medical?.observaciones || ""}</p></div></div>
+        {f.estado === "RECHAZADO" && <p className="error">Motivo del rechazo: {detail.motivoRechazo}</p>}
+        {f.estado === "SOLICITADO" && <div className="detail-actions"><button onClick={() => call(`/flights/${id}/evaluation`, { aprobar: true, priorityCode: f.prioridad }, "Solicitud aprobada")}>Aprobar solicitud</button><label>Motivo del rechazo<textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Indique el motivo obligatorio" /></label><button className="secondary-action" disabled={!reason.trim()} onClick={() => call(`/flights/${id}/evaluation`, { aprobar: false, motivoRechazo: reason }, "Solicitud rechazada")}>Rechazar solicitud</button></div>}
+        {f.estado === "APROBADO" && <div className="detail-actions">{detail.recursos.aircraftId && detail.recursos.commanderId ? <p className="success">Recursos asignados: {detail.recursos.aircraftMatricula} · {detail.recursos.commanderNombre} {detail.recursos.commanderApellido} · Licencia {detail.recursos.commanderLicencia}</p> : <><label>Aeronave<select value={a} onChange={(e) => setA(e.target.value)}><option value="">Seleccionar aeronave</option>{d.aircraft.map((x) => <option key={x.id} value={x.id}>{x.matricula} · {x.modelo}</option>)}</select></label><label>Comandante<select value={c} onChange={(e) => setC(e.target.value)}><option value="">Seleccionar comandante</option>{d.commanders.map((x) => <option key={x.id} value={x.id}>{x.nombre} {x.apellido} · Licencia {x.licencia}</option>)}</select></label><button disabled={!a || !c} onClick={() => call(`/flights/${id}/resources`, { aircraftId: a, comandanteId: c }, "Aeronave y comandante asignados")}>Asignar recursos</button></>}</div>}
+      </section>}
     </section>
   );
 }
