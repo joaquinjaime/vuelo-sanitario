@@ -69,6 +69,19 @@ test("activation errors remain styled as errors", async () => {
  expect(await screen.findByText("Código de activación inválido")).toHaveClass("error");
  expect(screen.getByText("Código de activación inválido")).not.toHaveClass("success");
 });
+test("login keeps the temporary-password flag in the active session", async () => {
+ vi.mocked(api).mockReset();
+ vi.mocked(api).mockResolvedValue({ accessToken:"new-token", username:"temporal", roles:["DTS"], debeCambiarContrasena:true });
+ const { Login } = await import("./main.jsx");
+ const set = vi.fn();
+ render(<Login set={set} />);
+ fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "temporal" } });
+ fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "TemporalJWT12" } });
+ fireEvent.submit(screen.getByRole("button", { name: "Iniciar sesión" }).closest("form"));
+ await waitFor(() => expect(set).toHaveBeenCalledWith({ username:"temporal", roles:["DTS"], debeCambiarContrasena:true }));
+ expect(localStorage.getItem("vs-token")).toBe("new-token");
+ expect(JSON.parse(localStorage.getItem("vs-session"))).toMatchObject({ debeCambiarContrasena:true });
+});
 test("Centro de Operaciones loads its workspace without the administrative users request or an access-denied banner", async () => {
  const { OperationalApp } = await import("./main.jsx");
  localStorage.setItem("vs-session", JSON.stringify({ username: "operaciones", roles: ["CENTRO_OPERACIONES"] }));

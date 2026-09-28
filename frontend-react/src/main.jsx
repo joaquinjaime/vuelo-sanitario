@@ -86,7 +86,7 @@ export function Login({ set }) {
               "vs-session",
               JSON.stringify({ username: r.username, roles: r.roles, debeCambiarContrasena: r.debeCambiarContrasena }),
             );
-            set({ username: r.username, roles: r.roles });
+            set({ username: r.username, roles: r.roles, debeCambiarContrasena: r.debeCambiarContrasena });
           } catch (x) {
             se({ type: "error", text: x.message });
           }

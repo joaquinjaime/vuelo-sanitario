@@ -1,8 +1,10 @@
 package com.vuelossanitarios.backend.api;
 
 import com.vuelossanitarios.backend.api.dto.AuthDtos.*;
+import com.vuelossanitarios.backend.domain.catalog.Province;
 import com.vuelossanitarios.backend.domain.user.Role;
 import com.vuelossanitarios.backend.repository.AccountActivationRepository;
+import com.vuelossanitarios.backend.repository.ProvinceRepository;
 import com.vuelossanitarios.backend.repository.RoleRepository;
 import com.vuelossanitarios.backend.repository.UserRepository;
 import com.vuelossanitarios.backend.service.AuthService;
@@ -18,8 +20,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,6 +46,7 @@ class AccountActivationIntegrationTest {
  @Autowired MockMvc mvc;
  @Autowired AuthService auth;
  @Autowired RoleRepository roles;
+ @Autowired ProvinceRepository provinces;
  @Autowired UserRepository users;
  @Autowired AccountActivationRepository activations;
  @Autowired PasswordEncoder encoder;
@@ -53,6 +58,9 @@ class AccountActivationIntegrationTest {
   }
   if(roles.findByCodigo("ADMINISTRADOR").isEmpty()){
    Role role=new Role(); role.setCodigo("ADMINISTRADOR"); role.setNombre("Administrador"); roles.save(role);
+  }
+  if(roles.findByCodigo("DTS").isEmpty()){
+   Role role=new Role(); role.setCodigo("DTS"); role.setNombre("DTS"); roles.save(role);
   }
  }
 
@@ -106,5 +114,76 @@ class AccountActivationIntegrationTest {
   mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"ana.operaciones\",\"password\":\"NuevaClave123\"}"))
    .andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").isNotEmpty());
   mvc.perform(post("/api/auth/activar-cuenta").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("La cuenta ya está activada"));
+ }
+
+ @Test void loginTokenAuthenticatesTheAuthenticatedUserAtMeEndpoint() throws Exception {
+  String dni = "30" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+  ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
+   "Usuario", "JWT", dni, null, null, Set.of("OPERACIONES"),
+   List.of(new ContactRequest("jwt." + dni + "@example.test", "PERSONAL")),
+   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+  String username = "jwt." + dni;
+  mvc.perform(post("/api/auth/activar-cuenta")
+    .contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new ActivateAccountRequest(dni, activation.codigo(), username, "ClaveJWT1234", "ClaveJWT1234"))))
+   .andExpect(status().isNoContent());
+  var login = mvc.perform(post("/api/auth/login")
+    .contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new LoginRequest(username, "ClaveJWT1234"))))
+   .andExpect(status().isOk())
+   .andExpect(jsonPath("$.accessToken").isNotEmpty())
+   .andReturn();
+  String accessToken = json.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
+
+  mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + accessToken))
+   .andExpect(status().isOk())
+   .andExpect(jsonPath("$.username").value(username))
+   .andExpect(jsonPath("$.roles[0]").value("OPERACIONES"));
+ }
+
+ @Test void temporaryPasswordTokenStillAuthenticatesAtMeEndpoint() throws Exception {
+  String dni = "31" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+  ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
+   "Usuario", "Temporal", dni, null, null, Set.of("OPERACIONES"),
+   List.of(new ContactRequest("temporary." + dni + "@example.test", "PERSONAL")),
+   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+  String username = "temporary." + dni;
+  mvc.perform(post("/api/auth/activar-cuenta")
+    .contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new ActivateAccountRequest(dni, activation.codigo(), username, "ClaveJWT1234", "ClaveJWT1234"))))
+   .andExpect(status().isNoContent());
+  auth.setTemporaryPassword(users.findWithRolesByUsername(username).orElseThrow().getId(), new TemporaryPasswordRequest("TemporalJWT12"));
+  var login = mvc.perform(post("/api/auth/login")
+    .contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new LoginRequest(username, "TemporalJWT12"))))
+   .andExpect(status().isOk())
+   .andExpect(jsonPath("$.debeCambiarContrasena").value(true))
+   .andReturn();
+  String accessToken = json.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
+
+  mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + accessToken))
+   .andExpect(status().isOk())
+   .andExpect(jsonPath("$.username").value(username));
+ }
+
+ @Test void dtsLoginTokenCanLoadAllTwentyFourProvinces() throws Exception {
+  for(int i=1;i<=24;i++){ Province province=new Province(); province.setCodigoOficial("T"+i); province.setNombre("Provincia "+i); provinces.save(province); }
+  String dni = "32" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+  ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
+   "Usuario", "DTS", dni, null, null, Set.of("DTS"),
+   List.of(new ContactRequest("dts." + dni + "@example.test", "PERSONAL")),
+   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+  String username = "dts." + dni;
+  mvc.perform(post("/api/auth/activar-cuenta").contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new ActivateAccountRequest(dni, activation.codigo(), username, "ClaveJWT1234", "ClaveJWT1234"))))
+   .andExpect(status().isNoContent());
+  var login = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+    .content(json.writeValueAsString(new LoginRequest(username, "ClaveJWT1234"))))
+   .andExpect(status().isOk()).andReturn();
+  String accessToken = json.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
+
+  mvc.perform(get("/api/catalogs/provinces").header("Authorization", "Bearer " + accessToken))
+   .andExpect(status().isOk())
+   .andExpect(jsonPath("$.length()").value(24));
  }
 }
