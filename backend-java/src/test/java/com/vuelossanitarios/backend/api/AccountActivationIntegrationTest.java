@@ -80,6 +80,16 @@ class AccountActivationIntegrationTest {
   mvc.perform(post("/api/auth/activar-cuenta").contentType(MediaType.APPLICATION_JSON).content(activationPayload)).andExpect(status().isNoContent());
  }
 
+ @Test void administratorCanCreateTwoPendingAccountsWithoutUsernamesOverHttp() throws Exception {
+  auth.createBootstrapAdmin("admin.http","ClaveAdmin123","admin.http@example.test");
+  String token=auth.login(new LoginRequest("admin.http","ClaveAdmin123")).accessToken();
+  for(String dni:List.of("47355304","47355305")){
+   String payload=json.writeValueAsString(new CreatePendingUserRequest("Prueba","Pendiente",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("pending."+dni+"@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","PERSONAL"))));
+   mvc.perform(post("/api/auth/users").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").isNotEmpty());
+  }
+ }
+
  @Test void createdPendingAccountActivatesOverHttpAndCanThenLogIn() throws Exception {
   ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
    "Ana","Pérez","30111222",null,null,Set.of("OPERACIONES"),

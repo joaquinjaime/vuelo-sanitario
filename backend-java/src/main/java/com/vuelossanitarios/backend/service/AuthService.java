@@ -24,7 +24,7 @@ import java.util.*;
   User u=new User();u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("PENDIENTE_ACTIVACION");users.save(u); assignRoles(u,r.roles()); ensureCommanderProfile(p,r.roles(),r.licenciaAeronautica(),actorId); saveContacts(p,r.correos(),r.telefonos());
   return new ActivationCodeResponse(newActivation(u,actorId),"24 horas");
  }
- @Transactional public ActivationCodeResponse regenerate(UUID userId, UUID actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(LocalDateTime.now())); return new ActivationCodeResponse(newActivation(u,actorId),"24 horas"); }
+ @Transactional public ActivationCodeResponse regenerate(UUID userId, UUID actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(LocalDateTime.now())); activations.flush(); return new ActivationCodeResponse(newActivation(u,actorId),"24 horas"); }
  @Transactional public void activate(ActivateAccountRequest r){
   if(!r.password().equals(r.confirmacionPassword()))throw new ApiException(HttpStatus.BAD_REQUEST,"Las contraseñas no coinciden");
   String dni=canonicalDni(r.dni()); List<AccountActivation> candidates=activations.findOpenByDni(dni);
