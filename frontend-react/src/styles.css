@@ -149,6 +149,15 @@ header,
   display: block;
   margin-top: 0.5rem;
 }
+.admin-welcome h2 { margin: .25rem 0; }
+.quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.quick-action { min-height: 10rem; display: grid; align-content: center; justify-items: start; gap: .5rem; text-align: left; background: linear-gradient(135deg, #0c5da5, #0a407c); box-shadow: 0 .65rem 1.2rem #0b306026; }
+.quick-action span { font-size: 1.8rem; line-height: 1; }
+.quick-action strong { font-size: 1.2rem; }
+.quick-action small { color: #d7e5fb; font-weight: 400; }
+.admin-metrics { margin-top: 1rem; }
+.user-tabs { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.selected-tab { background: #0c5da5; }
 .card {
   overflow: auto;
   margin-bottom: 1rem;
@@ -281,6 +290,7 @@ button {
   .grid-form {
     grid-template-columns: 1fr;
   }
+  .quick-actions { grid-template-columns: 1fr; }
   .login h1 {
     font-size: 2rem;
   }

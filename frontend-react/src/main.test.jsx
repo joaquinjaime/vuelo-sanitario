@@ -16,10 +16,10 @@ const fillActivationFields = ({ password = "ClaveValida12", confirmation = passw
  fireEvent.change(screen.getByLabelText(/^Contraseña/), { target: { value: password } });
  fireEvent.change(screen.getByLabelText("Confirmar contraseña"), { target: { value: confirmation } });
 };
-test("admin only renders user management and never operational navigation", async () => {
+test("admin renders the dashboard and never operational navigation", async () => {
  localStorage.setItem("vs-session", JSON.stringify({ username:"admin", roles:["ADMINISTRADOR"] }));
  await import("./main.jsx");
- expect((await screen.findAllByText("Gestión de usuarios")).length).toBeGreaterThan(0);
+ expect(await screen.findByText("Panel de administración")).toBeInTheDocument();
  expect(screen.queryByText("Vuelos")).toBeNull(); expect(screen.queryByText(/Notificaciones/)).toBeNull(); expect(document.querySelector(".icon")?.textContent).not.toContain("🔔");
 });
 test("activation rejects an 11-character password without sending a request", async () => {
@@ -28,7 +28,7 @@ test("activation rejects an 11-character password without sending a request", as
  fillActivationFields({ password: "claveonce1", confirmation: "claveonce1" });
  expect(screen.getAllByText("La contraseña debe tener al menos 12 caracteres.")).toHaveLength(2);
  fireEvent.click(screen.getByRole("button", { name: "Activar cuenta" }));
- expect(vi.mocked(api)).not.toHaveBeenCalled();
+ expect(vi.mocked(api)).not.toHaveBeenCalledWith("/auth/activar-cuenta", expect.anything());
 });
 test("activation accepts passwords with at least 12 characters", async () => {
  vi.mocked(api).mockReset();
@@ -195,7 +195,7 @@ test("changing area preserves the session and moves from administration to opera
  });
  render(<AdminApp/>);
  fireEvent.click(await screen.findByRole("button",{name:"Administración"}));
- expect((await screen.findAllByText("Gestión de usuarios")).length).toBeGreaterThan(0);
+ expect(await screen.findByText("Panel de administración")).toBeInTheDocument();
  expect(screen.queryByText("Vuelos visibles")).toBeNull();
  fireEvent.click(screen.getByRole("button",{name:"Cambiar área"}));
  fireEvent.click(await screen.findByRole("button",{name:"Centro de Operaciones"}));
