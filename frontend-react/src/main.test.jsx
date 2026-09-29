@@ -96,19 +96,18 @@ test("Centro de Operaciones loads its workspace without the administrative users
  expect(vi.mocked(api)).not.toHaveBeenCalledWith("/auth/users");
  expect(screen.queryByText("Acceso denegado")).toBeNull();
 });
-test("operations opens a pending request, requires a rejection reason, and approves it", async () => {
+test("operations opens a pending request and accepts the DTS schedule", async () => {
  const { Ops } = await import("./main.jsx");
  const done = vi.fn().mockResolvedValue(undefined), msg = vi.fn();
  const flight = { id:"flight-1",codigo:"VS-001",estado:"SOLICITADO",paciente:"Ana Pérez",prioridad:"ALTA",origen:{id:"loc-tuc",nombre:"San Miguel de Tucumán",provincia:"Tucumán"},destino:{id:"loc-sal",nombre:"Salta",provincia:"Salta"},solicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00" };
  const detail = { vuelo:flight,paciente:{nombre:"Ana",apellido:"Pérez",dni:"30111222"},medical:{diagnostico:"Diagnóstico",condicionMedica:"ESTABLE",requiereEquipamientoEspecial:true,observaciones:"Oxígeno"},motivoSolicitud:"Traslado",motivoRechazo:null,recursos:{} };
  vi.mocked(api).mockImplementation((path, options) => path==="/flights/flight-1"&&options?.method!=="POST" ? Promise.resolve(detail) : Promise.resolve(flight));
  render(<Ops d={{flights:[flight],aircraft:[],commanders:[]}} done={done} msg={msg} />);
- fireEvent.click(screen.getByRole("button", { name:"Ver detalle" }));
- expect(await screen.findByText("Información médica")).toBeInTheDocument();
- expect(screen.getByRole("button", { name:"Rechazar solicitud" })).toBeDisabled();
- fireEvent.click(screen.getByRole("button", { name:"Aprobar solicitud" }));
- await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/flight-1/evaluation", expect.objectContaining({ method:"POST", body:JSON.stringify({aprobar:true,priorityCode:"ALTA"}) })));
- expect(msg).toHaveBeenCalledWith("Solicitud aprobada");
+ fireEvent.change(screen.getByLabelText("Solicitud"),{target:{value:"flight-1"}});
+ expect(await screen.findByText("Propuesta DTS")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name:"Aceptar horario DTS" }));
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/flight-1/schedule/accept", expect.objectContaining({ method:"POST" })));
+ expect(msg).toHaveBeenCalledWith("Horario aceptado");
 });
 test("saved dark preference is applied before app rendering", () => { localStorage.setItem("vs-theme", "dark"); document.documentElement.dataset.theme="dark"; expect(document.documentElement.dataset.theme).toBe("dark"); });
 test("the license input follows the COMANDANTE role without clearing the form", async () => {
@@ -202,4 +201,53 @@ test("changing area preserves the session and moves from administration to opera
  expect(await screen.findByText("Vuelos visibles")).toBeInTheDocument();
  expect(localStorage.getItem("vs-token")).toBe("unchanged-token");
  expect(JSON.parse(localStorage.getItem("vs-session")).roles).toEqual(["ADMINISTRADOR","CENTRO_OPERACIONES"]);
+});
+const adminUsersFixture=[
+ {id:"u-activo",nombre:"Lisandro",apellido:"Lopez",dni:"42789123",username:"lisandro123",estado:"ACTIVO",activo:true,fechaBaja:null,roles:["DTS"],correos:[],telefonos:[],provinciaActual:null},
+ {id:"u-comandante",nombre:"Maria",apellido:"Rodriguez",dni:"38789789",username:"maria123",estado:"ACTIVO",activo:true,fechaBaja:null,roles:["COMANDANTE"],correos:[],telefonos:[],provinciaActual:"Tucumán"},
+ {id:"u-baja",nombre:"Prueba",apellido:"Baja",dni:"15408625",username:"bajatest",estado:"DESACTIVADO",activo:false,fechaBaja:"2026-09-29T01:31:15",roles:["DTS"],correos:[],telefonos:[],provinciaActual:null}
+];
+test("admin users stay visible when an unrelated admin resource fails (regression: aircraft 500 emptied the list)", async () => {
+ const { AdminApp } = await import("./main.jsx");
+ localStorage.setItem("vs-session",JSON.stringify({username:"admin",roles:["ADMINISTRADOR"]}));
+ window.location.hash="#/admin/usuarios";
+ vi.mocked(api).mockImplementation((path) => {
+   if(path==="/auth/users")return Promise.resolve(adminUsersFixture);
+   if(path==="/auth/me")return Promise.resolve({nombre:"Admin",apellido:"Inicial",dni:null,correos:[],telefonos:[]});
+   if(path==="/catalogs/aircraft/admin")return Promise.reject(new Error("Error interno"));
+   return Promise.resolve([]);
+ });
+ render(<AdminApp/>);
+ expect(await screen.findByText("Lisandro")).toBeInTheDocument();
+ expect(screen.getByText("Maria")).toBeInTheDocument();
+ expect(screen.queryByText("bajatest")).toBeNull();
+ expect(screen.getByText(/No se pudo cargar aeronaves: Error interno/)).toBeInTheDocument();
+ expect(screen.getAllByRole("button",{name:"Desactivar"})).toHaveLength(2);
+ fireEvent.click(screen.getByRole("button",{name:"Usuarios desactivados"}));
+ expect(await screen.findByText("bajatest")).toBeInTheDocument();
+ expect(screen.queryByText("lisandro123")).toBeNull();
+ expect(screen.getByRole("button",{name:"Reactivar"})).toBeInTheDocument();
+ window.location.hash="";
+});
+test("deactivating from the active list calls the logical-deactivation endpoint and reloads from the backend", async () => {
+ const { AdminUsers } = await import("./main.jsx");
+ const reload=vi.fn(()=>Promise.resolve()), notify=vi.fn();
+ vi.spyOn(window,"confirm").mockReturnValue(true);
+ vi.mocked(api).mockImplementation(() => Promise.resolve({}));
+ render(<AdminUsers users={adminUsersFixture} reload={reload} notify={notify} active />);
+ fireEvent.click(screen.getAllByRole("button",{name:"Desactivar"})[0]);
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/users/u-activo/deactivate",{method:"PATCH",body:"{}"}));
+ await waitFor(() => expect(reload).toHaveBeenCalled());
+ expect(notify).toHaveBeenCalledWith("Usuario desactivado");
+});
+test("reactivating a deactivated user opens the review form and calls the reactivation endpoint", async () => {
+ const { AdminUsers } = await import("./main.jsx");
+ const reload=vi.fn(()=>Promise.resolve()), notify=vi.fn();
+ vi.mocked(api).mockImplementation((path) => path==="/auth/users/u-baja/reactivate" ? Promise.resolve({contrasenaTemporal:"Temporal-123456"}) : Promise.resolve({}));
+ render(<AdminUsers users={adminUsersFixture} reload={reload} notify={notify} active={false} />);
+ fireEvent.click(screen.getByRole("button",{name:"Reactivar"}));
+ fireEvent.click(await screen.findByRole("button",{name:"Reactivar y generar contraseña"}));
+ await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/users/u-baja/reactivate",expect.objectContaining({method:"PATCH"})));
+ expect(await screen.findByText("Temporal-123456")).toBeInTheDocument();
+ expect(reload).toHaveBeenCalled();
 });

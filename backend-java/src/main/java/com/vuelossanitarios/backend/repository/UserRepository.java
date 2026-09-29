@@ -9,6 +9,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findWithRolesByUsername(@Param("username") String username);
     @Query("select distinct u from User u join u.userRoles ur join ur.role r where r.codigo = :role and u.activo = true")
     List<User> findActiveByRoleCode(@Param("role") String role);
+    @Query("select distinct u from User u join fetch u.person p join fetch p.commanderProfile cp join cp.provinciaActual pr join u.userRoles ur join ur.role r where r.codigo='COMANDANTE' and u.activo=true and u.estadoCuenta='ACTIVO' and pr.id=:provinceId")
+    List<User> findAvailableCommandersInProvince(@Param("provinceId") UUID provinceId);
     boolean existsByUsername(String username);
     @Query("select distinct u from User u join fetch u.person left join fetch u.userRoles ur left join fetch ur.role")
     List<User> findAllWithPersonAndRoles();
