@@ -17,6 +17,9 @@ services:
       retries: 15
       start_period: 30s
     restart: unless-stopped
+    ports:
+      - "14330:1433"
+
 
   db-init:
     image: mcr.microsoft.com/mssql/server:2022-latest

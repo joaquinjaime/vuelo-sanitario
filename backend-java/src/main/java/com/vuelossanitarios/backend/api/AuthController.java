@@ -24,6 +24,8 @@ import java.util.*;
  @GetMapping("/users/commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<CommanderView> commanders(){return service.listActiveCommanders();}
  @PostMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse create(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody CreatePendingUserRequest r){return service.createPending(r,u.id());}
  @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
+ @PatchMapping("/users/{id}/deactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView deactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody DeactivateUserRequest r){return service.deactivateUser(id,actor.id(),r.motivo());}
+ @PatchMapping("/users/{id}/reactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public ReactivationResponse reactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody ReactivateUserRequest r){return service.reactivateUser(id,r,actor.id());}
  @PostMapping("/users/{id}/activation-code") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse regenerate(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){return service.regenerate(id,u.id());}
- @PostMapping("/users/{id}/temporary-password") @PreAuthorize("hasRole('ADMINISTRADOR')") public void temporary(@PathVariable UUID id,@Valid @RequestBody TemporaryPasswordRequest r){service.setTemporaryPassword(id,r);}
+ @PostMapping("/users/{id}/temporary-password") @PreAuthorize("hasRole('ADMINISTRADOR')") public void temporary(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody TemporaryPasswordRequest r){service.setTemporaryPassword(id,r,actor.id());}
 }

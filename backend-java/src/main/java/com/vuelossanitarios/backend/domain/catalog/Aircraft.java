@@ -3,6 +3,9 @@ package com.vuelossanitarios.backend.domain.catalog;
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -33,6 +36,11 @@ public class Aircraft extends BaseEntity {
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
 
+    /** Aeropuerto físico en el que se encuentra mientras no ejecuta un vuelo. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "aeropuerto_actual_id")
+    private Airport aeropuertoActual;
+
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -60,6 +68,9 @@ public class Aircraft extends BaseEntity {
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
+
+    public Airport getAeropuertoActual() { return aeropuertoActual; }
+    public void setAeropuertoActual(Airport aeropuertoActual) { this.aeropuertoActual = aeropuertoActual; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

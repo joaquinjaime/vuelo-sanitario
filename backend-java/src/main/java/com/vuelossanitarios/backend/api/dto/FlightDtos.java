@@ -15,6 +15,7 @@ public final class FlightDtos { private FlightDtos(){}
  public record LocalityView(UUID id,String nombre,String provincia){}
  public record FlightView(UUID id,String codigo,String estado,UUID patientId,String paciente,String prioridad,LocalityView origen,LocalityView destino,LocalDateTime solicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,LocalDateTime salida,LocalDateTime llegada){}
  public record PatientDetail(UUID id,String nombre,String apellido,String dni){}
+ public record AvailableAircraftView(UUID id,String matricula,String modelo,String tipo,UUID aeropuertoActualId,String aeropuertoActual){}
  public record ResourceAssignment(UUID aircraftId,String aircraftMatricula,UUID commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia){}
  public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,String motivoSolicitud,String motivoRechazo,ResourceAssignment recursos){}
 }

@@ -40,6 +40,13 @@ public class User extends BaseEntity {
     @Column(name = "debe_cambiar_contrasena", nullable = false)
     private Boolean debeCambiarContrasena = false;
 
+    /** Incremented whenever credentials are invalidated. It is carried in every JWT. */
+    @Column(name = "version_credenciales", nullable = false)
+    private Long versionCredenciales = 1L;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -69,6 +76,11 @@ public class User extends BaseEntity {
     public void setEstadoCuenta(String estadoCuenta) { this.estadoCuenta = estadoCuenta; }
     public Boolean getDebeCambiarContrasena() { return debeCambiarContrasena; }
     public void setDebeCambiarContrasena(Boolean value) { debeCambiarContrasena = value; }
+    public Long getVersionCredenciales() { return versionCredenciales; }
+    public void setVersionCredenciales(Long value) { versionCredenciales = value; }
+    public void invalidateCredentials() { versionCredenciales = versionCredenciales == null ? 1L : versionCredenciales + 1L; }
+    public LocalDateTime getFechaBaja() { return fechaBaja; }
+    public void setFechaBaja(LocalDateTime value) { fechaBaja = value; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

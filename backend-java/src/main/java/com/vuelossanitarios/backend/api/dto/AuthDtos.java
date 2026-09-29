@@ -12,6 +12,9 @@ public final class AuthDtos { private AuthDtos(){}
  public record UpdateUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles,@NotNull Boolean activo) {}
  public record ActivateAccountRequest(@NotBlank @Size(max=20) String dni,@NotBlank String codigo,@NotBlank @Size(max=50) String username,@NotBlank @Size(min=12,max=100) String password,@NotBlank String confirmacionPassword) {}
  public record TemporaryPasswordRequest(@NotBlank @Size(min=12,max=100) String password) {}
+ public record DeactivateUserRequest(@Size(max=500) String motivo) {}
+ public record ReactivateUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles) {}
+ public record ReactivationResponse(UserView usuario,String contrasenaTemporal) {}
  public record ChangePasswordRequest(@NotBlank String passwordActual,@NotBlank @Size(min=12,max=100) String nuevaPassword,@NotBlank String confirmacionPassword) {}
  public record ContactView(UUID id,String valor,String tipo,boolean principal) {}
  public record UserView(UUID id,String nombre,String apellido,String dni,String username,String estado,boolean activo,Set<String> roles,List<ContactView> correos,List<ContactView> telefonos) {}
