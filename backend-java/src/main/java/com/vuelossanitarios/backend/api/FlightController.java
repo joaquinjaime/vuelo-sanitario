@@ -25,5 +25,6 @@ import java.util.*;
  @PostMapping("/{id}/start") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView start(@PathVariable UUID id,@AuthenticationPrincipal CurrentUser u){return service.start(id,u.id());}
  @PostMapping("/{id}/finish") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView finish(@PathVariable UUID id,@AuthenticationPrincipal CurrentUser u){return service.finish(id,u.id());}
  @PostMapping("/{id}/cancel") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public FlightView cancel(@PathVariable UUID id,@Valid @RequestBody Cancel r,@AuthenticationPrincipal CurrentUser u){return service.cancel(id,r,u.id());}
+ @PostMapping("/{id}/weather") @PreAuthorize("hasRole('COMANDANTE')") public WeatherView weather(@PathVariable UUID id,@Valid @RequestBody Weather r,@AuthenticationPrincipal CurrentUser u){return service.registerWeather(id,r,u.id());}
  @PostMapping("/{id}/crew") @PreAuthorize("hasRole('COMANDANTE')") public void crew(@PathVariable UUID id,@Valid @RequestBody Crew r,@AuthenticationPrincipal CurrentUser u){service.addCrew(id,r,u.id());}
 }

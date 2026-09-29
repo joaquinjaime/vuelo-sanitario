@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 class AdministratorAuthorizationTest {
  @Autowired MockMvc mvc; @MockBean JwtService jwt;
  @MockBean UserRepository users; @MockBean AuditService audit;
- @MockBean FlightService flights; @MockBean PatientService patients; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean CommanderProfileRepository commanderProfiles; @MockBean AuthService auth;
+ @MockBean FlightService flights; @MockBean PatientService patients; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean CommanderProfileRepository commanderProfiles; @MockBean CancellationReasonRepository cancellationReasons; @MockBean AuthService auth;
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorIsForbiddenFromAllOperationalResources() throws Exception {
   mvc.perform(get("/api/flights")).andExpect(status().isForbidden());
   mvc.perform(get("/api/patients")).andExpect(status().isForbidden());

@@ -2,6 +2,7 @@ package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.catalog.Aircraft;
 import com.vuelossanitarios.backend.domain.catalog.Airport;
+import com.vuelossanitarios.backend.domain.catalog.CancellationReason;
 import com.vuelossanitarios.backend.domain.catalog.FlightStatus;
 import com.vuelossanitarios.backend.domain.catalog.FlightPriority;
 import com.vuelossanitarios.backend.domain.catalog.Locality;
@@ -126,8 +127,12 @@ public class Flight extends BaseEntity {
 
     // ---- Cancelacion (V2) ----
 
-    @Column(name = "motivo_cancelacion", columnDefinition = "NVARCHAR(MAX)")
-    private String motivoCancelacion;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "motivo_cancelacion_id")
+    private CancellationReason motivoCancelacion;
+
+    @Column(name = "motivo_cancelacion_personalizado", columnDefinition = "NVARCHAR(MAX)")
+    private String motivoCancelacionPersonalizado;
 
     @Column(name = "fecha_cancelacion")
     private LocalDateTime fechaCancelacion;
@@ -215,8 +220,10 @@ public class Flight extends BaseEntity {
     public LocalDateTime getFechaLlegadaReal() { return fechaLlegadaReal; }
     public void setFechaLlegadaReal(LocalDateTime fechaLlegadaReal) { this.fechaLlegadaReal = fechaLlegadaReal; }
 
-    public String getMotivoCancelacion() { return motivoCancelacion; }
-    public void setMotivoCancelacion(String motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; }
+    public CancellationReason getMotivoCancelacion() { return motivoCancelacion; }
+    public void setMotivoCancelacion(CancellationReason motivoCancelacion) { this.motivoCancelacion = motivoCancelacion; }
+    public String getMotivoCancelacionPersonalizado() { return motivoCancelacionPersonalizado; }
+    public void setMotivoCancelacionPersonalizado(String value) { motivoCancelacionPersonalizado = value; }
 
     public LocalDateTime getFechaCancelacion() { return fechaCancelacion; }
     public void setFechaCancelacion(LocalDateTime fechaCancelacion) { this.fechaCancelacion = fechaCancelacion; }

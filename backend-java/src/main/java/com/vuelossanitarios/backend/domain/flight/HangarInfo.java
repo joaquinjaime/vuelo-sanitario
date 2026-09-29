@@ -14,11 +14,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Informacion de hangar (combustible cargado, checklist de preparacion
- * del avion). "checklistPreparacion" guarda el JSON del checklist como
- * texto (columna NVARCHAR(MAX) con CHECK ISJSON). El documento/reporte
- * asociado se carga aparte en FlightDocument con
- * DocumentType.codigo = "HANGAR". Versionado: ver nota en FlightDocument.
+ * Información de hangar versionada para combustible y estado de preparación.
+ * El checklist se resuelve como funcionalidad de interfaz/reglas, no como
+ * texto JSON persistido.
  */
 @Entity
 @Table(name = "informacion_hangar")
@@ -36,9 +34,6 @@ public class HangarInfo extends BaseEntity {
 
     @Column(name = "combustible_litros", precision = 10, scale = 2)
     private BigDecimal combustibleLitros;
-
-    @Column(name = "checklist_preparacion", columnDefinition = "NVARCHAR(MAX)")
-    private String checklistPreparacion;
 
     @Column(name = "preparacion_completa", nullable = false)
     private Boolean preparacionCompleta = false;
@@ -68,9 +63,6 @@ public class HangarInfo extends BaseEntity {
 
     public BigDecimal getCombustibleLitros() { return combustibleLitros; }
     public void setCombustibleLitros(BigDecimal combustibleLitros) { this.combustibleLitros = combustibleLitros; }
-
-    public String getChecklistPreparacion() { return checklistPreparacion; }
-    public void setChecklistPreparacion(String checklistPreparacion) { this.checklistPreparacion = checklistPreparacion; }
 
     public Boolean getPreparacionCompleta() { return preparacionCompleta; }
     public void setPreparacionCompleta(Boolean preparacionCompleta) { this.preparacionCompleta = preparacionCompleta; }
