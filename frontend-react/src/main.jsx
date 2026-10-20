@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { api, credentialFile, uploadFile, downloadFile } from "./api";
 import { workspaceForRoles } from "./workspace";
+import { CommanderReports, OperationsReports, FlightClosure, LifecycleActions, NotificationsPanel } from "./closure";
 import "./styles.css";
 const s = (s) => `status status-${s?.toLowerCase()}`;
-const adaptFlight = (flight) => {
+export const adaptFlight = (flight) => {
   const sanitary = flight?.datosSanitarios;
-  return { ...flight, estado: flight?.estadoVuelo || sanitary?.estadoSolicitud || "SIN_ESTADO", prioridad: sanitary?.prioridad || "—", solicitada: sanitary?.fechaSolicitada || null, extremaUrgencia: Boolean(sanitary?.extremaUrgencia), justificacionExtremaUrgencia: sanitary?.justificacionExtremaUrgencia, fechaLimiteTraslado: sanitary?.fechaLimiteTraslado, origen: sanitary?.localidadOrigenSolicitada || flight?.origen, destino: sanitary?.localidadDestinoSolicitada || flight?.destino };
+  return { ...flight, estado: flight?.estadoVuelo || sanitary?.estadoSolicitud || "SIN_ESTADO", prioridad: sanitary?.prioridad || "—", solicitada: sanitary?.fechaSolicitada || null, extremaUrgencia: Boolean(sanitary?.extremaUrgencia), justificacionExtremaUrgencia: sanitary?.justificacionExtremaUrgencia, fechaLimiteTraslado: sanitary?.fechaLimiteTraslado, origen: sanitary?.localidadOrigenSolicitada || flight?.origenDetalle || flight?.origen, destino: sanitary?.localidadDestinoSolicitada || flight?.destinoDetalle || flight?.destino };
 };
 const adaptDetail = (detail) => detail ? { ...detail, vuelo: adaptFlight(detail.vuelo) } : detail;
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.
@@ -132,7 +133,8 @@ export function Login({ set }) {
     </main>
   );
 }
-const locationLabel = (location) => location ? `${location.nombre}, ${location.provincia}` : "—";
+// Acepta el lugar estructurado ({nombre, provincia}) o, en payloads antiguos, el nombre del aeropuerto como texto.
+export const locationLabel = (location) => !location ? "—" : typeof location === "string" ? (location.trim() || "—") : ([location.nombre, location.provincia].filter(Boolean).join(", ") || "—");
 function LocalityPicker({ title, provinces, provinceId, setProvinceId, selected, setSelected }) {
   const [query, setQuery] = useState(""), [options, setOptions] = useState([]), [loading, setLoading] = useState(false), [open, setOpen] = useState(false);
   const resetAutocomplete = () => { setSelected(null); setQuery(""); setOptions([]); setLoading(false); setOpen(false); };
@@ -441,7 +443,7 @@ export function Ops({ d, done, msg }) {
  useEffect(()=>{api("/catalogs/provinces").then(setProvinces).catch(e=>msg(e.message,true));api("/catalogs/cancellation-reasons").then(x=>setReasons(Array.isArray(x)?x:[])).catch(e=>msg(e.message,true));},[]); useEffect(()=>{setDetail(null);setAircraft([]);setCommanders([]);setA("");setC("");setReasonId("");setCustom("");load(id);},[id]);
  const call=async(path,body,success)=>{try{await api(path,{method:"POST",body:body&&JSON.stringify(body)});msg(success);await done();await load(id);setLogRevision(x=>x+1);}catch(e){msg(e.message,true);}}; const f=detail?.vuelo;
  const resources=async()=>{try{const [as,cs]=await Promise.all([api(`/flights/${id}/available-aircraft`),api(`/flights/${id}/available-commanders`)]);setAircraft(as);setCommanders(cs);}catch(e){msg(e.message,true);}};
- return <><OperationalFlightForm d={d} done={done} msg={msg}/><section className="card"><h2>Centro de Operaciones</h2><div className="grid-form"><label>Solicitud<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}{routeStates[x.id]?` · Ruta ${routeStates[x.id].replaceAll('_',' ')}`:''}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>{f.datosSanitarios?"Propuesta DTS":"Vuelo operativo"}</h4><p>{f.datosSanitarios?dt(f.solicitada):f.motivoVuelo}</p><p>{locationLabel(f.origen)} → {locationLabel(f.destino)}</p></div><div><h4>Horario definitivo</h4><p>{f.salida?dt(f.salida):"Aún en negociación"}</p></div></div><Urgency flight={f} detail/><HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${logRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={f.estado!=="FINALIZADO"} msg={msg}/><FlightLog key={`log-${id}`} flightId={id} revision={logRevision} msg={msg}/><FlightRoute key={`route-${id}`} flightId={id} msg={msg}/><FlightCrew key={id} flightId={id} canManage state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id}/><Negotiation events={detail.negociacion}/><CommanderProposalResponse flight={f} done={done} msg={msg} reload={()=>load(id)}/>{f.estado==="SOLICITADO"&&<div className="wide detail-actions"><button onClick={()=>call(`/flights/${id}/schedule/accept`,null,"Horario aceptado")}>Aceptar horario DTS</button><label>Nueva fecha y hora<input type="datetime-local" value={counter} onChange={e=>setCounter(e.target.value)}/></label><label>Motivo de contrapropuesta<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={!counter||!reason.trim()} onClick={()=>call(`/flights/${id}/schedule/counterproposal`,{salida:counter,motivo:reason},"Contrapropuesta enviada")}>Contrapropone</button></div>}{!["EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO"].includes(f.estado)&&<div className="wide detail-actions"><h4>Cancelar vuelo</h4><CancellationFields reasons={reasons} value={reasonId} setValue={setReasonId} custom={custom} setCustom={setCustom}/><button className="secondary-action" disabled={!reasonId||(reasons.find(x=>x.id===reasonId)?.codigo==="OTRO"&&!custom.trim())} onClick={()=>call(`/flights/${id}/cancel`,{motivoCancelacionId:reasonId,motivoCancelacionPersonalizado:custom||null},"Vuelo cancelado")}>Cancelar vuelo</button></div>}{f.estado==="APROBADO"&&<div className="wide detail-actions"><h4>Asignación de recursos</h4><button onClick={resources}>Consultar disponibilidad</button>{aircraft.length>0&&<label>Aeronave<select value={a} onChange={e=>setA(e.target.value)}><option value="">Seleccionar</option>{aircraft.map(x=><option key={x.id} value={x.id}>{x.matricula} — {x.aeropuertoActual}</option>)}</select></label>}{commanders.length>0&&<label>Comandante<select value={c} onChange={e=>setC(e.target.value)}><option value="">Seleccionar</option>{commanders.map(x=><option key={x.id} value={x.id}>{x.nombre} {x.apellido} — {x.provinciaActual}</option>)}</select></label>}<button disabled={!a||!c} onClick={()=>call(`/flights/${id}/resources`,{aircraftId:a,comandanteId:c},"Recursos asignados")}>Confirmar asignación</button></div>}</>}</div></section></>;
+ return <><OperationalFlightForm d={d} done={done} msg={msg}/><section className="card"><h2>Centro de Operaciones</h2><div className="grid-form"><label>Solicitud<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}{routeStates[x.id]?` · Ruta ${routeStates[x.id].replaceAll('_',' ')}`:''}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>{f.datosSanitarios?"Propuesta DTS":"Vuelo operativo"}</h4><p>{f.datosSanitarios?dt(f.solicitada):f.motivoVuelo}</p><p>{locationLabel(f.origen)} → {locationLabel(f.destino)}</p></div><div><h4>Horario definitivo</h4><p>{f.salida?dt(f.salida):"Aún en negociación"}</p></div></div><Urgency flight={f} detail/><FlightClosure flight={f} cierre={detail.cierre}/><LifecycleActions flight={f} run={(path,ok)=>call(path,null,ok)}/><HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${logRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={f.estado!=="FINALIZADO"} msg={msg}/><FlightLog key={`log-${id}`} flightId={id} revision={logRevision} msg={msg}/><FlightRoute key={`route-${id}`} flightId={id} msg={msg}/><FlightCrew key={id} flightId={id} canManage state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id}/><Negotiation events={detail.negociacion}/><CommanderProposalResponse flight={f} done={done} msg={msg} reload={()=>load(id)}/>{f.estado==="SOLICITADO"&&<div className="wide detail-actions"><button onClick={()=>call(`/flights/${id}/schedule/accept`,null,"Horario aceptado")}>Aceptar horario DTS</button><label>Nueva fecha y hora<input type="datetime-local" value={counter} onChange={e=>setCounter(e.target.value)}/></label><label>Motivo de contrapropuesta<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={!counter||!reason.trim()} onClick={()=>call(`/flights/${id}/schedule/counterproposal`,{salida:counter,motivo:reason},"Contrapropuesta enviada")}>Contrapropone</button></div>}{!["EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO"].includes(f.estado)&&<div className="wide detail-actions"><h4>Cancelar vuelo</h4><CancellationFields reasons={reasons} value={reasonId} setValue={setReasonId} custom={custom} setCustom={setCustom}/><button className="secondary-action" disabled={!reasonId||(reasons.find(x=>x.id===reasonId)?.codigo==="OTRO"&&!custom.trim())} onClick={()=>call(`/flights/${id}/cancel`,{motivoCancelacionId:reasonId,motivoCancelacionPersonalizado:custom||null},"Vuelo cancelado")}>Cancelar vuelo</button></div>}{f.estado==="APROBADO"&&<div className="wide detail-actions"><h4>Asignación de recursos</h4><button onClick={resources}>Consultar disponibilidad</button>{aircraft.length>0&&<label>Aeronave<select value={a} onChange={e=>setA(e.target.value)}><option value="">Seleccionar</option>{aircraft.map(x=><option key={x.id} value={x.id}>{x.matricula} — {x.aeropuertoActual}</option>)}</select></label>}{commanders.length>0&&<label>Comandante<select value={c} onChange={e=>setC(e.target.value)}><option value="">Seleccionar</option>{commanders.map(x=><option key={x.id} value={x.id}>{x.nombre} {x.apellido} — {x.provinciaActual}</option>)}</select></label>}<button disabled={!a||!c} onClick={()=>call(`/flights/${id}/resources`,{aircraftId:a,comandanteId:c},"Recursos asignados")}>Confirmar asignación</button></div>}</>}</div></section></>;
 }
 export function Cmd({ d, done, msg }) {
  const [id,setId]=useState(""),[detail,setDetail]=useState(null),[origin,setOrigin]=useState(""),[destination,setDestination]=useState(""),[arrival,setArrival]=useState(""),[airports,setAirports]=useState([]),[weather,setWeather]=useState({condiciones:"",favorable:true,observaciones:""}),[weatherRevision,setWeatherRevision]=useState(0),[routeRevision,setRouteRevision]=useState(0);
@@ -449,7 +451,7 @@ export function Cmd({ d, done, msg }) {
  useEffect(()=>{if(!f?.datosSanitarios){setAirports([]);return;}Promise.all([api(`/catalogs/airports?provinceId=${f.origen.provinciaId}`),api(`/catalogs/airports?provinceId=${f.destino.provinciaId}`)]).then(([o,de])=>setAirports([{kind:"o",items:o},{kind:"d",items:de}])).catch(e=>msg(e.message,true));},[f?.id]); const originOptions=airports.find(x=>x.kind==="o")?.items||[],destinationOptions=airports.find(x=>x.kind==="d")?.items||[];
  const save=async()=>{try{await api(`/flights/${id}/operational-planning`,{method:"POST",body:JSON.stringify({origenId:origin,destinoId:destination,llegada:arrival})});msg("Planificación operativa guardada");await done();setDetail(adaptDetail(await api(`/flights/${id}`)));setRouteRevision(x=>x+1);}catch(e){msg(e.message,true);}};
  const saveWeather=async()=>{try{await api(`/flights/${id}/weather`,{method:"POST",body:JSON.stringify(weather)});msg("Condiciones meteorológicas registradas");setWeather({condiciones:"",favorable:true,observaciones:""});setWeatherRevision(x=>x+1);}catch(e){msg(e.message,true);}};
- return <section className="card"><h2>Planificación operativa</h2><p className="hint">La salida definitiva proviene del flujo que corresponda y no es editable por el comandante.</p><div className="grid-form"><label>Vuelo<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar vuelo</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>Salida fijada</h4><p>{dt(f.salida)}</p></div><div><h4>Recursos</h4><p>{detail.recursos?.aircraftMatricula||"—"}</p></div></div><CommanderAssignment flight={f} done={done} msg={msg} reload={async()=>setDetail(adaptDetail(await api(`/flights/${id}`)))}/>{f.estado==="PLANIFICADO"&&<>{f.datosSanitarios&&<><label>Aeropuerto de origen<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="">Seleccionar ({f.origen.provincia})</option>{originOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Aeropuerto de destino<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Seleccionar ({f.destino.provincia})</option>{destinationOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Llegada planificada<input type="datetime-local" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><button disabled={!origin||!destination||!arrival} onClick={save}>Guardar planificación</button></>}<fieldset className="wide"><legend>Condiciones meteorológicas</legend><label>Condiciones<textarea required value={weather.condiciones} onChange={e=>setWeather({...weather,condiciones:e.target.value})}/></label><label>¿Condiciones favorables?<select value={String(weather.favorable)} onChange={e=>setWeather({...weather,favorable:e.target.value==="true"})}><option value="true">Sí</option><option value="false">No</option></select></label><label>Observaciones<textarea value={weather.observaciones} onChange={e=>setWeather({...weather,observaciones:e.target.value})}/></label><button type="button" disabled={!weather.condiciones.trim()} onClick={saveWeather}>Registrar clima</button></fieldset></>}<HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${routeRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={f.estado!=="FINALIZADO"} msg={msg}/><FlightLog key={`log-${id}`} flightId={id} msg={msg}/><FlightRoute key={`route-${id}-${routeRevision}`} flightId={id} canEdit msg={msg}/><FlightCrew key={id} flightId={id} state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id} revision={weatherRevision}/><Negotiation events={detail.negociacion}/></>}</div></section>;
+ return <section className="card"><h2>Planificación operativa</h2><p className="hint">La salida definitiva proviene del flujo que corresponda y no es editable por el comandante.</p><div className="grid-form"><label>Vuelo<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar vuelo</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>Salida fijada</h4><p>{dt(f.salida)}</p></div><div><h4>Recursos</h4><p>{detail.recursos?.aircraftMatricula||"—"}</p></div></div><FlightClosure flight={f} cierre={detail.cierre}/><CommanderAssignment flight={f} done={done} msg={msg} reload={async()=>setDetail(adaptDetail(await api(`/flights/${id}`)))}/>{f.estado==="PLANIFICADO"&&<>{f.datosSanitarios&&<><label>Aeropuerto de origen<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="">Seleccionar ({f.origen.provincia})</option>{originOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Aeropuerto de destino<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Seleccionar ({f.destino.provincia})</option>{destinationOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Llegada planificada<input type="datetime-local" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><button disabled={!origin||!destination||!arrival} onClick={save}>Guardar planificación</button></>}<fieldset className="wide"><legend>Condiciones meteorológicas</legend><label>Condiciones<textarea required value={weather.condiciones} onChange={e=>setWeather({...weather,condiciones:e.target.value})}/></label><label>¿Condiciones favorables?<select value={String(weather.favorable)} onChange={e=>setWeather({...weather,favorable:e.target.value==="true"})}><option value="true">Sí</option><option value="false">No</option></select></label><label>Observaciones<textarea value={weather.observaciones} onChange={e=>setWeather({...weather,observaciones:e.target.value})}/></label><button type="button" disabled={!weather.condiciones.trim()} onClick={saveWeather}>Registrar clima</button></fieldset></>}<HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${routeRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={f.estado!=="FINALIZADO"} msg={msg}/><FlightLog key={`log-${id}`} flightId={id} msg={msg}/><FlightRoute key={`route-${id}-${routeRevision}`} flightId={id} canEdit msg={msg}/><FlightCrew key={id} flightId={id} state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id} revision={weatherRevision}/><Negotiation events={detail.negociacion}/></>}</div></section>;
 }
 export function FlightDocuments({ flightId, canEdit=false, msg=()=>{} }) {
  const [documents,setDocuments]=useState(null),[types,setTypes]=useState([]),[selected,setSelected]=useState(null),[history,setHistory]=useState(null),[lock,setLock]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -464,159 +466,6 @@ export function FlightDocuments({ flightId, canEdit=false, msg=()=>{} }) {
  const addVersion=async()=>{if(!selected||!versionFile)return;setBusy(true);try{const updated=await uploadFile(`/documents/${selected.id}/versions/pdf`,versionFile);setVersionFile(null);await load();await choose(updated);msg('Nueva versión documental guardada');}catch(e){setError(e.message);}finally{setBusy(false);}};
  const download=async version=>{try{const blob=await downloadFile(version.urlDescarga);const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=version.nombreArchivoOriginal;a.click();URL.revokeObjectURL(url);}catch(e){setError(e.message);}};
  return <section className="wide detail-actions"><h4>Documentos del vuelo</h4><p>Los archivos son PDF versionados. La edición requiere un bloqueo temporal del servidor; las versiones anteriores conservan su descarga.</p>{error&&<p role="alert">{error}</p>}{documents===null?!error&&<p>Cargando documentos…</p>:documents.length===0?<p>Sin documentos registrados.</p>:<ul>{documents.map(item=><li key={item.id}><button type="button" className="secondary-action" onClick={()=>choose(item)}>{item.nombreDocumento} · {item.tipoDocumento.nombre} · v{item.versionActual.numeroVersion}</button></li>)}</ul>}{canEdit&&<div className="grid-form"><h4 className="wide">Registrar documento PDF</h4><label>Tipo documental<select value={typeCode} onChange={e=>setTypeCode(e.target.value)}><option value="">Seleccionar</option>{types.map(t=><option key={t.codigo} value={t.codigo}>{t.nombre}</option>)}</select></label><label>Nombre del documento<input maxLength="255" value={name} onChange={e=>setName(e.target.value)}/></label><label>Archivo PDF<input type="file" accept="application/pdf,.pdf" onChange={e=>setCreateFile(e.target.files[0]||null)}/></label><button type="button" disabled={busy||!typeCode||!name.trim()||!createFile} onClick={create}>Registrar documento</button></div>}{selected&&<div className="wide"><h4>{selected.nombreDocumento}</h4>{canEdit&&<>{!lock?<button type="button" disabled={busy} onClick={()=>inspect(selected.id)}>Consultar bloqueo</button>:!lock.active?<><p>Disponible para edición: no hay bloqueo vigente.</p><button type="button" disabled={busy} onClick={acquire}>Adquirir bloqueo</button></>:lock.mine?<><p className="success">Usted posee el bloqueo hasta {dt(lock.expiresAt)}.</p><button type="button" disabled={busy} onClick={acquire}>Renovar bloqueo</button><button type="button" className="secondary-action" disabled={busy} onClick={release}>Liberar bloqueo</button></>:<><p className="error">Bloqueado por {lock.ownerUsername} hasta {dt(lock.expiresAt)}.</p><button type="button" disabled={busy} onClick={acquire}>Intentar adquirir bloqueo</button></>}</>}{canEdit&&lock?.active&&lock.mine&&<div><label>Nueva versión PDF<input type="file" accept="application/pdf,.pdf" onChange={e=>setVersionFile(e.target.files[0]||null)}/></label><button type="button" disabled={busy||!versionFile} onClick={addVersion}>Guardar nueva versión</button></div>}<h4>Historial de versiones</h4>{history===null?<p>Cargando historial…</p>:history.versiones.length===0?<p>Sin versiones disponibles.</p>:<ul>{history.versiones.map(v=><li key={v.id}>Versión {v.numeroVersion}{v.esVersionActual?' (vigente)':''} · {v.nombreArchivoOriginal} · {dt(v.fechaCreacion)} <button type="button" className="secondary-action" onClick={()=>download(v)}>Descargar versión {v.numeroVersion}</button></li>)}</ul>}</div>}</section>;
-}
-function CommanderReports({ msg }) {
-  const [items, setItems] = useState([]),
-    [text, setText] = useState({});
-  const load = async () => {
-    try {
-      setItems(await api("/final-reports/mine"));
-    } catch (e) {
-      msg(e.message, true);
-    }
-  };
-  useEffect(() => {
-    load();
-  }, []);
-  const call = async (path, body) => {
-    try {
-      await api(path, { method: "POST", body: body && JSON.stringify(body) });
-      msg("Informe actualizado");
-      load();
-    } catch (e) {
-      msg(e.message, true);
-    }
-  };
-  const blocked = items.some((x) => x.bloqueado);
-  return (
-    <section className={blocked ? "card report-blocked" : "card"}>
-      <h2>
-        {blocked
-          ? "⚠ FUNCIONES BLOQUEADAS: INFORME FINAL VENCIDO"
-          : "Informes finales pendientes"}
-      </h2>
-      <p className="hint">
-        El vencimiento lo calcula el servidor. Presentar una versión válida
-        restablece las funciones.
-      </p>
-      {items
-        .filter((x) => x.status !== "APROBADO")
-        .map((x) => (
-          <article className="report-item" key={x.id}>
-            <h3>
-              {x.flightCode} · {x.status}
-            </h3>
-            <p>
-              Vence: {dt(x.vencimiento)}{" "}
-              {x.prorrogaUsada
-                ? "(prórroga utilizada)"
-                : "(prórroga disponible)"}
-            </p>
-            <FlightLog flightId={x.flightId} allowWrite={false} msg={msg}/>
-            {x.motivoDevolucion && (
-              <p className="error">Devuelto: {x.motivoDevolucion}</p>
-            )}
-            {(x.status === "PENDIENTE" || x.status === "DEVUELTO") && (
-              <>
-                <label>
-                  Informe de texto
-                  <textarea
-                    value={text[x.id] || ""}
-                    onChange={(e) =>
-                      setText({ ...text, [x.id]: e.target.value })
-                    }
-                    placeholder="Describa la ejecución del vuelo"
-                  />
-                </label>
-                <div className="report-actions">
-                  <button
-                    disabled={!(text[x.id] || "").trim()}
-                    onClick={() =>
-                      call(`/final-reports/${x.id}/submit`, {
-                        texto: text[x.id],
-                      })
-                    }
-                  >
-                    Presentar informe
-                  </button>
-                  {!x.prorrogaUsada && (
-                    <button
-                      className="secondary-action"
-                      onClick={() => call(`/final-reports/${x.id}/extension`)}
-                    >
-                      Solicitar prórroga de 24 h
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </article>
-        ))}
-    </section>
-  );
-}
-function OperationsReports({ msg }) {
-  const [items, setItems] = useState([]),
-    [reason, setReason] = useState({});
-  const load = async () => {
-    try {
-      setItems(await api("/final-reports/pending-review"));
-    } catch (e) {
-      msg(e.message, true);
-    }
-  };
-  useEffect(() => {
-    load();
-  }, []);
-  let review = async (id, aprobar) => {
-    try {
-      await api(`/final-reports/${id}/review`, {
-        method: "POST",
-        body: JSON.stringify({ aprobar, motivoDevolucion: reason[id] }),
-      });
-      msg(aprobar ? "Informe aprobado y vuelo completado" : "Informe devuelto");
-      load();
-    } catch (e) {
-      msg(e.message, true);
-    }
-  };
-  return (
-    <section className="card">
-      <h2>Revisión de informes finales</h2>
-      {items.length ? (
-        items.map((x) => (
-          <article className="report-item" key={x.id}>
-            <strong>{x.flightCode}</strong>
-            <p>
-              Presentado: {dt(x.presentadoEn)} · vencimiento:{" "}
-              {dt(x.vencimiento)}
-            </p>
-            <button onClick={() => review(x.id, true)}>
-              Aprobar y completar vuelo
-            </button>
-            <label className="wide">
-              Motivo de devolución
-              <textarea
-                value={reason[x.id] || ""}
-                onChange={(e) =>
-                  setReason({ ...reason, [x.id]: e.target.value })
-                }
-              />
-            </label>
-            <button
-              className="secondary-action"
-              disabled={!(reason[x.id] || "").trim()}
-              onClick={() => review(x.id, false)}
-            >
-              Devolver para corrección
-            </button>
-          </article>
-        ))
-      ) : (
-        <p className="empty">No hay informes pendientes de revisión.</p>
-      )}
-    </section>
-  );
 }
 export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{} }) {
   const [session, setSession] = useState(() => {
@@ -634,6 +483,7 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
       airports: [],
       commanders: [],
       notifications: [],
+      unread: 0,
     }),
     [note, setNote] = useState(""),
     [dark, setDark] = useState(false);
@@ -656,7 +506,8 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
         priorities: c,
         aircraft: e,
         airports: f,
-        notifications: n.content || [],
+        notifications: n.items || n.content || [],
+        unread: n.unread ?? (n.items || n.content || []).filter((x) => !x.leido).length,
         commanders: u,
       });
     } catch (x) {
@@ -709,7 +560,7 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
             <button className="icon" onClick={() => setDark(!dark)}>
               {dark ? "☀" : "◐"}
             </button>
-            <button className="icon">🔔 {d.notifications.length}</button>
+            <button className="icon">🔔 {d.unread}</button>
           </div>
         </header>
         {note && (
@@ -742,7 +593,7 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
         )}{" "}
         {workspace==="COMANDANTE" && (
           <>
-            <CommanderReports msg={msg} />
+            <CommanderReports msg={msg} renderLog={(flightId) => <FlightLog flightId={flightId} allowWrite={false} msg={msg} />} />
             <Cmd d={d} done={load} msg={msg} />
           </>
         )}
@@ -787,6 +638,7 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
             <p className="empty">No hay vuelos para mostrar.</p>
           )}
         </section>
+        <NotificationsPanel items={d.notifications} unread={d.unread} msg={msg} reload={load} />
         {d.notifications.some((n) => n.tipo.includes("EXTREME_URGENCY")) && (
           <section className="card notifications">
             <h2>Alertas de extrema urgencia</h2>

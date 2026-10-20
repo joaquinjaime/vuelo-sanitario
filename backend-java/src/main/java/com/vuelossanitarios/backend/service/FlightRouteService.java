@@ -23,13 +23,14 @@ public class FlightRouteService {
  public record Version(Integer version,String recorrido,Long alternativoId,String alternativo,BigDecimal altitudPies,BigDecimal distanciaNm,Integer tiempoEstimadoMinutos,String observaciones,String creadoPor,LocalDateTime fechaCreacion,boolean vigente) {}
  public record View(String estado,boolean editable,String motivo, String origen,String destino,LocalDateTime salida,LocalDateTime llegada,List<Version> versiones) {}
  public record Status(Long flightId,String estado) {}
- private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final ObjectMapper json;
- public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,ObjectMapper j){flights=f;routes=r;airports=a;users=u;access=x;audit=au;json=j;}
+ private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess;
+ public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,ObjectMapper j,CommanderReportAccessService ca){commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;json=j;}
  @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->missing("Vuelo"));access.mayRead(f,actor);return view(f);}
  @Transactional(readOnly=true) public List<Status> statuses(){Map<Long,FlightRoute> current=new HashMap<>();for(FlightRoute r:routes.findByEsVersionActualTrue())current.put(r.getFlight().getId(),r);return flights.findAll().stream().map(f->new Status(f.getId(),state(f,current.get(f.getId())))).toList();}
  @Transactional public View save(Long id,Long actor,Input input){
   Flight f=flights.lockById(id).orElseThrow(()->missing("Vuelo"));
   if(f.getComandante()==null || !f.getComandante().getId().equals(actor))throw new ApiException(HttpStatus.FORBIDDEN,"Sólo el comandante asignado puede modificar la ruta");
+  commanderAccess.requireOperationalAccess(actor);
   if(!mutable(f))throw new ApiException(HttpStatus.BAD_REQUEST,"La ruta sólo puede modificarse en un vuelo PLANIFICADO");
   if(!ready(f))throw new ApiException(HttpStatus.BAD_REQUEST,"Complete primero los aeropuertos y horarios del vuelo");
   FlightRoute old=routes.findByFlightIdAndEsVersionActualTrue(id).orElse(null); int version=old==null?0:old.getVersion();

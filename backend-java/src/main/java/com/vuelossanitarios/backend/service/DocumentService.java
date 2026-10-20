@@ -22,15 +22,15 @@ public class DocumentService {
  private final FlightRepository flights; private final DocumentTypeRepository types; private final DocumentItemRepository items;
  private final FlightDocumentRepository versions; private final UserRepository users; private final DocumentStorage storage;
  private final AuditService audit; private final FlightAuthorizationService access;
- private final DocumentLockRepository locks; private final Clock clock; private final long lockSeconds;
+ private final DocumentLockRepository locks; private final Clock clock; private final long lockSeconds; private final CommanderReportAccessService commanderAccess;
 
  public DocumentService(FlightRepository flights, DocumentTypeRepository types, DocumentItemRepository items,
                         FlightDocumentRepository versions, UserRepository users, DocumentStorage storage,
-                        AuditService audit, FlightAuthorizationService access, DocumentLockRepository locks, Clock clock,
+                        AuditService audit, FlightAuthorizationService access, DocumentLockRepository locks, Clock clock, CommanderReportAccessService commanderAccess,
                         @org.springframework.beans.factory.annotation.Value("${app.storage.document-lock-seconds:300}") long lockSeconds) {
   this.flights=flights; this.types=types; this.items=items; this.versions=versions; this.users=users;
   this.storage=storage; this.audit=audit; this.access=access;
-  this.locks=locks; this.clock=clock; this.lockSeconds=lockSeconds;
+  this.commanderAccess=commanderAccess; this.locks=locks; this.clock=clock; this.lockSeconds=lockSeconds;
  }
 
  @Transactional
@@ -153,6 +153,7 @@ public class DocumentService {
 
  private void mayChange(Flight flight, Long actorId) {
   access.mayRead(flight,actorId);
+  if (flight.getComandante()!=null && flight.getComandante().getId().equals(actorId)) commanderAccess.requireOperationalAccess(actorId);
   if (flight.getEstadoVuelo()!=null && "FINALIZADO".equals(flight.getEstadoVuelo().getCodigo())) throw bad("El vuelo finalizado no admite documentos");
  }
  private void requireEditableLock(FlightDocumentItem item,Long actorId){

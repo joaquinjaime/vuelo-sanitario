@@ -32,6 +32,7 @@ public class HangarInfoService {
                        String aeronave, String origenPlanificado, String ubicacionConfirmada,
                        List<Version> versiones) {}
 
+    private final CommanderReportAccessService commanderAccess;
     private final FlightRepository flights;
     private final HangarInfoRepository records;
     private final AircraftRepository aircraft;
@@ -39,7 +40,8 @@ public class HangarInfoService {
     private final AuditService audit;
     private final ObjectMapper json;
 
-    public HangarInfoService(FlightRepository flights, HangarInfoRepository records, AircraftRepository aircraft, UserRepository users, AuditService audit, ObjectMapper json) {
+    public HangarInfoService(FlightRepository flights, HangarInfoRepository records, AircraftRepository aircraft, UserRepository users, AuditService audit, ObjectMapper json, CommanderReportAccessService commanderAccess) {
+        this.commanderAccess=commanderAccess;
         this.flights=flights; this.records=records; this.aircraft=aircraft; this.users=users; this.audit=audit; this.json=json;
     }
 
@@ -77,6 +79,7 @@ public class HangarInfoService {
     public View observe(Long id, Long actor, CommanderInput input) {
         Flight flight=flight(id,true); User user=user(actor);
         if (!commander(flight,user)) throw forbidden();
+        commanderAccess.requireOperationalAccess(actor);
         requireMutable(flight);
         HangarInfo old=current(id); checkVersion(old,input.version());
         if (old==null || old.getRequiereHangar()==null || !contextMatches(flight,old)) throw bad("Operaciones debe registrar o revisar primero la información de hangar");

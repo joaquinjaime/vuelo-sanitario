@@ -22,7 +22,7 @@ class FlightLogServiceTest {
  private final UserRepository users=mock(UserRepository.class);
  private final AuditService audit=mock(AuditService.class);
  private final Clock clock=Clock.fixed(Instant.parse("2026-01-02T00:00:00Z"),ZoneOffset.UTC);
- private final FlightLogService service=new FlightLogService(flights,entries,users,audit,new ObjectMapper().findAndRegisterModules(),clock);
+ private final FlightLogService service=new FlightLogService(flights,entries,users,audit,new ObjectMapper().findAndRegisterModules(),clock,mock(CommanderReportAccessService.class));
  private Flight flight; private User commander,operations,other,admin;
  private User user(long id,String name,String role){User u=new User();u.setId(id);u.setUsername(name);Role r=new Role();r.setCodigo(role);UserRole link=new UserRole();link.setRole(r);u.setUserRoles(Set.of(link));when(users.findById(id)).thenReturn(Optional.of(u));when(users.findWithRolesByUsername(name)).thenReturn(Optional.of(u));return u;}
  @BeforeEach void setup(){commander=user(1,"cmd","COMANDANTE");operations=user(2,"ops","CENTRO_OPERACIONES");other=user(3,"other","COMANDANTE");admin=user(4,"admin","ADMINISTRADOR");flight=new Flight();flight.setId(42L);flight.setComandante(commander);FlightStatus s=new FlightStatus();s.setCodigo("PLANIFICADO");flight.setEstadoVuelo(s);when(flights.findById(42L)).thenReturn(Optional.of(flight));when(flights.lockById(42L)).thenReturn(Optional.of(flight));when(entries.saveAndFlush(any())).thenAnswer(inv->{FlightAuditLog e=inv.getArgument(0);ReflectionTestUtils.setField(e,"id",100L);return e;});}

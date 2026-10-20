@@ -339,3 +339,11 @@ body[data-theme="dark"] .link-button { color: #8fc8ff; }
 .autocomplete::-webkit-scrollbar-thumb { background: var(--autocomplete-scrollbar); border: 2px solid var(--autocomplete-surface); border-radius: 999px; }
 .locality-picker .success { display: block; margin-top: .25rem; }
 @media (max-width: 760px) { .filters, .account-columns, .locality-picker { grid-template-columns: 1fr; } }
+
+/* Cierre de vuelos: informes finales, historial y notificaciones */
+.report-overdue { border-left: 4px solid #b42318; padding-left: .75rem; }
+.report-versions { display: grid; gap: .75rem; padding-left: 1.25rem; }
+.report-text { white-space: pre-wrap; margin: .25rem 0; }
+.notification-list { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.notification-list li { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+.notification-list li.unread { font-weight: 600; }

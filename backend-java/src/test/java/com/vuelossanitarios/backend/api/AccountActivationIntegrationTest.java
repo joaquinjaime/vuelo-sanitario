@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
   "spring.datasource.url=jdbc:h2:mem:activation;MODE=MSSQLServer;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-  "spring.datasource.driver-class-name=org.h2.Driver",
+  "spring.datasource.driver-class-name=org.h2.Driver","app.final-report.sweep-enabled=false",
   "spring.datasource.username=sa",
   "spring.datasource.password=",
   "spring.flyway.enabled=false",

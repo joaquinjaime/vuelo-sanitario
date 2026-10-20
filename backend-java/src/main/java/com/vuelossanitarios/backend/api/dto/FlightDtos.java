@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import com.vuelossanitarios.backend.api.dto.FinalReportDtos;
 
 public final class FlightDtos { private FlightDtos(){}
  public record Medical(@Size(max=10000) String diagnostico,@Size(max=100) String condicionMedica,boolean requiereEquipamientoEspecial,@Size(max=10000) String observaciones){}
@@ -29,11 +30,14 @@ public final class FlightDtos { private FlightDtos(){}
  public record LocalityView(Long id,String nombre,String provincia,Long provinciaId){}
  public record FlightTypeView(String codigo,String nombre){}
  public record SanitaryDataView(Long patientId,String paciente,String prioridad,LocalityView localidadOrigenSolicitada,LocalityView localidadDestinoSolicitada,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,String estadoSolicitud){}
- public record FlightView(Long id,String codigo,FlightTypeView tipo,String motivoVuelo,String estadoVuelo,SanitaryDataView datosSanitarios,LocalDateTime salida,LocalDateTime llegada,String origen,String destino){}
+ /** Lugar estructurado de un aeropuerto planificado (mismo formato que las localidades solicitadas: nombre y provincia). */
+ public record PlaceView(Long id,String nombre,String provincia,Long provinciaId){}
+ /** origen/destino conservan el nombre del aeropuerto; origenDetalle/destinoDetalle lo entregan estructurado (null mientras no hay aeropuerto planificado). */
+ public record FlightView(Long id,String codigo,FlightTypeView tipo,String motivoVuelo,String estadoVuelo,SanitaryDataView datosSanitarios,LocalDateTime salida,LocalDateTime llegada,String origen,String destino,PlaceView origenDetalle,PlaceView destinoDetalle){}
  public record PatientDetail(Long id,String nombre,String apellido,String dni){}
  public record AvailableAircraftView(Long id,String matricula,String modelo,String tipo,Long aeropuertoActualId,String aeropuertoActual){}
  public record AvailableCommanderView(Long id,String username,String nombre,String apellido,String licencia,String provinciaActual){}
  public record NegotiationEventView(String tipo,LocalDateTime fechaHoraPropuesta,LocalDateTime fechaHoraLlegadaPropuesta,String motivo,String actor,LocalDateTime fechaOcurrencia){}
  public record ResourceAssignment(Long aircraftId,String aircraftMatricula,Long commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia,String commanderProvinciaActual){}
- public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,ResourceAssignment recursos,List<NegotiationEventView> negociacion){}
+ public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,ResourceAssignment recursos,List<NegotiationEventView> negociacion,FinalReportDtos.ClosureView cierre){}
 }

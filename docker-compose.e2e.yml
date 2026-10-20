@@ -19,6 +19,12 @@ services:
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_e2e;encrypt=true;trustServerCertificate=true
       # Sólo en E2E: permite verificar recuperación de leases vencidos sin esperas largas.
       DOCUMENT_LOCK_SECONDS: 1
+      # Sólo en E2E: reloj ajustable y barrido a demanda (/api/e2e, requiere ADMINISTRADOR). El barrido periódico queda
+      # prácticamente desactivado para que las pruebas controlen cuándo corre y verifiquen el bloqueo sin él.
+      SPRING_PROFILES_ACTIVE: docker,e2e
+      APP_E2E_CONTROLS_ENABLED: "true"
+      FINAL_REPORT_SWEEP_MS: 3600000
+      FINAL_REPORT_SWEEP_INITIAL_MS: 3600000
     ports:
       - "18080:8080"
 

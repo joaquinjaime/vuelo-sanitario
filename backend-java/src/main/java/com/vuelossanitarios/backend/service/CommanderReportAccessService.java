@@ -10,6 +10,6 @@ import org.springframework.stereotype.Service;
  private final FinalReportObligationRepository obligations; private final Clock clock;
  public CommanderReportAccessService(FinalReportObligationRepository o,Clock c){obligations=o;clock=c;}
  public boolean isBlocked(Long commander){return obligations.existsByCommanderIdAndCurrentTrueAndStatusInAndDueAtLessThanEqual(commander,List.of(FinalReportStatus.PENDIENTE,FinalReportStatus.DEVUELTO),now());}
- public void requireOperationalAccess(Long commander){if(isBlocked(commander))throw new ApiException(HttpStatus.FORBIDDEN,"FUNCIONES BLOQUEADAS: INFORME FINAL VENCIDO");}
+ public void requireOperationalAccess(Long commander){if(isBlocked(commander))throw new ApiException(HttpStatus.FORBIDDEN,"COMANDANTE_BLOQUEADO","FUNCIONES BLOQUEADAS: INFORME FINAL VENCIDO",java.util.Map.of());}
  public OffsetDateTime now(){return OffsetDateTime.ofInstant(Instant.now(clock),ZoneOffset.UTC);}
 }

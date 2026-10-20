@@ -389,3 +389,22 @@ test("ruta: comandante guarda la versión cargada y operaciones solo consulta", 
  await screen.findByText('Punto Alfa',{selector:'p'});view.unmount();render(<FlightRoute flightId={42} msg={vi.fn()}/>);
  await screen.findByText('Punto Alfa',{selector:'p'});expect(screen.queryByRole('button',{name:'Guardar ruta'})).toBeNull();
 });
+
+test("regresión: el trayecto de un vuelo operativo se muestra desde el contrato estructurado, sin 'undefined'", async () => {
+ const { OperationalApp, adaptFlight, locationLabel } = await import("./main.jsx");
+ const operational = { id: 5, codigo: "V-OP5", tipo: { codigo: "REGRESO_BASE", nombre: "Regreso a base" }, motivoVuelo: "Retorno", estadoVuelo: "PLANIFICADO", datosSanitarios: null, origen: "Aeroparque Jorge Newbery", destino: "Benjamín Matienzo", origenDetalle: { id: 1, nombre: "Aeroparque Jorge Newbery", provincia: "Buenos Aires", provinciaId: 2 }, destinoDetalle: { id: 2, nombre: "Benjamín Matienzo", provincia: "Tucumán", provinciaId: 3 } };
+ const unplanned = { ...operational, id: 6, codigo: "V-SIN", estadoVuelo: "SOLICITADO", origen: null, destino: null, origenDetalle: null, destinoDetalle: null };
+ const sanitary = { ...operational, id: 7, codigo: "V-SAN", datosSanitarios: { localidadOrigenSolicitada: { nombre: "Tafí Viejo", provincia: "Tucumán" }, localidadDestinoSolicitada: { nombre: "Rosario", provincia: "Santa Fe" }, estadoSolicitud: "SOLICITADO" }, estadoVuelo: null };
+ expect(locationLabel(adaptFlight(operational).origen)).toBe("Aeroparque Jorge Newbery, Buenos Aires"); expect(locationLabel(adaptFlight(sanitary).destino)).toBe("Rosario, Santa Fe");
+ expect(locationLabel(adaptFlight(unplanned).origen)).toBe("—"); expect(locationLabel("Aeroparque")).toBe("Aeroparque"); expect(locationLabel({ nombre: "Solo nombre" })).toBe("Solo nombre"); expect(locationLabel({})).toBe("—");
+ expect(locationLabel(adaptFlight({ ...operational, origenDetalle: undefined }).origen)).toBe("Aeroparque Jorge Newbery");
+ localStorage.setItem("vs-session", JSON.stringify({ username: "operaciones", roles: ["CENTRO_OPERACIONES"] }));
+ vi.mocked(api).mockImplementation((path) => path === "/flights" ? Promise.resolve([operational, unplanned, sanitary]) : path === "/notifications" ? Promise.resolve({ items: [], unread: 0 }) : Promise.resolve([]));
+ const { container } = render(<OperationalApp workspace="OPERACIONES" />);
+ await screen.findByText("V-OP5");
+ const rows = [...container.querySelectorAll("table tbody tr")].map((r) => r.textContent);
+ expect(rows.some((t) => t.includes("Aeroparque Jorge Newbery, Buenos Aires → Benjamín Matienzo, Tucumán"))).toBe(true);
+ expect(rows.some((t) => t.includes("Tafí Viejo, Tucumán → Rosario, Santa Fe"))).toBe(true);
+ expect(rows.some((t) => t.includes("V-SIN") && t.includes("— → —"))).toBe(true);
+ expect(container.textContent).not.toContain("undefined");
+});

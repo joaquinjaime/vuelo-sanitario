@@ -41,6 +41,10 @@ public class Notification extends BaseEntity {
     @Column(name = "leido", nullable = false)
     private Boolean leido = false;
 
+    /** Identifica el hecho que originó la notificación; evita duplicados ante reintentos. */
+    @Column(name = "clave_evento", length = 160)
+    private String claveEvento;
+
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -62,6 +66,9 @@ public class Notification extends BaseEntity {
 
     public Boolean getLeido() { return leido; }
     public void setLeido(Boolean leido) { this.leido = leido; }
+
+    public String getClaveEvento() { return claveEvento; }
+    public void setClaveEvento(String claveEvento) { this.claveEvento = claveEvento; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

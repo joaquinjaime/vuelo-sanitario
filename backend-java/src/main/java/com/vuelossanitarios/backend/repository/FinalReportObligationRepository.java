@@ -11,5 +11,6 @@ public interface FinalReportObligationRepository extends JpaRepository<FinalRepo
  Optional<FinalReportObligation> findByFlightIdAndCurrentTrue(Long flightId);
  List<FinalReportObligation> findByCommanderIdAndCurrentTrueOrderByDueAtAsc(Long commanderId);
  List<FinalReportObligation> findByStatusAndCurrentTrueOrderByPresentedAtAsc(FinalReportStatus status);
+ List<FinalReportObligation> findByStatusInAndCurrentTrueOrderByDueAtAsc(Collection<FinalReportStatus> statuses);
  boolean existsByCommanderIdAndCurrentTrueAndStatusInAndDueAtLessThanEqual(Long commanderId, Collection<FinalReportStatus> statuses, OffsetDateTime now);
 }

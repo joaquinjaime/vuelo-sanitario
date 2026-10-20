@@ -33,7 +33,7 @@ class DocumentServiceTest {
  private DocumentType type=new DocumentType();
 
  @BeforeEach void setup() {
-  service=new DocumentService(flights,types,items,versions,users,storage,audit,access,locks,java.time.Clock.systemUTC(),300);
+  service=new DocumentService(flights,types,items,versions,users,storage,audit,access,locks,java.time.Clock.systemUTC(),mock(CommanderReportAccessService.class),300);
   flight.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); FlightStatus status=new FlightStatus(); status.setCodigo("PLANIFICADO"); flight.setEstadoVuelo(status);
   actor.setId(actorId); type.setCodigo("AUTORIZACION"); type.setNombre("Autorización de vuelo");
   when(users.findById(actorId)).thenReturn(Optional.of(actor));
@@ -131,7 +131,7 @@ class DocumentServiceTest {
   FlightDocumentItem item=item(); Long itemId=item.getId();
   Instant start=Instant.parse("2026-10-13T12:00:00Z"); AtomicReference<Instant> instant=new AtomicReference<>(start);
   Clock advancingClock=new Clock(){ public ZoneId getZone(){return ZoneOffset.UTC;} public Clock withZone(ZoneId zone){return this;} public Instant instant(){return instant.get();} };
-  DocumentService expiringService=new DocumentService(flights,types,items,versions,users,storage,audit,access,locks,advancingClock,300);
+  DocumentService expiringService=new DocumentService(flights,types,items,versions,users,storage,audit,access,locks,advancingClock,mock(CommanderReportAccessService.class),300);
   DocumentLock lease=new DocumentLock(); lease.setOwner(actor); lease.setExpiresAt(LocalDateTime.ofInstant(start.plusSeconds(1),ZoneOffset.UTC));
   when(items.lockById(itemId)).thenReturn(Optional.of(item)); when(locks.findByDocumentItemId(itemId)).thenReturn(Optional.of(lease));
   when(storage.storePdf(any())).thenAnswer(invocation->{ instant.set(start.plusSeconds(2)); return "late.pdf"; });

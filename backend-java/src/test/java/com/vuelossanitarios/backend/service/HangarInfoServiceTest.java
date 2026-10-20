@@ -18,7 +18,7 @@ class HangarInfoServiceTest {
     AircraftRepository aircraft=mock(AircraftRepository.class);
     UserRepository users=mock(UserRepository.class);
     AuditService audit=mock(AuditService.class);
-    HangarInfoService service=new HangarInfoService(flights,records,aircraft,users,audit,new ObjectMapper().findAndRegisterModules());
+    HangarInfoService service=new HangarInfoService(flights,records,aircraft,users,audit,new ObjectMapper().findAndRegisterModules(),mock(CommanderReportAccessService.class));
     Flight flight; User ops, commander, stranger; Aircraft plane; Airport origin;
 
     User actor(long id,String name,String code){User u=new User();u.setId(id);u.setUsername(name);Role role=new Role();role.setCodigo(code);u.setUserRoles(Set.of(new UserRole(u,role)));when(users.findById(id)).thenReturn(Optional.of(u));when(users.findWithRolesByUsername(name)).thenReturn(Optional.of(u));return u;}
