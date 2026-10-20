@@ -14,5 +14,8 @@ class DocumentStorageTest {
         String key = storage.storePdf(new MockMultipartFile("file", "../safe.pdf", "application/pdf", "%PDF-1.7".getBytes()));
         assertArrayEquals("%PDF-1.7".getBytes(), storage.read(key).bytes());
         assertThrows(ApiException.class, () -> storage.storePdf(new MockMultipartFile("file", "bad.pdf", "application/pdf", "not pdf".getBytes())));
+        assertThrows(ApiException.class, () -> storage.storePdf(new MockMultipartFile("file", "bad.txt", "application/pdf", "%PDF-1.7".getBytes())));
+        assertThrows(ApiException.class, () -> storage.storePdf(new MockMultipartFile("file", "bad.pdf", "text/plain", "%PDF-1.7".getBytes())));
+        assertThrows(ApiException.class, () -> storage.storePdf(new MockMultipartFile("file", "large.pdf", "application/pdf", new byte[1025])));
     }
 }

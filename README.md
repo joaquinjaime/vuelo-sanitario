@@ -17,7 +17,7 @@ Aplicación para registrar, evaluar, planificar, ejecutar y cerrar vuelos sanita
 4. Ejecute `docker compose up --build`.
 5. Abra `http://localhost` (o el valor elegido en `FRONTEND_PORT`). La API queda disponible a través de `http://localhost/api`; no se expone directamente al navegador.
 
-El primer arranque crea `vuelos_sanitarios`, crea el login de aplicación, ejecuta Flyway de V1 a V10 y luego inicia el backend. El perfil Docker no usa autenticación integrada de Windows.
+El primer arranque crea `vuelos_sanitarios`, crea el login de aplicación, ejecuta Flyway de V1 a V31 y luego inicia el backend. El perfil Docker no usa autenticación integrada de Windows.
 
 Para detener el stack:
 
@@ -44,7 +44,7 @@ Consulte [`.env.example`](.env.example). `MSSQL_SA_PASSWORD`, `DB_PASSWORD` y `J
 
 ## Migraciones y persistencia
 
-Flyway administra el esquema exclusivamente mediante `backend-java/src/main/resources/db/migration`, hasta V10. Los datos SQL se guardan en `sqlserver_data`; los documentos subidos se guardan en `documents_data`. Ambos sobreviven a `docker compose down`.
+Flyway administra el esquema exclusivamente mediante `backend-java/src/main/resources/db/migration`, hasta V31. Los datos SQL se guardan en `sqlserver_data`; los documentos subidos se guardan en `documents_data`. Ambos sobreviven a `docker compose down`. Para la validación aislada existe el overlay optativo `docker-compose.e2e.yml`; no se carga con el comando habitual ni comparte la base o los volúmenes del proyecto normal.
 
 ## Desarrollo sin Docker
 
@@ -61,4 +61,4 @@ npm run dev
 
 El perfil `windows` conserva el uso local de autenticación integrada y su DLL JDBC; no se utiliza dentro de Docker.
 
-Más detalle operativo: [docs/DOCKER.md](docs/DOCKER.md).
+Más detalle operativo y funcional: [docs/DOCKER.md](docs/DOCKER.md) y [docs/ESTADO_FUNCIONAL.md](docs/ESTADO_FUNCIONAL.md).

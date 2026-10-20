@@ -20,7 +20,7 @@ import java.util.*;
  @Override protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException {
   String header=req.getHeader("Authorization");
   if(header!=null&&header.startsWith("Bearer ")&&SecurityContextHolder.getContext().getAuthentication()==null) try {
-   Claims c=jwt.parse(header.substring(7)); String username=c.get("username",String.class); UUID id=UUID.fromString(c.getSubject());
+   Claims c=jwt.parse(header.substring(7)); String username=c.get("username",String.class); Long id=Long.parseLong(c.getSubject());
    if(username==null||username.isBlank())throw new IllegalArgumentException("JWT sin username");
    User user=users.findWithRolesByUsername(username).orElseThrow(()->new IllegalArgumentException("Usuario JWT inexistente"));
    Long tokenVersion=c.get("credentialVersion",Long.class);

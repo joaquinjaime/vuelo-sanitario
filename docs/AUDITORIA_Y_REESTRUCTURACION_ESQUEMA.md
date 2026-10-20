@@ -1,5 +1,7 @@
 # Auditoria y reestructuracion del esquema
 
+> **Documento histórico.** Registra el diagnóstico y las decisiones hasta V22. La nomenclatura `UUID` y las referencias al modelo anterior no describen el esquema vigente tras V24, V27 y V28. Para las convenciones definitivas, V1--V31, leases documentales y operación actual, consulte [ESTADO_FUNCIONAL.md](ESTADO_FUNCIONAL.md) e [INVENTARIO_ESQUEMA_POST_V29.md](INVENTARIO_ESQUEMA_POST_V29.md).
+
 ## Diagnostico inicial
 
 El modelo ya habia corregido dos problemas importantes: `personas` separaba
@@ -41,9 +43,8 @@ continua siendo `America/Argentina/Tucuman` y esta declarada en configuracion.
 
 ## Integridad y escalabilidad
 
-El esquema usa UUID para entidades operativas y `BIGINT IDENTITY` para la
-auditoria, evitando que una tabla de eventos de alto crecimiento infle los
-indices de las entidades de dominio. Las relaciones, checks de fechas,
+En la versión descrita por este diagnóstico el esquema usaba UUID para entidades operativas y `BIGINT IDENTITY` para la
+auditoria. Esa decisión fue reemplazada por V24: el esquema vigente usa `BIGINT IDENTITY` para las identidades de aplicación. Las relaciones, checks de fechas,
 versiones y carga documental se hacen cumplir en SQL Server. Los indices ya
 existentes cubren estado/fecha, agendas de aeronave y comandante, vencimientos
 de informes, documentos por vuelo, auditoria y notificaciones no leidas.
@@ -52,6 +53,22 @@ Los binarios siguen fuera de las tablas operativas mediante una clave de
 almacenamiento; el contrato permite moverlos a object storage sin modificar el
 modelo relacional. Las consultas de colecciones grandes se exponen mediante
 `Pageable` en los repositorios/controladores correspondientes.
+
+## Actualización V22: documentos exclusivamente PDF
+
+`V22__refactorizar_documentos_de_vuelo_solo_pdf.sql` deja a
+`documentos_vuelo` como la identidad lógica, con `nombre_documento`, y a
+`versiones_documento_vuelo` como cada PDF físico. Renombra `version` a
+`numero_version`, `nombre_archivo` a `nombre_archivo_original` y
+`clave_almacenamiento` a `ubicacion_almacenamiento`.
+
+Se retiran `modalidad`, `tipo_mime` y `contenido_texto`. Las versiones TEXT
+preexistentes se copian antes a `documentos_vuelo_texto_legacy`, dado que no
+hay una conversión automática y fiel de texto a PDF; luego no forman parte del
+modelo operativo. Un índice único filtrado por `documento_vuelo_id` y
+`es_version_actual = 1` conserva exactamente una versión vigente por cada
+documento con versiones. La ubicación es una clave relativa generada dentro
+del directorio configurado, no una URL firmada o temporal.
 
 ## Operacion de desarrollo
 

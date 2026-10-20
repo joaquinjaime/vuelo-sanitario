@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { api } from "./api";
-vi.mock("./api", () => ({ api: vi.fn((path) => path === "/auth/users" ? Promise.resolve([]) : path === "/auth/me" ? Promise.resolve({ nombre:"Admin", apellido:"Inicial", dni:null, correos:[], telefonos:[] }) : Promise.resolve({})) }));
+vi.mock("./api", () => ({ api: vi.fn((path) => path === "/auth/users" ? Promise.resolve([]) : path === "/auth/me" ? Promise.resolve({ nombre:"Admin", apellido:"Inicial", dni:null, correos:[], telefonos:[] }) : Promise.resolve({})), uploadFile: vi.fn(), downloadFile: vi.fn(), credentialFile: vi.fn() }));
 beforeEach(() => { localStorage.clear(); document.body.innerHTML = '<div id="root"></div>'; });
 const openActivationForm = async () => {
  const { Login } = await import("./main.jsx");
@@ -21,6 +21,65 @@ test("admin renders the dashboard and never operational navigation", async () =>
  await import("./main.jsx");
  expect(await screen.findByText("Panel de administración")).toBeInTheDocument();
  expect(screen.queryByText("Vuelos")).toBeNull(); expect(screen.queryByText(/Notificaciones/)).toBeNull(); expect(document.querySelector(".icon")?.textContent).not.toContain("🔔");
+});
+test("bitácora envía una corrección con motivo y conserva el original", async () => {
+ vi.mocked(api).mockReset();let saved=false;
+ const original={id:9,tipo:'DEMORA',descripcion:'Espera original',ocurrido:'2025-01-01T12:00:00Z',registrado:'2025-01-01T13:00:00Z',origen:'MANUAL',importancia:'NORMAL',responsable:'cmd'};
+ vi.mocked(api).mockImplementation((path,opts)=>{if(opts?.method==='POST'){saved=true;return Promise.resolve({});}return Promise.resolve({entradas:saved?[{...original,id:10,descripcion:'Espera corregida',correccionDe:9,motivoCorreccion:'Hora incorrecta'},original]:[original],hayMas:false,puedeRegistrar:true});});
+ const {FlightLog}=await import('./main.jsx');render(<FlightLog flightId={7}/>);
+ await screen.findByText('Espera original');fireEvent.click(screen.getByRole('button',{name:'Corregir #9'}));fireEvent.change(screen.getByLabelText('Descripción de la novedad'),{target:{value:'Espera corregida'}});fireEvent.change(screen.getByLabelText('Fecha y hora del acontecimiento'),{target:{value:'2025-01-01T12:00'}});fireEvent.change(screen.getByLabelText('Motivo de corrección'),{target:{value:'Hora incorrecta'}});fireEvent.click(screen.getByRole('button',{name:'Guardar corrección'}));
+ await waitFor(()=>expect(api).toHaveBeenCalledWith('/flights/7/log',expect.objectContaining({method:'POST',body:expect.stringContaining('"correccionDe":9')})));expect(await screen.findByText('Espera corregida')).toBeInTheDocument();expect(screen.getByText('Espera original')).toBeInTheDocument();expect(screen.getByText('Corrección de #9: Hora incorrecta')).toBeInTheDocument();
+});
+test("bitácora impide iniciar una corrección mientras guarda otra novedad", async () => {
+ vi.mocked(api).mockReset();let finish;
+ const entry={id:9,tipo:'DEMORA',descripcion:'Entrada existente',ocurrido:'2025-01-01T12:00:00Z',registrado:'2025-01-01T13:00:00Z',origen:'MANUAL',importancia:'NORMAL',responsable:'cmd'};
+ vi.mocked(api).mockImplementation((path,opts)=>opts?.method==='POST'?new Promise(resolve=>{finish=resolve;}):Promise.resolve({entradas:[entry],hayMas:false,puedeRegistrar:true}));
+ const {FlightLog}=await import('./main.jsx');render(<FlightLog flightId={7}/>);await screen.findByText('Entrada existente');fireEvent.change(screen.getByLabelText('Descripción de la novedad'),{target:{value:'Nueva'}});fireEvent.change(screen.getByLabelText('Fecha y hora del acontecimiento'),{target:{value:'2025-01-01T12:00'}});fireEvent.click(screen.getByRole('button',{name:'Registrar novedad'}));expect(screen.getByRole('button',{name:'Corregir #9'})).toBeDisabled();finish({});await waitFor(()=>expect(screen.getByRole('button',{name:'Corregir #9'})).toBeEnabled());
+});
+test("tripulación permite retirar un integrante y vuelve a consultar el backend", async () => {
+ vi.mocked(api).mockReset();
+ const rows=[{id:1,userId:10,nombre:"Ana",apellido:"Piloto",crewRoleName:"Comandante",comandante:true},{id:2,userId:11,nombre:"Luis",apellido:"Médico",crewRoleName:"Médico",comandante:false}];
+ let removed=false;
+ vi.mocked(api).mockImplementation((path,opts)=>{if(path==="/flights/7/crew/2"&&opts?.method==="DELETE"){removed=true;return Promise.resolve(null);}if(path==="/flights/7/crew")return Promise.resolve(removed?rows.slice(0,1):rows);return Promise.resolve([]);});
+ const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()}/>);
+ expect(await screen.findByText(/Luis Médico/)).toBeInTheDocument();
+ expect(screen.getAllByRole("button",{name:"Retirar"})).toHaveLength(1);fireEvent.click(screen.getByRole("button",{name:"Retirar"}));
+ await waitFor(()=>expect(api).toHaveBeenCalledWith("/flights/7/crew/2",{method:"DELETE"}));
+ await waitFor(()=>expect(screen.queryByText(/Luis Médico/)).not.toBeInTheDocument());
+ expect(vi.mocked(api).mock.calls.filter(([path])=>path==="/flights/7/crew")).toHaveLength(2);
+});
+test("comandante consulta la tripulación sin acciones de modificación", async () => {
+ vi.mocked(api).mockReset();vi.mocked(api).mockResolvedValue([{id:2,nombre:"Luis",apellido:"Médico",crewRoleName:"Médico",comandante:false}]);
+ const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" msg={vi.fn()}/>);
+ expect(await screen.findByText(/Luis Médico/)).toBeInTheDocument();expect(screen.queryByRole("button",{name:"Retirar"})).toBeNull();
+});
+test("operaciones consulta disponibilidad y asigna el usuario elegido", async () => {
+ vi.mocked(api).mockReset();
+ const initial=[{id:1,userId:10,nombre:"Ana",apellido:"Piloto",crewRoleName:"Comandante",comandante:true}];
+ vi.mocked(api).mockImplementation((path,opts)=>{
+  if(path.includes("/crew/available"))return Promise.resolve([{userId:11,nombre:"Luis",apellido:"Médico",username:"luis"}]);
+  if(opts?.method==="POST")return Promise.resolve(null);
+  return Promise.resolve(initial);
+ });
+ const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()}/>);
+ await screen.findByText(/Ana Piloto/);fireEvent.change(screen.getByLabelText("Función de tripulación"),{target:{value:"MEDICO"}});
+ await screen.findByRole("option",{name:"Luis Médico (luis)"});fireEvent.change(screen.getByLabelText("Personal disponible"),{target:{value:"11"}});
+ fireEvent.click(screen.getByRole("button",{name:"Asignar tripulante"}));
+ await waitFor(()=>expect(api).toHaveBeenCalledWith("/flights/7/crew",{method:"POST",body:JSON.stringify({userId:11,crewRoleCode:"MEDICO"})}));
+ await waitFor(()=>expect(vi.mocked(api).mock.calls.filter(([path,opts])=>path==="/flights/7/crew"&&!opts)).toHaveLength(2));
+});
+test("administración registra y retira una clasificación consultando nuevamente el servidor", async () => {
+ vi.mocked(api).mockReset();let classified=false;
+ vi.mocked(api).mockImplementation((path,opts)=>{
+  if(opts?.method==="PUT")classified=true;
+  if(opts?.method==="DELETE")classified=false;
+  return Promise.resolve(opts?null:classified?[{crewRoleCode:"MEDICO"}]:[]);
+ });
+ const { AdminCrewQualifications } = await import("./main.jsx");render(<AdminCrewQualifications users={[{id:11,nombre:"Luis",apellido:"Médico",username:"luis"}]} notify={vi.fn()}/>);
+ fireEvent.change(screen.getByLabelText("Usuario"),{target:{value:"11"}});
+ const checkbox=await screen.findByRole("checkbox",{name:"Médico"});fireEvent.click(checkbox);
+ await waitFor(()=>expect(checkbox).toBeChecked());expect(api).toHaveBeenCalledWith("/crew-qualifications/11/MEDICO",{method:"PUT"});
+ fireEvent.click(checkbox);await waitFor(()=>expect(checkbox).not.toBeChecked());expect(api).toHaveBeenCalledWith("/crew-qualifications/11/MEDICO",{method:"DELETE"});
 });
 test("activation rejects an 11-character password without sending a request", async () => {
  vi.mocked(api).mockReset();
@@ -95,11 +154,12 @@ test("Centro de Operaciones loads its workspace without the administrative users
  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/users/commanders"));
  expect(vi.mocked(api)).not.toHaveBeenCalledWith("/auth/users");
  expect(screen.queryByText("Acceso denegado")).toBeNull();
+ expect(screen.queryByRole("heading", { name: "Edición documental" })).toBeNull();
 });
 test("operations opens a pending request and accepts the DTS schedule", async () => {
  const { Ops } = await import("./main.jsx");
  const done = vi.fn().mockResolvedValue(undefined), msg = vi.fn();
- const flight = { id:"flight-1",codigo:"VS-001",estado:"SOLICITADO",paciente:"Ana Pérez",prioridad:"ALTA",origen:{id:"loc-tuc",nombre:"San Miguel de Tucumán",provincia:"Tucumán"},destino:{id:"loc-sal",nombre:"Salta",provincia:"Salta"},solicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00" };
+ const flight = { id:"flight-1",codigo:"VS-001",estadoVuelo:"SOLICITADO",datosSanitarios:{patientId:"patient-1",paciente:"Ana Pérez",prioridad:"ALTA",localidadOrigenSolicitada:{id:"loc-tuc",nombre:"San Miguel de Tucumán",provincia:"Tucumán",provinciaId:"prov-tuc"},localidadDestinoSolicitada:{id:"loc-sal",nombre:"Salta",provincia:"Salta",provinciaId:"prov-sal"},fechaSolicitada:"2026-10-01T10:00",extremaUrgencia:true,justificacionExtremaUrgencia:"Crítica",fechaLimiteTraslado:"2026-10-01T14:00",estadoSolicitud:"SOLICITADO"} };
  const detail = { vuelo:flight,paciente:{nombre:"Ana",apellido:"Pérez",dni:"30111222"},medical:{diagnostico:"Diagnóstico",condicionMedica:"ESTABLE",requiereEquipamientoEspecial:true,observaciones:"Oxígeno"},motivoSolicitud:"Traslado",motivoRechazo:null,recursos:{} };
  vi.mocked(api).mockImplementation((path, options) => path==="/flights/flight-1"&&options?.method!=="POST" ? Promise.resolve(detail) : Promise.resolve(flight));
  render(<Ops d={{flights:[flight],aircraft:[],commanders:[]}} done={done} msg={msg} />);
@@ -240,6 +300,22 @@ test("deactivating from the active list calls the logical-deactivation endpoint 
  await waitFor(() => expect(reload).toHaveBeenCalled());
  expect(notify).toHaveBeenCalledWith("Usuario desactivado");
 });
+
+test("flight documents lists a selected document and exposes its owner lease", async () => {
+ const { FlightDocuments } = await import("./main.jsx");
+ vi.mocked(api).mockImplementation((path, options) => {
+   if(path==="/flights/7/documents") return Promise.resolve([{id:"44",nombreDocumento:"Autorización",tipoDocumento:{codigo:"AUT",nombre:"Autorización"},versionActual:{id:"9",numeroVersion:1,nombreArchivoOriginal:"a.pdf",fechaCreacion:"2026-10-13T10:00:00",urlDescarga:"/api/document-versions/9/download"}}]);
+   if(path==="/catalogs/document-types") return Promise.resolve([{codigo:"AUT",nombre:"Autorización"}]);
+   if(path==="/documents/44/versions") return Promise.resolve({id:"44",versiones:[{id:"9",numeroVersion:1,esVersionActual:true,nombreArchivoOriginal:"a.pdf",fechaCreacion:"2026-10-13T10:00:00",urlDescarga:"/api/document-versions/9/download"}]});
+   if(path==="/documents/44/lock") return Promise.resolve(options?.method==="POST"?{documentId:"44",ownerId:7,ownerUsername:"comandante",acquiredAt:"2026-10-13T10:00:00",expiresAt:"2026-10-13T10:05:00",mine:true,active:true}:{documentId:"44",ownerId:null,ownerUsername:null,acquiredAt:null,expiresAt:null,mine:false,active:false});
+   return Promise.resolve({});
+ });
+ render(<FlightDocuments flightId={7} canEdit msg={vi.fn()}/>);
+ fireEvent.click(await screen.findByRole("button",{name:/Autorización/}));
+ expect(await screen.findByText(/Disponible para edición/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Adquirir bloqueo"}));
+ expect(await screen.findByRole("button",{name:"Liberar bloqueo"})).toBeInTheDocument();
+});
 test("reactivating a deactivated user opens the review form and calls the reactivation endpoint", async () => {
  const { AdminUsers } = await import("./main.jsx");
  const reload=vi.fn(()=>Promise.resolve()), notify=vi.fn();
@@ -250,4 +326,66 @@ test("reactivating a deactivated user opens the review form and calls the reacti
  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/auth/users/u-baja/reactivate",expect.objectContaining({method:"PATCH"})));
  expect(await screen.findByText("Temporal-123456")).toBeInTheDocument();
  expect(reload).toHaveBeenCalled();
+});
+
+test("weather history reloads after a commander records conditions", async () => {
+ const { Cmd } = await import("./main.jsx");
+ const flight={id:"1",codigo:"OP-1",estadoVuelo:"PLANIFICADO",tipo:{codigo:"OTRO",nombre:"Otro"}};
+ let saved=false;
+ vi.mocked(api).mockImplementation((path,options)=>{
+   if(path==="/flights/1/weather"&&options?.method==="POST"){saved=true;return Promise.resolve({});}
+   if(path==="/flights/1/weather")return Promise.resolve(saved?[{id:1,condiciones:"Nubes bajas",favorable:false,observaciones:"Viento",fechaRegistro:"2026-10-18T12:00:00",registradoPor:"piloto"}]:[]);
+   if(path==="/flights/1")return Promise.resolve({vuelo:flight,recursos:{},negociacion:[]});
+   return Promise.resolve([]);
+ });
+ render(<Cmd d={{flights:[flight]}} done={vi.fn()} msg={vi.fn()}/>);
+ fireEvent.change(screen.getByLabelText("Vuelo"),{target:{value:"1"}});
+ expect(await screen.findByText("Sin registros meteorológicos.")).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText("Condiciones"),{target:{value:"Nubes bajas"}});
+ fireEvent.click(screen.getByRole("button",{name:"Registrar clima"}));
+ expect(await screen.findByText(/No favorable/)).toBeInTheDocument();
+ expect(screen.getByText("Nubes bajas")).toBeInTheDocument();
+ expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/1/weather",expect.objectContaining({method:"POST"}));
+});
+test("weather history shows an error rather than an empty history", async () => {
+ const { WeatherHistory } = await import("./main.jsx");
+ vi.mocked(api).mockRejectedValue(new Error("Acceso denegado"));
+ render(<WeatherHistory flightId="1"/>);
+ expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
+});
+
+test("the root does not request administrator resources for a commander", async () => {
+ const { AdminApp } = await import("./main.jsx");
+ localStorage.setItem("vs-session",JSON.stringify({username:"piloto",roles:["COMANDANTE"]}));
+ vi.mocked(api).mockReset();
+ vi.mocked(api).mockImplementation(path => path==="/notifications" ? Promise.resolve({items:[]}) : Promise.resolve([]));
+ render(<AdminApp/>);
+ expect(await screen.findByText("Planificación operativa")).toBeInTheDocument();
+ await waitFor(()=>expect(api).toHaveBeenCalledWith("/flights"));
+ expect(api).not.toHaveBeenCalledWith("/auth/users");
+ expect(api).not.toHaveBeenCalledWith("/catalogs/aircraft/admin");
+});
+test("the root waits for password change before loading administrator resources", async () => {
+ const { AdminApp }=await import("./main.jsx");
+ localStorage.setItem("vs-session",JSON.stringify({username:"temporal",roles:["ADMINISTRADOR"],debeCambiarContrasena:true}));
+ vi.mocked(api).mockReset();
+ render(<AdminApp/>);
+ expect(screen.getByRole("heading",{name:"Actualizá tu contraseña"})).toBeInTheDocument();
+ expect(api).not.toHaveBeenCalledWith("/auth/users");
+ expect(api).not.toHaveBeenCalledWith("/catalogs/aircraft/admin");
+});
+
+test("ruta: comandante guarda la versión cargada y operaciones solo consulta", async () => {
+ vi.mocked(api).mockReset(); let version=0;
+ vi.mocked(api).mockImplementation((path,opts)=>{
+  if(path==='/catalogs/airports?q=')return Promise.resolve([]);
+  if(path==='/flights/42/route'&&opts?.method==='PUT'){version=1;return Promise.resolve({});}
+  if(path==='/flights/42/route')return Promise.resolve({estado:version?'COMPLETA':'SIN_PLANIFICAR',editable:true,origen:'Origen',destino:'Destino',versiones:version?[{version:1,recorrido:'Punto Alfa',creadoPor:'comandante',fechaCreacion:'2030-01-01T12:00:00'}]:[]});
+  return Promise.resolve([]);
+ });
+ const {FlightRoute}=await import('./main.jsx');const view=render(<FlightRoute flightId={42} canEdit msg={vi.fn()}/>);
+ await screen.findByText(/SIN PLANIFICAR/);fireEvent.change(screen.getByLabelText('Recorrido y puntos intermedios en orden'),{target:{value:'Punto Alfa'}});fireEvent.click(screen.getByRole('button',{name:'Guardar ruta'}));
+ await waitFor(()=>expect(api).toHaveBeenCalledWith('/flights/42/route',expect.objectContaining({method:'PUT',body:expect.stringContaining('"version":0')})));
+ await screen.findByText('Punto Alfa',{selector:'p'});view.unmount();render(<FlightRoute flightId={42} msg={vi.fn()}/>);
+ await screen.findByText('Punto Alfa',{selector:'p'});expect(screen.queryByRole('button',{name:'Guardar ruta'})).toBeNull();
 });

@@ -17,8 +17,8 @@ public final class AuthDtos { private AuthDtos(){}
  public record ReactivateUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles) {}
  public record ReactivationResponse(UserView usuario,String contrasenaTemporal) {}
  public record ChangePasswordRequest(@NotBlank String passwordActual,@NotBlank @Size(min=12,max=100) String nuevaPassword,@NotBlank String confirmacionPassword) {}
- public record ContactView(UUID id,String valor,String tipo,boolean principal) {}
- public record UserView(UUID id,String nombre,String apellido,String dni,String username,String estado,boolean activo,LocalDateTime fechaBaja,Set<String> roles,List<ContactView> correos,List<ContactView> telefonos,String provinciaActual) {}
- public record CommanderView(UUID id,String username,String nombre,String apellido,String licencia,String provinciaActual) {}
+ public record ContactView(Long id,String valor,String tipo,boolean principal) {}
+ public record UserView(Long id,String nombre,String apellido,String dni,String username,String estado,boolean activo,LocalDateTime fechaBaja,Set<String> roles,List<ContactView> correos,List<ContactView> telefonos,String provinciaActual) {}
+ public record CommanderView(Long id,String username,String nombre,String apellido,String licencia,String provinciaActual) {}
  public record ActivationCodeResponse(String codigo, String expiraEn) {}
 }

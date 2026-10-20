@@ -6,13 +6,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_tipos_documento"))
 @Table(name = "tipos_documento")
 public class DocumentType extends BaseEntity {
 
-    @Column(name = "codigo", nullable = false, unique = true, length = 30)
+    @Column(name = "codigo_tipo_documento", nullable = false, unique = true, length = 30)
     private String codigo;
 
-    @Column(name = "nombre", nullable = false, length = 100)
+    @Column(name = "nombre_tipo_documento", nullable = false, length = 100)
     private String nombre;
 
     public DocumentType() {

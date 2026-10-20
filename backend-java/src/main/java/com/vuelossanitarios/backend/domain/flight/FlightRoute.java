@@ -20,11 +20,12 @@ import java.time.LocalDateTime;
  * ver nota en FlightDocument.
  */
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_rutas_vuelo"))
 @Table(name = "rutas_vuelo")
 public class FlightRoute extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false)
+@JoinColumn(name = "id_vuelos", nullable = false)
     private Flight flight;
 
     @Column(name = "version", nullable = false)
@@ -42,11 +43,18 @@ public class FlightRoute extends BaseEntity {
     @Column(name = "tiempo_estimado_minutos")
     private Integer tiempoEstimadoMinutos;
 
-    @Column(name = "observaciones", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "recorrido_planificado", columnDefinition = "NVARCHAR(MAX)") private String recorrido;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "id_aeropuerto_alternativo") private com.vuelossanitarios.backend.domain.catalog.Airport alternativo;
+    @Column(name = "contexto_operativo", length = 300) private String contexto;
+    public String getRecorrido(){return recorrido;} public void setRecorrido(String v){recorrido=v;}
+    public com.vuelossanitarios.backend.domain.catalog.Airport getAlternativo(){return alternativo;} public void setAlternativo(com.vuelossanitarios.backend.domain.catalog.Airport v){alternativo=v;}
+    public String getContexto(){return contexto;} public void setContexto(String v){contexto=v;}
+
+    @Column(name = "observaciones_ruta", columnDefinition = "NVARCHAR(MAX)")
     private String observaciones;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "creado_por_usuario_id", nullable = false)
+@JoinColumn(name = "id_usuario_creador", nullable = false)
     private User creadoPor;
 
     @CreationTimestamp

@@ -5,8 +5,8 @@ import java.util.*;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface LocalityRepository extends JpaRepository<Locality, UUID> {
-    Optional<Locality> findByIdAndActivoTrue(UUID id);
+public interface LocalityRepository extends JpaRepository<Locality, Long> {
+    Optional<Locality> findByIdAndActivoTrue(Long id);
     @EntityGraph(attributePaths = "provincia")
-    List<Locality> findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(UUID provinciaId, String query);
+    List<Locality> findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(Long provinciaId, String query);
 }

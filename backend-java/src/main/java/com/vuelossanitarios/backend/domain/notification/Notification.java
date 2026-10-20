@@ -19,19 +19,20 @@ import java.time.LocalDateTime;
  * conectado en el momento del evento.
  */
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_notificaciones"))
 @Table(name = "notificaciones")
 public class Notification extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "usuario_id", nullable = false)
+@JoinColumn(name = "id_usuarios", nullable = false)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-@JoinColumn(name = "vuelo_id")
+@JoinColumn(name = "id_vuelos")
     private Flight flight;
 
     /** Ej: NUEVO_VUELO, VUELO_APROBADO, VUELO_RECHAZADO, COMANDANTE_ASIGNADO */
-    @Column(name = "tipo", nullable = false, length = 50)
+    @Column(name = "tipo_notificacion", nullable = false, length = 50)
     private String tipo;
 
     @Column(name = "mensaje", nullable = false, columnDefinition = "NVARCHAR(MAX)")

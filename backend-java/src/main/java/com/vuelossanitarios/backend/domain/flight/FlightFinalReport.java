@@ -21,11 +21,12 @@ import java.time.LocalDateTime;
  * FlightDocument.
  */
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_informes_finales_vuelo"))
 @Table(name = "informes_finales_vuelo")
 public class FlightFinalReport extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false)
+@JoinColumn(name = "id_vuelos", nullable = false)
     private Flight flight;
 
     @Column(name = "version", nullable = false)
@@ -47,7 +48,7 @@ public class FlightFinalReport extends BaseEntity {
     private String resumen;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "creado_por_usuario_id", nullable = false)
+@JoinColumn(name = "id_usuario_creador", nullable = false)
     private User creadoPor;
 
     @CreationTimestamp

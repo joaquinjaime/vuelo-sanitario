@@ -7,15 +7,14 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-public interface AircraftRepository extends JpaRepository<Aircraft, UUID> {
+public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Aircraft a where a.id = :id")
-    Optional<Aircraft> lockById(@Param("id") UUID id);
+    Optional<Aircraft> lockById(@Param("id") Long id);
     /** Carga el aeropuerto actual en la misma consulta: los listados se serializan fuera de una sesión JPA (open-in-view=false). */
     @Query("select a from Aircraft a left join fetch a.aeropuertoActual order by a.matricula")
     List<Aircraft> findAllWithCurrentAirportOrderByMatricula();
-    List<Aircraft> findByActivoTrueAndAeropuertoActualIdOrderByMatriculaAsc(UUID aeropuertoId);
+    List<Aircraft> findByActivoTrueAndAeropuertoActualIdOrderByMatriculaAsc(Long aeropuertoId);
     @Query("select a from Aircraft a join fetch a.aeropuertoActual ap join ap.provinciaReferencial p where a.activo=true and p.id=:provinceId order by a.matricula")
-    List<Aircraft> findActiveLocatedInProvince(@Param("provinceId") UUID provinceId);
+    List<Aircraft> findActiveLocatedInProvince(@Param("provinceId") Long provinceId);
 }

@@ -1,45 +1,71 @@
-# Estado funcional
+# Estado funcional y guía de continuidad
 
-| Módulo | Backend implementado | Frontend implementado | Integrado | Probado | Pendientes |
-|---|---|---|---|---|---|
-| Autenticación | Sí, JWT, BCrypt y bootstrap explícito | Login | Parcial | Unitario e integración SQL Server | Persistencia de sesión y recuperación de perfil en UI |
-| Administración de usuarios | Alta por Administrador y bootstrap | No | No | Integración SQL Server | Listar, editar, activar/desactivar y roles |
-| Pacientes | Alta | No | No | Integración SQL Server | Listado y selección en interfaz |
-| Solicitudes | Crear/listar/detalle y validación de extrema urgencia | Formulario DTS, alertas y listado ordenado | Parcial | Unitario de política y compilación | Migración V6 y recorrido conectado a SQL Server pendientes de ejecutar en este entorno |
-| Evaluación | Aprobar/rechazar | Panel Operaciones | Parcial | Integración SQL Server por API | Rechazo con motivo y filtros visuales |
-| Asignación de recursos | Sí | Selector en panel Operaciones | Parcial | Integración SQL Server por API | Disponibilidad visual |
-| Planificación | Aeropuertos/horarios | Selector en panel Comandante | Parcial | Integración SQL Server por API | Ruta, tareas y formulario ampliado |
-| Meteorología | Entidad solamente | No | No | No | Servicio, API e interfaz |
-| Hangar | Entidad solamente | No | No | No | Servicio, API e interfaz |
-| AA2000 | Entidad solamente | No | No | No | Servicio, API e interfaz |
-| Tripulación | Alta | No | No | No | Consulta y gestión visual |
-| Documentos PDF | Crear/versionar/descargar | No | No | Unitario de storage | Lista y pantallas |
-| Textos libres | Crear/versionar | No | No | Integración SQL Server | Editor e historial |
-| Versionado | Documental y reporte | No | No | Parcial | Concurrencia avanzada |
-| Auditoría | Registro y consulta paginada | No | No | Integración SQL Server | Interfaz y prueba de permisos exhaustiva |
-| Notificaciones | Persistentes REST, aviso especial de extrema urgencia | Alertas urgentes en el panel | Parcial | Compilación frontend | Verificar entrega contra SQL Server con usuarios reales |
-| Inicio/finalización | Sí, Operaciones; informe del comandante | No | No | Integración SQL Server | Flujo UI |
+Actualizado el 2026-10-13 tras validar las migraciones V1--V31 en el entorno aislado E2E. Este documento describe el estado objetivo del código actual; no sustituye a las migraciones ni al diccionario físico.
 
-`Probado` sólo incluye pruebas ejecutadas. El 22/09/2026 se validaron V1–V5 en SQL Server local y un ciclo completo hasta `FINALIZADO`, con auditoría, notificación y documento de texto. La interfaz actual es intencionalmente acotada a inicio de sesión y panel/listado; los flujos operativos siguen pendientes de pantallas específicas.
+## Convenciones de SQL Server y Flyway
 
-## Extrema urgencia (implementación pendiente de validación conectada)
+- SQL Server es la única base soportada. Flyway es la fuente de verdad: Hibernate usa `ddl-auto=validate` y nunca crea ni modifica tablas.
+- Desde V27 cada tabla de aplicación usa una identidad `BIGINT` llamada `id_<tabla>`; cada FK se llama `id_<tabla_referida>` o una variante semántica `id_usuario_*`, `id_aeropuerto_*`.
+- V28 contextualiza columnas de negocio con `snake_case` en español. No se deben introducir nombres anteriores (`flight_id`, `user_id`, `codigo`, `activo`, etc.) en mappings nuevos.
+- `DATETIME2(3)` contiene hora civil del negocio; la zona se configura con `BUSINESS_TIME_ZONE`. Las obligaciones de informes conservan instantes en `DATETIMEOFFSET` cuando corresponde.
+- Las migraciones V24 y V27 son cortes históricos de desarrollo: V24 elimina datos transaccionales UUID para reconstruir identificadores BIGINT. No son una receta de recreación para una base con datos que se deban conservar. Las migraciones posteriores son incrementales.
 
-La migración `V6__extreme_urgency_requests.sql` agrega a `flights` los campos `extrema_urgencia`, `justificacion_extrema_urgencia` y `fecha_limite_traslado`. La restricción SQL sólo protege invariantes estáticas: una solicitud urgente debe tener justificación no vacía y plazo, y dicho plazo no puede preceder la fecha solicitada. Los registros históricos quedan como no urgentes; no se reclasifican por su fecha.
+En una instalación nueva, Flyway aplica V1--V31 al iniciar el backend. Antes de actualizar una base existente se debe revisar `flyway_schema_history`, tomar respaldo según la política del entorno y ejecutar el backend con credenciales DDL; no se debe ejecutar `down -v`, V24 manualmente ni un script de limpieza contra una base de desarrollo compartida.
 
-`fecha_solicitada` es desde esta versión la fecha/hora solicitada por DTS; `created_at` conserva el instante de creación. Los valores `DATETIME2` se interpretan como hora civil de `America/Argentina/Tucuman`, configurable mediante `BUSINESS_TIME_ZONE`. La política backend usa un `Clock` inyectable y valida al crear: fecha futura, anticipación de dos días calendario para solicitudes normales, declaración explícita de urgencia, justificación y plazo. No se usa el reloj del navegador ni una función no determinista en un `CHECK` para estas reglas temporales.
+## Arquitectura y ciclo de vuelos
 
-Las respuestas de `GET /api/flights` incluyen `extremaUrgencia`, `justificacionExtremaUrgencia` y `fechaLimiteTraslado` además de prioridad y estado. Operaciones recibe una notificación `EXTREME_URGENCY_REQUEST` al crear una solicitud urgente; el comandante asignado recibe `EXTREME_URGENCY_COMMANDER_ASSIGNED`. Los mensajes contienen código y horarios, no datos clínicos. La creación queda auditada con los datos declarados.
+`vuelos` es la entidad operativa común. `vuelos_sanitarios` es una extensión 0..1 con paciente, solicitud, prioridad y datos clínicos; los vuelos operativos no crean esa extensión. Los catálogos `tipos_vuelo`, `estados_vuelo` y `estados_solicitud_sanitaria` mantienen el significado de cada flujo.
 
-El plazo representa el límite declarado por DTS, no una hora real de llegada. La interfaz lo conserva y, si la llegada planificada lo supera, muestra una advertencia de que esa programación no se presenta como cumplimiento. El modelo actual no permite concluir automáticamente que el traslado real cumplió el plazo; esa conclusión no se registra.
+El ciclo operativo normal es `SOLICITADO -> APROBADO -> PLANIFICADO -> EN_CURSO -> FINALIZADO -> COMPLETADO`. Los rechazos sanitarios ocurren antes de la operación; las cancelaciones operativas son previas a la ejecución y SQL Server las valida mediante trigger. Operaciones/Centro de Operaciones evalúan, asignan recursos, inician y finalizan; el comandante confirma, planifica lo que le corresponde y registra el informe final. Los bloqueos de informe vencido se verifican en la operación protegida, no en el navegador.
 
-Se ejecutaron `mvn test -q` (incluye pruebas de fechas de calendario, urgencia y medianoche con reloj fijo) y `npm run build`. También se intentó arrancar el perfil `windows` para ejecutar Flyway: no llegó a conectarse porque falta el DLL nativo `mssql-jdbc_auth-12.8.1.x64` de autenticación integrada. Por eso V6 no se aplicó ni se validó contra SQL Server, y tampoco se probó el flujo React conectado al backend en este turno; la funcionalidad no debe considerarse verificada de extremo a extremo.
+## Informes finales
 
-## Informes finales y cierre administrativo (implementación pendiente de SQL Server)
+Al finalizar un vuelo se crea una obligación para el comandante. La primera presentación pasa a `PRESENTADO`; Operaciones/Centro de Operaciones puede aprobarla (el vuelo llega a `COMPLETADO`) o devolverla. Una devolución crea un vencimiento de corrección de 48 horas desde el evento y reinicia la prórroga de esa obligación. El acceso del comandante queda bloqueado por obligaciones vencidas, pero el envío del informe pendiente sigue permitido para resolver el bloqueo. Las pruebas de servicio usan un `Clock` fijo para mantener las reglas temporales deterministas.
 
-`V7__final_report_obligations_and_completed.sql` incorpora el estado `COMPLETADO` y la tabla `final_report_obligations`. Las obligaciones nuevas almacenan sus vencimientos en `DATETIMEOFFSET` UTC: el plazo inicial y cada devolución vencen exactamente 48 horas después del evento; una única prórroga agrega 24 horas al vencimiento vigente o, si ya venció, 24 horas al instante de concesión. No se crean obligaciones para vuelos FINALIZADOS históricos, por lo que no producen bloqueos retroactivos.
+## Documentos PDF, versiones y lease
 
-`FINALIZADO` representa fin físico y mantiene abierto sólo el expediente de informe. La finalización ya no exige un informe existente: crea la obligación y notifica al comandante. Una presentación de texto no vacío genera una versión nueva de `flight_final_reports`, pasa a `PRESENTADO` y elimina inmediatamente el bloqueo si no hay otra obligación vencida. Operaciones puede devolver con motivo, creando un nuevo plazo de corrección, o aprobar la versión actual; esta aprobación lleva el vuelo a `COMPLETADO` en la misma transacción. Los vuelos completados no se cancelan ni admiten modificaciones ordinarias.
+Un documento de vuelo es una identidad lógica en `documentos_vuelo`; cada PDF se guarda como una fila inmutable de `versiones_documento_vuelo` y como un archivo bajo `DOCUMENTS_DIRECTORY`. Hay una sola versión vigente, respaldada por un índice filtrado. La descarga sigue autorizada por vuelo y nunca expone una ruta de almacenamiento.
 
-El bloqueo se consulta en cada operación protegida del comandante y antes de asignar un nuevo comandante; no depende de tareas programadas ni de renovar el JWT. Los endpoints son `GET /api/final-reports/mine`, `GET /api/final-reports/pending-review`, `POST /api/final-reports/{id}/submit`, `POST /api/final-reports/{id}/extension` y `POST /api/final-reports/{id}/review`. La interfaz muestra obligaciones, vencimiento, prórroga, bloqueo, presentación de texto y revisión.
+Crear un documento lógico no requiere lease porque aún no existe un recurso compartido. Para crear una versión de un documento existente se exige un lease vigente del servidor:
 
-En esta iteración la presentación operativa disponible desde la interfaz es texto ingresado en la aplicación. La vinculación de PDF y texto adjunto al ciclo de obligación aún no está realizada, aunque el proyecto conserva su almacenamiento documental versionado. Tampoco se ejecutó V7 contra SQL Server por la misma falta del DLL de autenticación integrada; no se considera verificado el recorrido conectado.
+- `POST /api/documents/{id}/lock` adquiere o renueva el lease. La fila de `documentos_vuelo` se bloquea pesimistamente durante esa operación y la tabla `bloqueos_documento_vuelo` impone unicidad por documento.
+- Un lease vigente de otro propietario devuelve `409`; uno vencido puede recuperarse y queda auditado. Sólo el propietario actual puede liberarlo mediante `DELETE`.
+- `POST /api/documents/{id}/versions/pdf` toma el mismo bloqueo pesimista y revalida propietario y vencimiento antes y después de guardar el PDF, dentro de la transacción que crea la versión. Esto rechaza escrituras tardías y evita que dos versionados simultáneos generen números o versiones actuales contradictorios.
+- La interfaz consulta el estado al servidor y sólo presenta las acciones que corresponden, pero el servidor es la autoridad: un estado local no habilita ninguna escritura. El mismo componente React se muestra en Comandante y en Centro de Operaciones/Operaciones; DTS sólo puede leer historial y descargar.
+
+Los roles que pueden crear documentos, adquirir/liberar lease o versionar son `COMANDANTE`, `OPERACIONES` y `CENTRO_OPERACIONES`; la autorización concreta sobre el vuelo se comprueba además en el servicio. `DTS` comparte solamente lectura de historial, estado y descarga.
+
+## Auditoría
+
+`eventos_auditoria` registra actor, entidad, operación, vuelo y snapshots acotados. No registra PDFs ni contenido clínico. La planificación operativa, inicio y finalización de vuelo se auditan como `OPERATIONAL_PLANNING`, `START` y `FINISH`. Las acciones de lease se auditan como `DOCUMENT_LOCK` con `ACQUIRE`, `RECOVER` o `RELEASE`. La consulta está paginada y reservada a los roles autorizados.
+
+## Docker, inicialización y pruebas
+
+El compose habitual crea SQL Server, `db-init`, backend, frontend y un inicializador de permisos para `documents_data`; el backend corre como usuario no privilegiado y Flyway se ejecuta al iniciar. Las credenciales provienen exclusivamente de `.env` (ignorado) o variables de entorno; `.env.example` no contiene secretos. `docker-compose.e2e.yml` es un overlay explícito, usa el proyecto `vuelos-sanitarios-e2e`, la base `vuelos_sanitarios_e2e`, puertos alternativos y leases de un segundo sólo para E2E. No forma parte de `docker compose up` habitual.
+
+Ejecutar la verificación local:
+
+```powershell
+cd backend-java
+mvn test
+cd ..\frontend-react
+npm test -- --run
+npm run build
+```
+
+La validación E2E contra SQL Server se ejecuta de forma aislada con:
+
+```powershell
+docker compose -p vuelos-sanitarios-e2e -f docker-compose.yml -f docker-compose.e2e.yml up --build
+```
+
+No se deben usar esas pruebas para borrar, reseedear ni modificar una base habitual. Para inspeccionar una base de desarrollo sin alterarla, primero confirmar conexión y consultar `flyway_schema_history`; sólo el arranque normal del backend aplica migraciones pendientes.
+
+## Estado consolidado
+
+| Área | Estado |
+| --- | --- |
+| Migraciones | V1--V31 validadas en SQL Server E2E; V30 corrige el trigger tras V28 y V31 agrega leases. |
+| Backend | Pruebas unitarias e integración del proyecto en verde. |
+| Frontend | Pruebas y compilación en verde; no sustituye los controles de autorización del backend. |
+| Pendientes funcionales | Gestión visual integral de documentos (alta, historial y carga desde lista), mantenimiento administrativo más detallado y las mejoras de negocio que se prioricen después. |

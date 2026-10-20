@@ -24,3 +24,6 @@ Thumbs.db
 mssql-jdbc_auth*.dll
 *.mdf
 *.ldf
+
+.atl/
+__pycache__/

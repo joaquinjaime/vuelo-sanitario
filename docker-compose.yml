@@ -37,6 +37,16 @@ services:
     command: ["/bin/bash", "/scripts/init-db.sh"]
     restart: "no"
 
+  # El backend se ejecuta como el usuario no privilegiado `spring` (UID 999),
+  # mientras que Docker crea los volúmenes nombrados como root. Inicializamos
+  # explícitamente el directorio persistente antes de iniciar la aplicación.
+  documents-init:
+    image: alpine:3.21
+    volumes:
+      - documents_data:/data/documents
+    command: ["/bin/sh", "-c", "chown -R 999:999 /data/documents"]
+    restart: "no"
+
   backend:
     build:
       context: ./backend-java
@@ -54,6 +64,8 @@ services:
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost}
     depends_on:
       db-init:
+        condition: service_completed_successfully
+      documents-init:
         condition: service_completed_successfully
     volumes:
       - documents_data:/data/documents

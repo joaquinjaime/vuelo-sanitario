@@ -6,7 +6,6 @@ import com.vuelossanitarios.backend.repository.*;
 import com.vuelossanitarios.backend.domain.catalog.Locality;
 import com.vuelossanitarios.backend.domain.catalog.Province;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -28,16 +27,14 @@ import static org.mockito.Mockito.when;
 class AdministratorAuthorizationTest {
  @Autowired MockMvc mvc; @MockBean JwtService jwt;
  @MockBean UserRepository users; @MockBean AuditService audit;
- @MockBean FlightService flights; @MockBean PatientService patients; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean CommanderProfileRepository commanderProfiles; @MockBean CancellationReasonRepository cancellationReasons; @MockBean AuthService auth;
- @Test @WithMockUser(roles="ADMINISTRADOR") void administratorIsForbiddenFromAllOperationalResources() throws Exception {
-  mvc.perform(get("/api/flights")).andExpect(status().isForbidden());
+ @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean PatientService patients; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean CommanderProfileRepository commanderProfiles; @MockBean CancellationReasonRepository cancellationReasons; @MockBean DocumentTypeRepository documentTypes; @MockBean AuthService auth;
+ @Test @WithMockUser(roles="ADMINISTRADOR") void administratorIsForbiddenFromResourcesOutsideAdministrativeScope() throws Exception {
   mvc.perform(get("/api/patients")).andExpect(status().isForbidden());
   mvc.perform(get("/api/notifications")).andExpect(status().isForbidden());
   mvc.perform(get("/api/final-reports/mine")).andExpect(status().isForbidden());
-  mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isForbidden());
-  mvc.perform(get("/api/documents/00000000-0000-0000-0000-000000000001/versions")).andExpect(status().isForbidden());
-  mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/documents/1/versions")).andExpect(status().isForbidden());
  }
+ @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanLoadOperationalCreationCatalogs() throws Exception { mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isOk()); mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanReachUserManagementEndpoint() throws Exception { mvc.perform(get("/api/auth/users")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles={"COMANDANTE","OPERACIONES"}) void validOperationalMultiRoleKeepsOperationalAccess() throws Exception { mvc.perform(get("/api/final-reports/pending-review")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles="CENTRO_OPERACIONES") void operationsCenterCanLoadCommandersForResourceAssignment() throws Exception { mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isOk()); }
@@ -48,17 +45,18 @@ class AdministratorAuthorizationTest {
    .andExpect(status().isNoContent()).andExpect(content().string(""));
  }
  @Test @WithMockUser(roles="DTS") void localitySearchReturnsActiveLocalitiesForTheRequestedProvince() throws Exception {
-  UUID rioNegro=UUID.fromString("de23ca75-f451-4620-a4c8-e0a6b2b6b5d2"); Locality viedma=locality("Viedma","62007090","Río Negro");
+  Long rioNegro=1L; Locality viedma=locality("Viedma","62007090","Río Negro");
   when(localities.findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(rioNegro,"Vie")).thenReturn(List.of(viedma));
   mvc.perform(get("/api/catalogs/localities").param("provinceId",rioNegro.toString()).param("q","Vie"))
    .andExpect(status().isOk()).andExpect(jsonPath("$[0].nombre").value("Viedma")).andExpect(jsonPath("$[0].provincia").value("Río Negro"));
   verify(localities).findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(eq(rioNegro),eq("Vie"));
  }
  @Test @WithMockUser(roles="DTS") void localitySearchPassesEmptyQueryAndRejectsAnInvalidProvinceUuid() throws Exception {
-  UUID tucuman=UUID.randomUUID(); when(localities.findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(tucuman,"")).thenReturn(List.of());
+  Long tucuman=java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE); when(localities.findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(tucuman,"")).thenReturn(List.of());
   mvc.perform(get("/api/catalogs/localities").param("provinceId",tucuman.toString())).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
   verify(localities).findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(tucuman,"");
-  mvc.perform(get("/api/catalogs/localities").param("provinceId","no-es-un-uuid").param("q","Vie")).andExpect(status().isBadRequest());
+  mvc.perform(get("/api/catalogs/localities").param("provinceId","no-es-un-Long").param("q","Vie")).andExpect(status().isBadRequest());
  }
- private Locality locality(String nombre,String codigo,String provinciaNombre){Province provincia=new Province();provincia.setId(UUID.randomUUID());provincia.setNombre(provinciaNombre);Locality localidad=new Locality();localidad.setId(UUID.randomUUID());localidad.setNombre(nombre);localidad.setCodigoOficial(codigo);localidad.setActivo(true);localidad.setProvincia(provincia);return localidad;}
+ private Locality locality(String nombre,String codigo,String provinciaNombre){Province provincia=new Province();provincia.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));provincia.setNombre(provinciaNombre);Locality localidad=new Locality();localidad.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));localidad.setNombre(nombre);localidad.setCodigoOficial(codigo);localidad.setActivo(true);localidad.setProvincia(provincia);return localidad;}
 }
+

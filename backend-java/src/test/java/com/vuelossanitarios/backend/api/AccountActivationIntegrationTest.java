@@ -166,6 +166,27 @@ class AccountActivationIntegrationTest {
    .andExpect(jsonPath("$.username").value(username));
  }
 
+ @Test void reactivationReplacesExistingRolesWithoutDuplicatingTheJoinRow() {
+  auth.createBootstrapAdmin("admin.reactivate","ClaveAdmin123","admin.reactivate@example.test");
+  Long administratorId=users.findAllWithPersonAndRoles().stream().filter(u->u.getUserRoles().stream().anyMatch(ur->"ADMINISTRADOR".equals(ur.getRole().getCodigo()))).findFirst().orElseThrow().getId();
+  String dni="34"+UUID.randomUUID().toString().replace("-","").substring(0,6);
+  ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
+   "Usuario","Reactivado",dni,null,null,Set.of("OPERACIONES"),
+   List.of(new ContactRequest("reactivate."+dni+"@example.test","PERSONAL")),
+   List.of(new PhoneRequest("3815555555","PERSONAL"))), administratorId);
+  auth.activate(new ActivateAccountRequest(dni,activation.codigo(),"reactiva."+dni,"ClaveReactiva12","ClaveReactiva12"));
+  Long userId=users.findWithRolesByUsername("reactiva."+dni).orElseThrow().getId();
+  var inactive=users.findById(userId).orElseThrow();
+  inactive.setActivo(false);
+  inactive.setEstadoCuenta("DESACTIVADO");
+  users.saveAndFlush(inactive);
+
+  ReactivationResponse result=auth.reactivateUser(userId,new ReactivateUserRequest("Usuario","Reactivado",null,null,Set.of("OPERACIONES")),administratorId);
+
+  assertTrue(result.usuario().activo());
+  assertEquals(Set.of("OPERACIONES"),result.usuario().roles());
+ }
+
  @Test void dtsLoginTokenCanLoadAllTwentyFourProvinces() throws Exception {
   for(int i=1;i<=24;i++){ Province province=new Province(); province.setCodigoOficial("T"+i); province.setNombre("Provincia "+i); provinces.save(province); }
   String dni = "32" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);

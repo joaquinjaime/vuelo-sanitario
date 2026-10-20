@@ -12,7 +12,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -48,7 +47,7 @@ class JwtAuthenticationFilterTest {
 
     private User enabledUser() {
         Person person = new Person(); person.setNombre("Ana"); person.setApellido("Pérez");
-        User user = new User(); user.setId(UUID.randomUUID()); user.setPerson(person); user.setUsername("ana"); user.setActivo(true); user.setEstadoCuenta("ACTIVO");
+        User user = new User(); user.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); user.setPerson(person); user.setUsername("ana"); user.setActivo(true); user.setEstadoCuenta("ACTIVO");
         return user;
     }
 }

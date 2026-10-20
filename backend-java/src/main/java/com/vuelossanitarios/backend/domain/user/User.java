@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_usuarios"))
 @Table(name = "usuarios")
 public class User extends BaseEntity {
 
@@ -27,11 +28,11 @@ public class User extends BaseEntity {
     private String passwordHash;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "persona_id", nullable = false, unique = true)
+@JoinColumn(name = "id_personas", nullable = false, unique = true)
     private Person person;
 
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activo", nullable = false)
     private Boolean activo = true;
 
     @Column(name = "estado_cuenta", nullable = false, length = 24)

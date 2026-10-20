@@ -7,27 +7,24 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 
 import java.util.Objects;
-import java.util.UUID;
 
 /**
- * Superclase comun para todas las entidades con clave primaria UUID
- * (coincide con UNIQUEIDENTIFIER en SQL Server). Hibernate genera el
- * valor en la aplicacion; el DEFAULT NEWID() de la base queda como
- * respaldo para inserts hechos fuera de la app.
+ * Superclase común para entidades con clave primaria numérica generada por
+ * SQL Server mediante BIGINT IDENTITY.
  */
 @MappedSuperclass
 public abstract class BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
-    public UUID getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(UUID id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

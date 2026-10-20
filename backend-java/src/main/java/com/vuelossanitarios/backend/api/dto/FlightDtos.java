@@ -1,29 +1,39 @@
 package com.vuelossanitarios.backend.api.dto;
+
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
-import java.util.List;
+import java.util.*;
+
 public final class FlightDtos { private FlightDtos(){}
  public record Medical(@Size(max=10000) String diagnostico,@Size(max=100) String condicionMedica,boolean requiereEquipamientoEspecial,@Size(max=10000) String observaciones){}
- public record CreateFlight(@NotNull UUID patientId,@NotNull UUID localidadOrigenId,@NotNull UUID localidadDestinoId,@NotBlank String priorityCode,@Size(max=10000) String motivoSolicitud,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical){}
- public record Evaluation(@NotNull Boolean aprobar,UUID motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado,String priorityCode){}
+ /** DTS-only request. Type is deliberately absent: it is always SANITARIO. */
+ public record CreateFlight(@NotNull Long patientId,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical){}
+ public record CreateOperationalFlight(@NotBlank @Size(max=40) String tipoVueloCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
+ public record ReplanOperationalFlight(@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
+ public record Evaluation(@NotNull Boolean aprobar,Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado,String priorityCode){}
  public record CounterProposal(@NotNull LocalDateTime salida,@NotBlank @Size(max=10000) String motivo){}
- public record NegotiationResponse(@NotNull Boolean aceptar,UUID motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
- public record AssignResources(@NotNull UUID aircraftId,@NotNull UUID comandanteId){}
- public record Plan(@NotNull UUID origenId,@NotNull UUID destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
- public record OperationalPlan(@NotNull UUID origenId,@NotNull UUID destinoId,@NotNull LocalDateTime llegada){}
- public record Cancel(@NotNull UUID motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
+ public record NegotiationResponse(@NotNull Boolean aceptar,Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
+ public record CommanderResponse(@NotNull Boolean aceptar,@Size(max=10000) String motivo,LocalDateTime salidaPropuesta,LocalDateTime llegadaPropuesta){}
+ public record AssignResources(@NotNull Long aircraftId,@NotNull Long comandanteId){}
+ public record Plan(@NotNull Long origenId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
+ public record OperationalPlan(@NotNull Long origenId,@NotNull Long destinoId,@NotNull LocalDateTime llegada){}
+ public record Cancel(@NotNull Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
  public record Weather(@NotBlank @Size(max=10000) String condiciones,@NotNull Boolean favorable,@Size(max=10000) String observaciones){}
- public record WeatherView(UUID id,String condiciones,Boolean favorable,String observaciones,LocalDateTime fechaRegistro,String registradoPor){}
- public record Crew(@NotNull UUID userId,@NotBlank String crewRoleCode){}
+ public record WeatherView(Long id,String condiciones,Boolean favorable,String observaciones,LocalDateTime fechaRegistro,String registradoPor){}
+ public record Crew(@NotNull Long userId,@NotBlank String crewRoleCode){}
+ public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante){}
+ public record AvailableCrewView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName){}
+ public record QualificationView(Long userId,String crewRoleCode,String crewRoleName){}
  public record FinalReport(@DecimalMin("0.0") BigDecimal horasVuelo,@DecimalMin("0.0") BigDecimal combustibleConsumidoLitros,@Size(max=10000) String incidentes,@Size(max=10000) String resumen){}
- public record LocalityView(UUID id,String nombre,String provincia,UUID provinciaId){}
- public record FlightView(UUID id,String codigo,String estado,UUID patientId,String paciente,String prioridad,LocalityView origen,LocalityView destino,LocalDateTime solicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,LocalDateTime salida,LocalDateTime llegada){}
- public record PatientDetail(UUID id,String nombre,String apellido,String dni){}
- public record AvailableAircraftView(UUID id,String matricula,String modelo,String tipo,UUID aeropuertoActualId,String aeropuertoActual){}
- public record AvailableCommanderView(UUID id,String username,String nombre,String apellido,String licencia,String provinciaActual){}
- public record NegotiationEventView(String tipo,LocalDateTime fechaHoraPropuesta,String motivo,String actor,LocalDateTime fechaOcurrencia){}
- public record ResourceAssignment(UUID aircraftId,String aircraftMatricula,UUID commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia,String commanderProvinciaActual){}
- public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,String motivoSolicitud,String motivoRechazo,ResourceAssignment recursos,List<NegotiationEventView> negociacion){}
+ public record LocalityView(Long id,String nombre,String provincia,Long provinciaId){}
+ public record FlightTypeView(String codigo,String nombre){}
+ public record SanitaryDataView(Long patientId,String paciente,String prioridad,LocalityView localidadOrigenSolicitada,LocalityView localidadDestinoSolicitada,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,String estadoSolicitud){}
+ public record FlightView(Long id,String codigo,FlightTypeView tipo,String motivoVuelo,String estadoVuelo,SanitaryDataView datosSanitarios,LocalDateTime salida,LocalDateTime llegada,String origen,String destino){}
+ public record PatientDetail(Long id,String nombre,String apellido,String dni){}
+ public record AvailableAircraftView(Long id,String matricula,String modelo,String tipo,Long aeropuertoActualId,String aeropuertoActual){}
+ public record AvailableCommanderView(Long id,String username,String nombre,String apellido,String licencia,String provinciaActual){}
+ public record NegotiationEventView(String tipo,LocalDateTime fechaHoraPropuesta,LocalDateTime fechaHoraLlegadaPropuesta,String motivo,String actor,LocalDateTime fechaOcurrencia){}
+ public record ResourceAssignment(Long aircraftId,String aircraftMatricula,Long commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia,String commanderProvinciaActual){}
+ public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,ResourceAssignment recursos,List<NegotiationEventView> negociacion){}
 }

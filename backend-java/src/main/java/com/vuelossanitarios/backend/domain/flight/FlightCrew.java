@@ -15,25 +15,26 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_vuelos_tripulantes"))
 @Table(name = "vuelos_tripulantes", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_flight_crew", columnNames = {"flight_id", "user_id", "crew_role_id"})
+        @UniqueConstraint(name = "uq_flight_crew", columnNames = {"id_vuelos", "id_usuarios", "id_roles_tripulacion"})
 })
 public class FlightCrew extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false)
+@JoinColumn(name = "id_vuelos", nullable = false)
     private Flight flight;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "usuario_id", nullable = false)
+@JoinColumn(name = "id_usuarios", nullable = false)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "rol_tripulacion_id", nullable = false)
+@JoinColumn(name = "id_roles_tripulacion", nullable = false)
     private CrewRole crewRole;
 
     @ManyToOne(fetch = FetchType.LAZY)
-@JoinColumn(name = "asignado_por_usuario_id")
+@JoinColumn(name = "id_usuario_asignador")
     private User asignadoPor;
 
     @CreationTimestamp

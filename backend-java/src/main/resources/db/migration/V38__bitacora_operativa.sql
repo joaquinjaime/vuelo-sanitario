@@ -1,0 +1,9 @@
+-- Las columnas históricas de auditoría por campo se conservan sin reinterpretarlas.
+ALTER TABLE dbo.bitacora_vuelos ADD tipo_acontecimiento NVARCHAR(40) NULL, descripcion_operativa NVARCHAR(4000) NULL, fecha_acontecimiento DATETIMEOFFSET(3) NULL, fecha_registro_operativo DATETIMEOFFSET(3) NULL, origen_acontecimiento NVARCHAR(12) NULL, importancia NVARCHAR(12) NULL, id_entrada_corregida BIGINT NULL, motivo_correccion NVARCHAR(1000) NULL;
+GO
+ALTER TABLE dbo.bitacora_vuelos ADD CONSTRAINT FK_bitacora_correccion FOREIGN KEY (id_entrada_corregida) REFERENCES dbo.bitacora_vuelos(id_bitacora_vuelos);
+ALTER TABLE dbo.bitacora_vuelos ADD CONSTRAINT CK_bitacora_operativa CHECK (origen_acontecimiento IS NULL OR (origen_acontecimiento IN (N'MANUAL',N'AUTOMATICO') AND tipo_acontecimiento IS NOT NULL AND descripcion_operativa IS NOT NULL AND fecha_acontecimiento IS NOT NULL AND fecha_registro_operativo IS NOT NULL AND id_usuarios IS NOT NULL AND importancia IS NOT NULL AND importancia IN (N'NORMAL',N'IMPORTANTE') AND ((id_entrada_corregida IS NULL AND motivo_correccion IS NULL) OR (id_entrada_corregida IS NOT NULL AND motivo_correccion IS NOT NULL AND origen_acontecimiento=N'MANUAL'))));
+CREATE INDEX IX_bitacora_operativa_cronologia ON dbo.bitacora_vuelos(id_vuelos,fecha_acontecimiento DESC,id_bitacora_vuelos DESC) WHERE origen_acontecimiento IS NOT NULL;
+CREATE UNIQUE INDEX UX_bitacora_transicion ON dbo.bitacora_vuelos(id_vuelos,tipo_acontecimiento) WHERE origen_acontecimiento=N'AUTOMATICO';
+-- Los registros históricos por campo permanecen intactos; los operativos sólo admiten inserciones.
+EXEC(N'CREATE TRIGGER dbo.tr_bitacora_operativa_inmutable ON dbo.bitacora_vuelos AFTER UPDATE, DELETE AS BEGIN SET NOCOUNT ON; IF EXISTS (SELECT 1 FROM deleted WHERE origen_acontecimiento IS NOT NULL) THROW 51001, N''Los acontecimientos operativos son inmutables'', 1; END');

@@ -4,16 +4,17 @@ import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_localidades"))
 @Table(name = "localidades")
 public class Locality extends BaseEntity {
     @Column(name = "codigo_oficial", nullable = false, unique = true, length = 20)
     private String codigoOficial;
-    @Column(name = "nombre", nullable = false, length = 200)
+    @Column(name = "nombre_localidad", nullable = false, length = 200)
     private String nombre;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "provincia_id", nullable = false)
+    @JoinColumn(name = "id_provincias", nullable = false)
     private Province provincia;
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activa", nullable = false)
     private Boolean activo = true;
     public String getCodigoOficial() { return codigoOficial; }
     public void setCodigoOficial(String value) { codigoOficial = value; }

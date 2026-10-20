@@ -5,27 +5,26 @@ import jakarta.persistence.Column;
 
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.UUID;
 
 @Embeddable
 public class UserRoleId implements Serializable {
 
-    @Column(name = "usuario_id") private UUID userId;
-    @Column(name = "rol_id") private UUID roleId;
+    @Column(name = "id_usuarios") private Long userId;
+    @Column(name = "id_roles") private Long roleId;
 
     public UserRoleId() {
     }
 
-    public UserRoleId(UUID userId, UUID roleId) {
+    public UserRoleId(Long userId, Long roleId) {
         this.userId = userId;
         this.roleId = roleId;
     }
 
-    public UUID getUserId() { return userId; }
-    public void setUserId(UUID userId) { this.userId = userId; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
-    public UUID getRoleId() { return roleId; }
-    public void setRoleId(UUID roleId) { this.roleId = roleId; }
+    public Long getRoleId() { return roleId; }
+    public void setRoleId(Long roleId) { this.roleId = roleId; }
 
     @Override
     public boolean equals(Object o) {
