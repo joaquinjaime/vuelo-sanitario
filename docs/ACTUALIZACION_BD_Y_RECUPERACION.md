@@ -60,14 +60,16 @@ El script se niega a reutilizar una base existente y nunca la elimina. Ejecuta F
 
 ## Procedimiento de actualización
 
-1. Confirme que la prevalidación se hizo contra la base correcta y que cualquier `ISSUE` fue resuelto y revisado.
-2. Confirme que el backup se puede restaurar y que existe una restauración de ensayo satisfactoria.
-3. Detenga o pause las escrituras de la aplicación con el procedimiento operativo aprobado. No aplique la migración mientras cambian los datos que se validaron.
-4. Aplique la versión de backend que contiene las migraciones requeridas. Flyway ejecuta en orden las migraciones pendientes al iniciar la aplicación; no altere archivos históricos ya aplicados.
-5. Observe la salida de Flyway y del backend. Ante error, detenga la actualización, conserve logs/esquema y no ejecute `repair` ni repita scripts manualmente sin diagnóstico.
-6. Confirme la versión Flyway esperada, las migraciones exitosas, el estado saludable de backend y una verificación SQL de claves foráneas y restricciones.
-7. Compare conteos, identidades y relaciones acordados, compruebe restricciones/índices/triggers, recorra pruebas E2E seleccionadas y revise autenticación/autorización.
-8. Reanude las escrituras solo después de aceptar las verificaciones y conservar evidencia de la ventana.
+1. Confirme que la base objetivo está `ONLINE` en V32 y que el diagnóstico de solo lectura se ejecutó contra esa instancia y nombre exactos. Cualquier `ISSUE` debe resolverse mediante una decisión revisada; no borre ni fusione registros automáticamente.
+2. Fije el release de backend y frontend que se desplegará. Compruebe que el backend contiene V33–V47, que `mvn -q test`, las pruebas relevantes de SQL Server, Vitest y el build de producción pasan, y que el frontend es compatible con esos contratos. Registre los commits y artefactos de los releases actual y propuesto para poder redeplegar el anterior.
+3. Confirme espacio para backup, log, datos y restauración; acceso a almacenamiento cifrado; autorización operativa; y disponibilidad del backup restaurable y del ensayo V32→V47. Detenga el cambio si algún requisito falla.
+4. Abra una ventana de mantenimiento. Bloquee escrituras de usuarios, APIs, tareas programadas e integraciones externas con el procedimiento operativo aprobado. Mantenga las escrituras pausadas mientras se toma el backup, migra y verifica; coordine los documentos externos asociados para preservar consistencia.
+5. Tome en ese momento un backup SQL Server `FULL` con `CHECKSUM` en almacenamiento cifrado y protegido. No use el backup de este ensayo como sustituto. Registre hora, tamaño, SHA-256, versión SQL y Flyway; ejecute `RESTORE VERIFYONLY WITH CHECKSUM`, revise el encabezado y no continúe si falla.
+6. Con escrituras detenidas y una sola instancia de backend autorizada para arrancar, aplique el release que contiene las migraciones. Flyway ejecuta V33–V47 en orden al iniciar; no altere archivos históricos ya aplicados ni modifique manualmente `flyway_schema_history`.
+7. Siga la salida de Flyway y del backend. Si falla una migración, detenga la actualización, preserve logs y base para diagnóstico y no ejecute `repair` ni repita scripts manualmente.
+8. Confirme V47 sin migraciones fallidas; ejecute `DBCC CHECKDB` y `DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS`; valide claves foráneas, índices, triggers, conteos, identidades, relaciones, permisos, auditoría y salud del backend. Ejecute smoke/E2E seleccionados sin notificaciones ni efectos externos.
+9. Reanude APIs, usuarios e integraciones únicamente después de aceptar las comprobaciones. Observe errores y salud durante la ventana posterior y conserve backup, hashes y resultados como evidencia.
+10. Si una migración o comprobación falla, mantenga el bloqueo de escrituras y aplique el procedimiento de recuperación siguiente. No reanude hasta que la base y los releases de aplicación vuelvan a ser compatibles y la persona responsable acepte la recuperación.
 
 ## Verificación posterior específica para V32→V47
 
@@ -86,17 +88,21 @@ Flyway no garantiza que el esquema se pueda revertir con SQL inverso. Si falla u
 
 1. Mantenga la aplicación en mantenimiento y evite escrituras nuevas.
 2. Capture logs, versión Flyway y estado de esquema; preserve la base fallida para análisis.
-3. Decida entre reparar hacia adelante con una migración correctiva revisada o recuperar la copia completa verificada.
-4. Para restaurar, use el procedimiento de SQL Server aprobado: ponga la base objetivo en mantenimiento, restaure el backup `FULL` y los logs requeridos hasta el punto decidido, verifique el estado restaurado y vuelva a validar aplicación y permisos.
-5. No sobrescriba una base sin confirmar nombre/instancia/backup, ni restaure una copia sintética sobre un entorno real. La restauración debe mantener consistentes la base y los documentos externos almacenados por la aplicación.
-6. Registre el resultado y mantenga bloqueadas las escrituras hasta la aceptación operativa.
+3. Con la persona responsable, decida entre una corrección hacia adelante revisada o recuperar la copia completa verificada. Flyway no proporciona rollback automático fiable.
+4. Para recuperar, confirme instancia, base, backup y cadena de logs; mantenga escrituras bloqueadas y restaure el backup `FULL` más los logs aprobados al punto acordado. No sobrescriba otra base ni restaure una copia sintética sobre el entorno habitual.
+5. Redepliegue el backend y frontend registrados antes del cambio, compatibles con V32. Si hubo escrituras posteriores al backup, no las descarte: acuerde reconciliarlas antes de reabrir el servicio. Coordine también los documentos almacenados fuera de SQL Server.
+6. Verifique V32, `DBCC CHECKDB`, permisos, API y frontend con ese release; documente el resultado y mantenga bloqueadas las escrituras hasta la aceptación operativa.
+
+### Condiciones para detener la ventana
+
+Detenga el cambio si la versión no es V32, aparece cualquier conflicto de prevalidación, no puede restaurarse el backup inmediato, no se confirma almacenamiento cifrado y protegido, faltan los artefactos de código compatibles, no es posible bloquear todas las escrituras/integraciones, hay falta de espacio o memoria, un servicio está inestable, Flyway falla o una verificación posterior detecta pérdida, huérfanos o cambios no explicados.
 
 ## Limitaciones conocidas
 
 - Registro de esta consolidación (22-10-2026): la consulta de prevalidación estrictamente de lectura sobre la base habitual `vuelos_sanitarios` informó V32, 15 migraciones pendientes y ningún `ISSUE` en los diagnósticos implementados. No devolvió ni copió filas individuales, no creó una copia y no ejecutó migraciones allí.
 - Registro del ensayo sintético: la reconstrucción desde migraciones llegó a V32; con filas sintéticas, Flyway aplicó V33–V47 y `DBCC CHECKCONSTRAINTS` no informó violaciones. La verificación cubrió reglas seleccionadas, no reemplaza una copia de ensayo de datos reales.
 - Una base reconstruida desde migraciones no refleja extensiones manuales, collation, triggers externos, historial de datos ni desviaciones de una base instalada hace tiempo.
-- El ensayo sintético no demuestra que los datos reales sean compatibles. La prevalidación de la base habitual en V32 solo encontró cero conflictos dentro de las consultas implementadas; no se hizo una copia ni se aplicaron migraciones allí.
+- El registro del 22-10-2026 no demostraba compatibilidad de los datos reales. El ensayo real del 23-10-2026, documentado abajo, sí migró la copia V32; el snapshot no tenía filas de vuelos, pacientes, aeronaves, documentos, informes ni auditoría, por lo que esos backfills siguen cubiertos por fixtures sintéticos.
 - V45 considera vigentes las filas de tripulación preexistentes porque V32 no tenía campos que demostraran una baja histórica. No se inventa historia de retiros.
 - V47 conserva identidades; si hay duplicados los índices fallan y la intervención debe decidirla un responsable de datos.
 - V46 conserva la interpretación/almacenamiento de eventos históricos y los hace inmutables en SQL Server; los consumidores deben tolerar JSON histórico sin valores anteriores/posteriores.
