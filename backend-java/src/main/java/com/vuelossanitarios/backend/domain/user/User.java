@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_usuarios"))
 @Table(name = "usuarios")
 public class User extends BaseEntity {
 
@@ -27,11 +28,11 @@ public class User extends BaseEntity {
     private String passwordHash;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "persona_id", nullable = false, unique = true)
+@JoinColumn(name = "id_personas", nullable = false, unique = true)
     private Person person;
 
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activo", nullable = false)
     private Boolean activo = true;
 
     @Column(name = "estado_cuenta", nullable = false, length = 24)
@@ -46,6 +47,14 @@ public class User extends BaseEntity {
 
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
+
+    /** Quién dio de baja la cuenta y por qué (V47); se limpian al reactivarla, el historial permanece en la auditoría. */
+    @jakarta.persistence.ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario_baja")
+    private User bajaPor;
+
+    @Column(name = "motivo_baja", length = 500)
+    private String motivoBaja;
 
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
@@ -81,6 +90,10 @@ public class User extends BaseEntity {
     public void invalidateCredentials() { versionCredenciales = versionCredenciales == null ? 1L : versionCredenciales + 1L; }
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime value) { fechaBaja = value; }
+    public User getBajaPor() { return bajaPor; }
+    public void setBajaPor(User value) { bajaPor = value; }
+    public String getMotivoBaja() { return motivoBaja; }
+    public void setMotivoBaja(String value) { motivoBaja = value; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

@@ -1,5 +1,7 @@
 # DER de la base de datos
 
+> **Snapshot histórico de V10.** No representa el modelo actual posterior a V24, V27, V28, V30 y V31. Debe regenerarse desde el catálogo de la instancia cuando se requiera un diagrama vigente; mientras tanto, use [ESTADO_FUNCIONAL.md](ESTADO_FUNCIONAL.md) e [INVENTARIO_ESQUEMA_POST_V29.md](INVENTARIO_ESQUEMA_POST_V29.md) como referencias actuales.
+
 Generado a partir del catálogo de `vuelos_sanitarios` en SQL Server luego de Flyway V10 (V8 aplicada correctamente). No incluye los objetos técnicos `flyway_schema_history` y `sysdiagrams`.
 
 ```mermaid

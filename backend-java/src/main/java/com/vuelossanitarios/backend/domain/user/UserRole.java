@@ -1,12 +1,13 @@
 package com.vuelossanitarios.backend.domain.user;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -21,17 +22,17 @@ import java.time.LocalDateTime;
 @Table(name = "usuarios_roles")
 public class UserRole {
 
-    @EmbeddedId
-    private UserRoleId id = new UserRoleId();
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_usuarios_roles")
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("userId")
-@JoinColumn(name = "usuario_id", nullable = false)
+@JoinColumn(name = "id_usuarios", nullable = false)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("roleId")
-@JoinColumn(name = "rol_id", nullable = false)
+@JoinColumn(name = "id_roles", nullable = false)
     private Role role;
 
     @CreationTimestamp
@@ -44,11 +45,10 @@ public class UserRole {
     public UserRole(User user, Role role) {
         this.user = user;
         this.role = role;
-        this.id = new UserRoleId(user.getId(), role.getId());
     }
 
-    public UserRoleId getId() { return id; }
-    public void setId(UserRoleId id) { this.id = id; }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }

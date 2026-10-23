@@ -1,0 +1,8 @@
+# Use only during an approved release window, with immutable local image IDs.
+# docker compose --env-file .env -f docker-compose.yml -f docker-compose.release.yml \
+#   up -d --no-build --pull never --no-deps backend frontend
+services:
+  backend:
+    image: ${BACKEND_RELEASE_IMAGE:?Set the verified immutable backend image ID}
+  frontend:
+    image: ${FRONTEND_RELEASE_IMAGE:?Set the verified immutable frontend image ID}

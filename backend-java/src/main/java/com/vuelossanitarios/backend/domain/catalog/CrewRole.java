@@ -6,13 +6,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_roles_tripulacion"))
 @Table(name = "roles_tripulacion")
 public class CrewRole extends BaseEntity {
 
-    @Column(name = "codigo", nullable = false, unique = true, length = 30)
+    @Column(name = "codigo_rol_tripulacion", nullable = false, unique = true, length = 30)
     private String codigo;
 
-    @Column(name = "nombre", nullable = false, length = 100)
+    @Column(name = "nombre_rol_tripulacion", nullable = false, length = 100)
     private String nombre;
 
     public CrewRole() {

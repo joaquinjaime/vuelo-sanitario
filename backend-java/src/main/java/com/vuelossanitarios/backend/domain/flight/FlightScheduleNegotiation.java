@@ -5,17 +5,23 @@ import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity @Table(name="negociaciones_horario_vuelo")
+@Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_negociaciones_horario_vuelo"))
+@Table(name="negociaciones_horario_vuelo")
 public class FlightScheduleNegotiation extends BaseEntity {
- @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="vuelo_id",nullable=false) private Flight flight;
- @Column(name="tipo",nullable=false,length=40) private String tipo;
+ @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="id_vuelos",nullable=false) private Flight flight;
+ @Column(name="tipo_negociacion",nullable=false,length=40) private String tipo;
  @Column(name="fecha_hora_propuesta") private LocalDateTime fechaHoraPropuesta;
- @Column(name="motivo",columnDefinition="NVARCHAR(MAX)") private String motivo;
- @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="actor_usuario_id") private User actor;
- @Column(name="fecha_ocurrencia",nullable=false) private LocalDateTime fechaOcurrencia=LocalDateTime.now();
+ @Column(name="fecha_hora_llegada_propuesta") private LocalDateTime fechaHoraLlegadaPropuesta;
+ @Column(name="motivo_negociacion",columnDefinition="NVARCHAR(MAX)") private String motivo;
+ @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_actor") private User actor;
+ @Column(name="fecha_ocurrencia",nullable=false) private LocalDateTime fechaOcurrencia;
+ /** Propuesta a la que responde (o que reemplaza) este evento; cada propuesta admite una sola respuesta. */
+ @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_negociacion_respondida") private FlightScheduleNegotiation respondida;
+ public FlightScheduleNegotiation getRespondida(){return respondida;} public void setRespondida(FlightScheduleNegotiation v){respondida=v;}
  public Flight getFlight(){return flight;} public void setFlight(Flight v){flight=v;}
  public String getTipo(){return tipo;} public void setTipo(String v){tipo=v;}
  public LocalDateTime getFechaHoraPropuesta(){return fechaHoraPropuesta;} public void setFechaHoraPropuesta(LocalDateTime v){fechaHoraPropuesta=v;}
+ public LocalDateTime getFechaHoraLlegadaPropuesta(){return fechaHoraLlegadaPropuesta;} public void setFechaHoraLlegadaPropuesta(LocalDateTime v){fechaHoraLlegadaPropuesta=v;}
  public String getMotivo(){return motivo;} public void setMotivo(String v){motivo=v;}
  public User getActor(){return actor;} public void setActor(User v){actor=v;}
  public LocalDateTime getFechaOcurrencia(){return fechaOcurrencia;} public void setFechaOcurrencia(LocalDateTime v){fechaOcurrencia=v;}

@@ -13,10 +13,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_personas"))
 @Table(name = "personas")
 public class Person extends BaseEntity {
-    @Column(name = "nombre", nullable = false, length = 100) private String nombre;
-    @Column(name = "apellido", nullable = false, length = 100) private String apellido;
+    @Column(name = "nombre_persona", nullable = false, length = 100) private String nombre;
+    @Column(name = "apellido_persona", nullable = false, length = 100) private String apellido;
     @Column(name = "dni", length = 20) private String dni;
     @Column(name = "fecha_nacimiento") private LocalDate fechaNacimiento;
     @OneToOne(mappedBy="person",fetch=FetchType.LAZY) private CommanderProfile commanderProfile;

@@ -1,5 +1,14 @@
 # Informe técnico y académico — Base de datos del Sistema de Gestión de Vuelos Sanitarios
 
+> **Informe de línea base histórica (V1--V5).** Sus conteos, nombres UUID y conclusiones describen la instancia inspeccionada entonces, no el esquema actual. V24 reconstruyó las identidades, V27/V28 normalizaron la nomenclatura física y V31 incorporó los leases documentales. La referencia operativa vigente es [ESTADO_FUNCIONAL.md](ESTADO_FUNCIONAL.md); el inventario físico actualizado está en [INVENTARIO_ESQUEMA_POST_V29.md](INVENTARIO_ESQUEMA_POST_V29.md).
+
+> Nota de vigencia: las secciones que describen documentos PDF/TEXT corresponden
+> al relevamiento anterior a V22. El modelo vigente sólo admite PDF: usa
+> `nombre_documento`, `numero_version`, `nombre_archivo_original` y
+> `ubicacion_almacenamiento`; no conserva `modalidad`, `tipo_mime` ni
+> `contenido_texto` en las tablas operativas. V22 archiva los textos previos en
+> `documentos_vuelo_texto_legacy` antes de retirar ese flujo.
+
 **Corte de inspección:** 22/09/2026. **Motor verificado:** Microsoft SQL Server 2025 Express, base `vuelos_sanitarios`. **Alcance:** estructura, metadatos y código; no se consultaron datos personales o clínicos.
 
 ## 1. Método, alcance y arquitectura

@@ -6,13 +6,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_motivos_cancelacion"))
 @Table(name = "motivos_cancelacion")
 public class CancellationReason extends BaseEntity {
-    @Column(name = "codigo", nullable = false, unique = true, length = 80) private String codigo;
-    @Column(name = "nombre", nullable = false, length = 200) private String nombre;
-    @Column(name = "descripcion", columnDefinition = "NVARCHAR(MAX)") private String descripcion;
+    @Column(name = "codigo_motivo_cancelacion", nullable = false, unique = true, length = 80) private String codigo;
+    @Column(name = "nombre_motivo_cancelacion", nullable = false, length = 200) private String nombre;
+    @Column(name = "descripcion_motivo_cancelacion", columnDefinition = "NVARCHAR(MAX)") private String descripcion;
     @Column(name = "categoria", nullable = false, length = 40) private String categoria;
-    @Column(name = "activo", nullable = false) private Boolean activo = true;
+    @Column(name = "esta_activo", nullable = false) private Boolean activo = true;
     @Column(name = "orden", nullable = false) private Short orden;
     public String getCodigo(){ return codigo; } public void setCodigo(String value){ codigo=value; }
     public String getNombre(){ return nombre; } public void setNombre(String value){ nombre=value; }

@@ -1,3 +1,16 @@
 package com.vuelossanitarios.backend.api.dto;
-import jakarta.validation.constraints.*;
-public final class DocumentDtos { private DocumentDtos(){} public record CreateText(@NotBlank String documentTypeCode,@NotBlank @Size(max=255) String titulo,@NotBlank @Size(max=100000) String contenido){} public record ReplaceText(@NotBlank @Size(max=100000) String contenido){} public record DocumentView(String itemId,int version,boolean actual,String modalidad,String titulo){} }
+import java.time.LocalDateTime;
+
+public final class DocumentDtos {
+ private DocumentDtos() {}
+ public record DocumentTypeView(String codigo, String nombre) {}
+ public record DocumentVersionView(String id, int numeroVersion, boolean esVersionActual,
+                                   String nombreArchivoOriginal, long tamanioBytes,
+                                   LocalDateTime fechaCreacion, String urlDescarga) {}
+ public record DocumentView(String id, String nombreDocumento, DocumentTypeView tipoDocumento,
+                            DocumentVersionView versionActual) {}
+ public record DocumentHistoryView(String id, String nombreDocumento, DocumentTypeView tipoDocumento,
+                                   java.util.List<DocumentVersionView> versiones) {}
+ public record DocumentLockView(String documentId, Long ownerId, String ownerUsername,
+                                LocalDateTime acquiredAt, LocalDateTime expiresAt, boolean mine, boolean active) {}
+}

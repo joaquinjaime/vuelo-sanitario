@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import java.math.BigDecimal;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_aeropuertos"))
 @Table(name = "aeropuertos")
 public class Airport extends BaseEntity {
 
@@ -23,7 +24,7 @@ public class Airport extends BaseEntity {
     @Column(name = "codigo_iata", unique = true, length = 3)
     private String codigoIata;
 
-    @Column(name = "nombre", nullable = false, length = 150)
+    @Column(name = "nombre_aeropuerto", nullable = false, length = 150)
     private String nombre;
 
     @Column(name = "ciudad", length = 100)
@@ -33,14 +34,14 @@ public class Airport extends BaseEntity {
     private String provincia;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "provincia_id")
+    @JoinColumn(name = "id_provincias")
     private Province provinciaReferencial;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "localidad_id")
+    @JoinColumn(name = "id_localidades")
     private Locality localidad;
 
-    @Column(name = "tipo", length = 30)
+    @Column(name = "tipo_aeropuerto", length = 30)
     private String tipo;
 
     @Column(name = "pais", nullable = false, length = 100)
@@ -52,7 +53,7 @@ public class Airport extends BaseEntity {
     @Column(name = "longitud", precision = 9, scale = 6)
     private BigDecimal longitud;
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activo", nullable = false)
     private Boolean activo = true;
 
     public Airport() {

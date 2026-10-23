@@ -14,11 +14,12 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_pacientes"))
 @Table(name = "pacientes")
 public class Patient extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "persona_id", nullable = false, unique = true)
+@JoinColumn(name = "id_personas", nullable = false, unique = true)
     private Person person;
 
     @CreationTimestamp

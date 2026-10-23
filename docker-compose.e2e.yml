@@ -1,0 +1,37 @@
+# Overlay descartable para la validación end-to-end. Se usa junto con
+# `docker compose --env-file .env --env-file .env.e2e -p vuelos-sanitarios-e2e
+#  -f docker-compose.yml -f docker-compose.e2e.yml`.
+services:
+  sqlserver:
+    environment:
+      MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
+    ports: !reset ["14331:1433"]
+    # El primer arranque de SQL Server en un volumen vacío puede tardar más de
+    # cinco segundos en responder a sqlcmd en equipos con recursos compartidos.
+    healthcheck:
+      timeout: 60s
+      retries: 20
+      start_period: 60s
+
+  db-init:
+    environment:
+      MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
+      DB_NAME: vuelos_sanitarios_e2e
+
+  backend:
+    environment:
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_e2e;encrypt=true;trustServerCertificate=true
+      # Sólo en E2E: permite verificar recuperación de leases vencidos sin esperas largas.
+      DOCUMENT_LOCK_SECONDS: 1
+      # Sólo en E2E: reloj ajustable y barrido a demanda (/api/e2e, requiere ADMINISTRADOR). El barrido periódico queda
+      # prácticamente desactivado para que las pruebas controlen cuándo corre y verifiquen el bloqueo sin él.
+      SPRING_PROFILES_ACTIVE: docker,e2e
+      APP_E2E_CONTROLS_ENABLED: "true"
+      APP_AUDIT_DIAGNOSTICS_ENABLED: ${APP_AUDIT_DIAGNOSTICS_ENABLED:-false}
+      FINAL_REPORT_SWEEP_MS: 3600000
+      FINAL_REPORT_SWEEP_INITIAL_MS: 3600000
+    ports:
+      - "18080:8080"
+
+  frontend:
+    profiles: ["ui"]

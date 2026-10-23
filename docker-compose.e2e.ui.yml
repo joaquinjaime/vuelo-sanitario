@@ -1,0 +1,7 @@
+# Frontend E2E isolated from the normal frontend on port 80.
+services:
+  backend:
+    environment:
+      CORS_ALLOWED_ORIGIN: http://127.0.0.1:18081
+  frontend:
+    ports: !override ["18081:80"]

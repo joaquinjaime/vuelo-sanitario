@@ -12,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_aeronaves"))
 @Table(name = "aeronaves")
 public class Aircraft extends BaseEntity {
 
@@ -21,7 +22,7 @@ public class Aircraft extends BaseEntity {
     @Column(name = "modelo", nullable = false, length = 100)
     private String modelo;
 
-    @Column(name = "tipo", nullable = false, length = 50)
+    @Column(name = "tipo_aeronave", nullable = false, length = 50)
     private String tipo;
 
     @Column(name = "capacidad_pacientes", nullable = false)
@@ -33,12 +34,12 @@ public class Aircraft extends BaseEntity {
     @Column(name = "equipamiento_medico", columnDefinition = "NVARCHAR(MAX)")
     private String equipamientoMedico;
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activa", nullable = false)
     private Boolean activo = true;
 
     /** Aeropuerto físico en el que se encuentra mientras no ejecuta un vuelo. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "aeropuerto_actual_id")
+    @JoinColumn(name = "id_aeropuertos")
     private Airport aeropuertoActual;
 
     @CreationTimestamp

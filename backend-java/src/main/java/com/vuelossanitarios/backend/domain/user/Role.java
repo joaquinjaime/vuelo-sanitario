@@ -9,19 +9,20 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_roles"))
 @Table(name = "roles")
 public class Role extends BaseEntity {
 
-    @Column(name = "codigo", nullable = false, unique = true, length = 30)
+    @Column(name = "codigo_rol", nullable = false, unique = true, length = 30)
     private String codigo;
 
-    @Column(name = "nombre", nullable = false, length = 100)
+    @Column(name = "nombre_rol", nullable = false, length = 100)
     private String nombre;
 
-    @Column(name = "descripcion", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "descripcion_rol", columnDefinition = "NVARCHAR(MAX)")
     private String descripcion;
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "esta_activo", nullable = false)
     private Boolean activo = true;
 
     @CreationTimestamp

@@ -3,7 +3,9 @@ import org.springframework.http.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import org.slf4j.Logger;
@@ -14,6 +16,12 @@ import org.slf4j.LoggerFactory;
  @ExceptionHandler(MethodArgumentNotValidException.class) ResponseEntity<Map<String,String>> validation(MethodArgumentNotValidException e){return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
  @ExceptionHandler(HttpMessageNotReadableException.class) ResponseEntity<Map<String,String>> unreadableBody(HttpMessageNotReadableException e){return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
  @ExceptionHandler(MethodArgumentTypeMismatchException.class) ResponseEntity<Map<String,String>> invalidParameter(){return ResponseEntity.badRequest().body(Map.of("error","Parámetro inválido"));}
+ @ExceptionHandler(NoResourceFoundException.class) ResponseEntity<Map<String,String>> resourceNotFound(){return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error","Recurso inexistente"));}
+ @ExceptionHandler(HttpRequestMethodNotSupportedException.class) ResponseEntity<Map<String,String>> methodNotAllowed(){return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Map.of("error","Método no permitido"));}
  @ExceptionHandler(AccessDeniedException.class) ResponseEntity<Map<String,String>> denied(){return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error","Acceso denegado"));}
+ @ExceptionHandler({jakarta.validation.ConstraintViolationException.class,org.springframework.web.bind.MissingServletRequestParameterException.class,org.springframework.web.multipart.support.MissingServletRequestPartException.class,org.springframework.web.multipart.MultipartException.class}) ResponseEntity<Map<String,String>> invalidInput(Exception e){if(e instanceof org.springframework.web.multipart.MaxUploadSizeExceededException)return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of("error","El archivo supera el tamaño permitido"));return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
+ /** Una víctima de bloqueo mutuo o un fallo de serialización no confirmó nada: se informa como conflicto reintentable, no como error interno. */
+ @ExceptionHandler(org.springframework.dao.ConcurrencyFailureException.class) ResponseEntity<Map<String,Object>> concurrency(org.springframework.dao.ConcurrencyFailureException e){log.warn("Concurrent operation rolled back",e);Map<String,Object> body=new LinkedHashMap<>();body.put("error","La operación entró en conflicto con otra simultánea y no se aplicó. Actualice los datos y reintente.");body.put("code","CONCURRENT_MODIFICATION");return ResponseEntity.status(HttpStatus.CONFLICT).body(body);}
+ @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class) ResponseEntity<Map<String,String>> integrity(org.springframework.dao.DataIntegrityViolationException e){log.warn("Restricción de integridad violada: {}",e.getMostSpecificCause().getClass().getSimpleName());return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","La operación entra en conflicto con un registro existente (dato único o referencia vigente)"));}
  @ExceptionHandler(Exception.class) ResponseEntity<Map<String,String>> unexpected(Exception e){log.error("Unhandled API exception",e);return ResponseEntity.status(500).body(Map.of("error","Error interno"));}
 }

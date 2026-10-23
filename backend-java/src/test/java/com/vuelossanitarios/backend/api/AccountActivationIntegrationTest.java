@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
   "spring.datasource.url=jdbc:h2:mem:activation;MODE=MSSQLServer;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-  "spring.datasource.driver-class-name=org.h2.Driver",
+  "spring.datasource.driver-class-name=org.h2.Driver","app.final-report.sweep-enabled=false",
   "spring.datasource.username=sa",
   "spring.datasource.password=",
   "spring.flyway.enabled=false",
@@ -164,6 +164,27 @@ class AccountActivationIntegrationTest {
   mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + accessToken))
    .andExpect(status().isOk())
    .andExpect(jsonPath("$.username").value(username));
+ }
+
+ @Test void reactivationReplacesExistingRolesWithoutDuplicatingTheJoinRow() {
+  auth.createBootstrapAdmin("admin.reactivate","ClaveAdmin123","admin.reactivate@example.test");
+  Long administratorId=users.findAllWithPersonAndRoles().stream().filter(u->u.getUserRoles().stream().anyMatch(ur->"ADMINISTRADOR".equals(ur.getRole().getCodigo()))).findFirst().orElseThrow().getId();
+  String dni="34"+UUID.randomUUID().toString().replace("-","").substring(0,6);
+  ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
+   "Usuario","Reactivado",dni,null,null,Set.of("OPERACIONES"),
+   List.of(new ContactRequest("reactivate."+dni+"@example.test","PERSONAL")),
+   List.of(new PhoneRequest("3815555555","PERSONAL"))), administratorId);
+  auth.activate(new ActivateAccountRequest(dni,activation.codigo(),"reactiva."+dni,"ClaveReactiva12","ClaveReactiva12"));
+  Long userId=users.findWithRolesByUsername("reactiva."+dni).orElseThrow().getId();
+  var inactive=users.findById(userId).orElseThrow();
+  inactive.setActivo(false);
+  inactive.setEstadoCuenta("DESACTIVADO");
+  users.saveAndFlush(inactive);
+
+  ReactivationResponse result=auth.reactivateUser(userId,new ReactivateUserRequest("Usuario","Reactivado",null,null,Set.of("OPERACIONES")),administratorId);
+
+  assertTrue(result.usuario().activo());
+  assertEquals(Set.of("OPERACIONES"),result.usuario().roles());
  }
 
  @Test void dtsLoginTokenCanLoadAllTwentyFourProvinces() throws Exception {

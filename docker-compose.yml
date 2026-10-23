@@ -11,7 +11,7 @@ services:
       - sqlserver_data:/var/opt/mssql
     networks: [internal]
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q \"SELECT 1\" >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -37,6 +37,16 @@ services:
     command: ["/bin/bash", "/scripts/init-db.sh"]
     restart: "no"
 
+  # El backend se ejecuta como el usuario no privilegiado `spring` (UID 999),
+  # mientras que Docker crea los volúmenes nombrados como root. Inicializamos
+  # explícitamente el directorio persistente antes de iniciar la aplicación.
+  documents-init:
+    image: alpine:3.21
+    volumes:
+      - documents_data:/data/documents
+    command: ["/bin/sh", "-c", "chown -R 999:999 /data/documents"]
+    restart: "no"
+
   backend:
     build:
       context: ./backend-java
@@ -54,6 +64,8 @@ services:
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost}
     depends_on:
       db-init:
+        condition: service_completed_successfully
+      documents-init:
         condition: service_completed_successfully
     volumes:
       - documents_data:/data/documents

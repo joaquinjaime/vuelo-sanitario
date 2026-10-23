@@ -17,15 +17,16 @@ import java.time.LocalDateTime;
  * fuente externa sin convertir este registro operativo en un payload de API.
  */
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_instantaneas_clima"))
 @Table(name = "instantaneas_clima")
 public class WeatherSnapshot extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false)
+@JoinColumn(name = "id_vuelos", nullable = false)
     private Flight flight;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "registrado_por_usuario_id", nullable = false)
+@JoinColumn(name = "id_usuario_registrador", nullable = false)
     private User registradoPor;
 
     @CreationTimestamp
@@ -38,7 +39,7 @@ public class WeatherSnapshot extends BaseEntity {
     @Column(name = "favorable")
     private Boolean favorable;
 
-    @Column(name = "observaciones", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "observaciones_clima", columnDefinition = "NVARCHAR(MAX)")
     private String observaciones;
 
     public WeatherSnapshot() {

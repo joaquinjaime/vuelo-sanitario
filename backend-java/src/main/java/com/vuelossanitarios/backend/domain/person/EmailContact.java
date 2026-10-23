@@ -4,11 +4,12 @@ import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity @Table(name = "correos_electronicos")
+@Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_correos_electronicos"))
+@Table(name = "correos_electronicos")
 public class EmailContact extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "persona_id", nullable = false) private Person person;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "id_personas", nullable = false) private Person person;
     @Column(name = "direccion", nullable = false, length = 150) private String direccion;
-    @Column(name = "tipo", nullable = false, length = 30) private String tipo = "PERSONAL";
+    @Column(name = "tipo_correo_electronico", nullable = false, length = 30) private String tipo = "PERSONAL";
     @Column(name = "es_principal", nullable = false) private Boolean principal = false;
     @Column(name = "fecha_creacion", nullable = false, updatable = false) private LocalDateTime createdAt;
     @Column(name = "fecha_actualizacion", nullable = false) private LocalDateTime updatedAt;

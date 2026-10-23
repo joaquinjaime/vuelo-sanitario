@@ -7,15 +7,16 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_informacion_medica_vuelo"))
 @Table(name = "informacion_medica_vuelo")
 public class FlightMedicalInfo extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false, unique = true)
+@JoinColumn(name = "id_vuelos", nullable = false, unique = true)
     private Flight flight;
     @Column(name = "diagnostico", columnDefinition = "NVARCHAR(MAX)") private String diagnostico;
     @Column(name = "condicion_medica", length = 100) private String condicionMedica;
     @Column(name = "requiere_equipamiento_especial", nullable = false) private Boolean requiereEquipamientoEspecial = false;
-    @Column(name = "observaciones", columnDefinition = "NVARCHAR(MAX)") private String observaciones;
+    @Column(name = "observaciones_medicas", columnDefinition = "NVARCHAR(MAX)") private String observaciones;
 @CreationTimestamp @Column(name = "fecha_creacion", nullable = false, updatable = false) private LocalDateTime createdAt;
 @UpdateTimestamp @Column(name = "fecha_actualizacion", nullable = false) private LocalDateTime updatedAt;
     public Flight getFlight() { return flight; } public void setFlight(Flight v) { flight = v; }

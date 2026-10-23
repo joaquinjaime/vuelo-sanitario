@@ -20,7 +20,7 @@ import java.util.*;
  @Override protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException {
   String header=req.getHeader("Authorization");
   if(header!=null&&header.startsWith("Bearer ")&&SecurityContextHolder.getContext().getAuthentication()==null) try {
-   Claims c=jwt.parse(header.substring(7)); String username=c.get("username",String.class); UUID id=UUID.fromString(c.getSubject());
+   Claims c=jwt.parse(header.substring(7)); String username=c.get("username",String.class); Long id=Long.parseLong(c.getSubject());
    if(username==null||username.isBlank())throw new IllegalArgumentException("JWT sin username");
    User user=users.findWithRolesByUsername(username).orElseThrow(()->new IllegalArgumentException("Usuario JWT inexistente"));
    Long tokenVersion=c.get("credentialVersion",Long.class);
@@ -28,7 +28,8 @@ import java.util.*;
    boolean passwordChangeRequired=Boolean.TRUE.equals(user.getDebeCambiarContrasena());
    var authorities=user.getUserRoles().stream().filter(r->Boolean.TRUE.equals(r.getRole().getActivo())).map(r->new SimpleGrantedAuthority("ROLE_"+r.getRole().getCodigo())).toList();
    SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(new CurrentUser(id,user.getUsername(),passwordChangeRequired),null,authorities));
-   if(passwordChangeRequired&&!allowsPasswordChangeOnlyAccess(req)) { res.sendError(HttpServletResponse.SC_FORBIDDEN,"Debe cambiar la contraseña temporal"); return; }
+   if(passwordChangeRequired&&!allowsPasswordChangeOnlyAccess(req)) { // Se responde directamente: sendError reenvía a /error sin autenticación y el punto de entrada lo convertiría en 401 en lugar del 403 propio de esta restricción.
+    res.setStatus(HttpServletResponse.SC_FORBIDDEN); res.setCharacterEncoding("UTF-8"); res.setContentType("application/json"); res.getWriter().write("{\"error\":\"Debe cambiar la contraseña temporal\",\"code\":\"PASSWORD_CHANGE_REQUIRED\"}"); return; }
   } catch (Exception e) { SecurityContextHolder.clearContext(); log.debug("JWT rechazado para {}: {}",req.getRequestURI(),e.getClass().getSimpleName()); }
   chain.doFilter(req,res);
  }

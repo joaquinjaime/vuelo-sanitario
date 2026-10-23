@@ -1,0 +1,6 @@
+# Puertos para un stack E2E limpio de validación, separado del stack persistente.
+services:
+  sqlserver:
+    ports: !override ["127.0.0.1:14333:1433"]
+  backend:
+    ports: !override ["127.0.0.1:18082:8080"]

@@ -15,17 +15,22 @@ import java.util.*;
  @GetMapping("/me") public UserView me(@AuthenticationPrincipal CurrentUser u){return service.myAccount(u.id());}
  @PostMapping("/me/password") public void password(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ChangePasswordRequest r){service.changePassword(u.id(),r);}
  @PostMapping("/me/correos") public ContactView email(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ContactRequest r){return service.addEmail(u.id(),r);}
- @DeleteMapping("/me/correos/{id}") public void deleteEmail(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.deleteEmail(u.id(),id);}
- @PostMapping("/me/correos/{id}/principal") public void mainEmail(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.makePrimaryEmail(u.id(),id);}
+ @DeleteMapping("/me/correos/{id}") public void deleteEmail(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){service.deleteEmail(u.id(),id);}
+ @PostMapping("/me/correos/{id}/principal") public void mainEmail(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){service.makePrimaryEmail(u.id(),id);}
  @PostMapping("/me/telefonos") public ContactView phone(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody PhoneRequest r){return service.addPhone(u.id(),r);}
- @DeleteMapping("/me/telefonos/{id}") public void deletePhone(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.deletePhone(u.id(),id);}
- @PostMapping("/me/telefonos/{id}/principal") public void mainPhone(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){service.makePrimaryPhone(u.id(),id);}
+ @DeleteMapping("/me/telefonos/{id}") public void deletePhone(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){service.deletePhone(u.id(),id);}
+ @PostMapping("/me/telefonos/{id}/principal") public void mainPhone(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){service.makePrimaryPhone(u.id(),id);}
  @GetMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<UserView> users(){return service.listUsers();}
- @GetMapping("/users/commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<CommanderView> commanders(){return service.listActiveCommanders();}
+ @GetMapping("/users/commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES','ADMINISTRADOR')") public List<CommanderView> commanders(){return service.listActiveCommanders();}
+ @GetMapping("/users/search") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserPage search(@RequestParam(required=false) String q,@RequestParam(required=false) String role,@RequestParam(required=false) String status,@RequestParam(required=false) Integer page,@RequestParam(required=false) Integer size){return service.search(q,role,status,page,size);}
+ @GetMapping("/users/summary") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserCounts summary(){return service.counts();}
+ @GetMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserDetail detail(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id){return service.detail(id,actor.id());}
+ @GetMapping("/roles") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<RoleOption> roleOptions(){return service.roleOptions();}
+ @PostMapping("/users/{id}/credential-reset") @PreAuthorize("hasRole('ADMINISTRADOR')") public CredentialResetResponse resetCredentials(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id){return service.resetCredentials(id,actor.id());}
  @PostMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse create(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody CreatePendingUserRequest r){return service.createPending(r,u.id());}
- @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
- @PatchMapping("/users/{id}/deactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView deactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody DeactivateUserRequest r){return service.deactivateUser(id,actor.id(),r.motivo());}
- @PatchMapping("/users/{id}/reactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public ReactivationResponse reactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody ReactivateUserRequest r){return service.reactivateUser(id,r,actor.id());}
- @PostMapping("/users/{id}/activation-code") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse regenerate(@AuthenticationPrincipal CurrentUser u,@PathVariable UUID id){return service.regenerate(id,u.id());}
- @PostMapping("/users/{id}/temporary-password") @PreAuthorize("hasRole('ADMINISTRADOR')") public void temporary(@AuthenticationPrincipal CurrentUser actor,@PathVariable UUID id,@Valid @RequestBody TemporaryPasswordRequest r){service.setTemporaryPassword(id,r,actor.id());}
+ @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
+ @PatchMapping("/users/{id}/deactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView deactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody DeactivateUserRequest r){return service.deactivateUser(id,actor.id(),r.motivo());}
+ @PatchMapping("/users/{id}/reactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public ReactivationResponse reactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody ReactivateUserRequest r){return service.reactivateUser(id,r,actor.id());}
+ @PostMapping("/users/{id}/activation-code") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse regenerate(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){return service.regenerate(id,u.id());}
+ @PostMapping("/users/{id}/temporary-password") @PreAuthorize("hasRole('ADMINISTRADOR')") public void temporary(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody TemporaryPasswordRequest r){service.setTemporaryPassword(id,r,actor.id());}
 }

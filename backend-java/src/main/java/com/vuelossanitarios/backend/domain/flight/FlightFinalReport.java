@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
 
 /**
@@ -21,11 +22,12 @@ import java.time.LocalDateTime;
  * FlightDocument.
  */
 @Entity
+@jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_informes_finales_vuelo"))
 @Table(name = "informes_finales_vuelo")
 public class FlightFinalReport extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "vuelo_id", nullable = false)
+@JoinColumn(name = "id_vuelos", nullable = false)
     private Flight flight;
 
     @Column(name = "version", nullable = false)
@@ -47,8 +49,39 @@ public class FlightFinalReport extends BaseEntity {
     private String resumen;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-@JoinColumn(name = "creado_por_usuario_id", nullable = false)
+@JoinColumn(name = "id_usuario_creador", nullable = false)
     private User creadoPor;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "estado_revision", nullable = false, length = 40)
+    private ReportReviewStatus estadoRevision = ReportReviewStatus.PRESENTADO;
+
+    @Column(name = "motivo_devolucion", columnDefinition = "NVARCHAR(MAX)")
+    private String motivoDevolucion;
+
+    @Column(name = "fecha_revision", columnDefinition = "DATETIMEOFFSET(3)")
+    private OffsetDateTime fechaRevision;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario_revisor")
+    private User revisor;
+
+    /** Procedencia de la decisión: FLUJO_ACTUAL o evidencia/falta de evidencia en datos anteriores a V42. */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "origen_decision", nullable = false, length = 40)
+    private ReportDecisionOrigin origenDecision = ReportDecisionOrigin.FLUJO_ACTUAL;
+
+    @Column(name = "adjunto_nombre_original", length = 255)
+    private String adjuntoNombreOriginal;
+
+    @Column(name = "adjunto_ubicacion", length = 255)
+    private String adjuntoUbicacion;
+
+    @Column(name = "adjunto_tamanio_bytes")
+    private Long adjuntoTamanioBytes;
+
+    @Column(name = "adjunto_sha256", length = 64, columnDefinition = "CHAR(64)")
+    private String adjuntoSha256;
 
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
@@ -80,6 +113,27 @@ public class FlightFinalReport extends BaseEntity {
 
     public User getCreadoPor() { return creadoPor; }
     public void setCreadoPor(User creadoPor) { this.creadoPor = creadoPor; }
+
+    public ReportReviewStatus getEstadoRevision() { return estadoRevision; }
+    public void setEstadoRevision(ReportReviewStatus x) { this.estadoRevision = x; }
+    public String getMotivoDevolucion() { return motivoDevolucion; }
+    public void setMotivoDevolucion(String x) { this.motivoDevolucion = x; }
+    public OffsetDateTime getFechaRevision() { return fechaRevision; }
+    public void setFechaRevision(OffsetDateTime x) { this.fechaRevision = x; }
+    public User getRevisor() { return revisor; }
+    public void setRevisor(User x) { this.revisor = x; }
+
+    public ReportDecisionOrigin getOrigenDecision() { return origenDecision; }
+    public void setOrigenDecision(ReportDecisionOrigin x) { this.origenDecision = x; }
+    public String getAdjuntoNombreOriginal() { return adjuntoNombreOriginal; }
+    public void setAdjuntoNombreOriginal(String x) { this.adjuntoNombreOriginal = x; }
+    public String getAdjuntoUbicacion() { return adjuntoUbicacion; }
+    public void setAdjuntoUbicacion(String x) { this.adjuntoUbicacion = x; }
+    public Long getAdjuntoTamanioBytes() { return adjuntoTamanioBytes; }
+    public void setAdjuntoTamanioBytes(Long x) { this.adjuntoTamanioBytes = x; }
+    public String getAdjuntoSha256() { return adjuntoSha256; }
+    public void setAdjuntoSha256(String x) { this.adjuntoSha256 = x; }
+    public boolean hasAttachment() { return adjuntoUbicacion != null; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
