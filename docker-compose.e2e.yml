@@ -1,7 +1,10 @@
 # Overlay descartable para la validación end-to-end. Se usa junto con
-# `docker compose -p vuelos-sanitarios-e2e -f docker-compose.yml -f docker-compose.e2e.yml`.
+# `docker compose --env-file .env --env-file .env.e2e -p vuelos-sanitarios-e2e
+#  -f docker-compose.yml -f docker-compose.e2e.yml`.
 services:
   sqlserver:
+    environment:
+      MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
     ports: !reset ["14331:1433"]
     # El primer arranque de SQL Server en un volumen vacío puede tardar más de
     # cinco segundos en responder a sqlcmd en equipos con recursos compartidos.
@@ -12,6 +15,7 @@ services:
 
   db-init:
     environment:
+      MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
       DB_NAME: vuelos_sanitarios_e2e
 
   backend:

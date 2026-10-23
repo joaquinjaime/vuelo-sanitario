@@ -110,7 +110,7 @@ npm run build
 La validación E2E contra SQL Server se ejecuta de forma aislada con:
 
 ```powershell
-docker compose -p vuelos-sanitarios-e2e -f docker-compose.yml -f docker-compose.e2e.yml up --build
+docker compose --env-file .env --env-file .env.e2e -p vuelos-sanitarios-e2e -f docker-compose.yml -f docker-compose.e2e.yml up --build
 ```
 
 No se deben usar esas pruebas para borrar, reseedear ni modificar una base habitual. Para inspeccionar una base de desarrollo sin alterarla, primero confirmar conexión y consultar `flyway_schema_history`; sólo el arranque normal del backend aplica migraciones pendientes.

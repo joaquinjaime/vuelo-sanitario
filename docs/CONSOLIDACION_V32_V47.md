@@ -1,5 +1,103 @@
 # Consolidación V32–V47
 
+## Estado vigente — cierre operativo del 23-10-2026
+
+Esta sección prevalece sobre los registros históricos que siguen. **La base habitual
+continúa en V32. No se autorizaron ni ejecutaron V33–V47 en ella.** La autorización
+posterior del operador cubrió exclusivamente la rotación administrativa de SA.
+
+### Seguridad y respaldo
+
+- El FULL real `vuelos_sanitarios_v32_full_20261023_023018.bak` se conserva íntegro
+  fuera de Git, en `%USERPROFILE%\Backups\VuelosSanitarios`. SHA-256:
+  `6DF632E1AAF85B26A95E301A763B2EB45C0713C2C76AF0B6227ED976F8E1B32F`.
+- Su archivo `.bak.aesgcm` usa AES-256-GCM, clave aleatoria por archivo, nonce de
+  96 bits y etiqueta autenticada de 128 bits. `scripts/protect-sql-backup.ps1`
+  verificó descifrado, tamaño y SHA-256 en procesos separados; rechazó una etiqueta
+  alterada. La copia descifrada se restauró realmente en el motor E2E existente.
+- Las claves están protegidas con DPAPI CurrentUser en
+  `%LOCALAPPDATA%\VuelosSanitarios\RecoveryKeys`, fuera de Git. Las ACL de las
+  carpetas de respaldo/claves y los archivos de configuración se limitaron al
+  operador, SYSTEM y Administradores. El original válido permanece conservado.
+  DPAPI requiere el mismo usuario/perfil Windows; esto no constituye recuperación
+  independiente ante pérdida de ese perfil. El cifrado BitLocker del disco sigue
+  sin confirmarse; el cifrado autenticado del archivo ya está comprobado.
+- Se corrigió el diagnóstico anterior: la contraseña SA completa había quedado
+  en dos registros del historial local de herramientas y era compartida por
+  ambos SQL activos. No se encontró en archivos versionados ni en el historial
+  Git. Se restringió el acceso al registro local sin volver a mostrar su contenido.
+- SA E2E fue rotada y separada en `.env.e2e` ignorado y protegido. SA habitual
+  también fue rotada, con autorización expresa, después de generar y comprobar
+  otro FULL V32: `vuelos_sanitarios_v32_full_pre_sa_rotation_20261023_032300.bak`,
+  SHA-256 `7F389AD837BC06B2D7AEB5DA693F5FDB12870447EDA5F46809502670F4299AA5`.
+  Este segundo respaldo también tiene copia cifrada y verificación de recuperación.
+- Los dos motores activos aceptan sus nuevas credenciales distintas y rechazan
+  la anterior. Se actualizaron SQL/healthchecks y consumidores `db-init`; el
+  `db-init` habitual quedó creado, sin ejecutarse. Los backend utilizan el login
+  de aplicación, no SA. Los conteos por tabla permanecieron iguales durante las
+  rotaciones; se conservaron imágenes y volúmenes. SQL/backend/frontend habituales
+  volvieron saludables, en V32. No se cambiaron credenciales de aplicación.
+- Los contenedores antiguos de validación detenidos conservan su configuración
+  histórica y volúmenes. No deben iniciarse con credenciales obsoletas: requieren
+  revisión y una rotación propia antes de reutilizarlos. No son servicios activos
+  ni fueron eliminados. Ningún secreto se incluye en esta documentación.
+
+### Preflight y compatibilidad
+
+| Comprobación actual | Resultado |
+|---|---|
+| Habitual después de rotar SA | ONLINE, Flyway V32, sin migraciones fallidas; diagnóstico de lectura sin `ISSUE` |
+| Historial completo | 44 SQL + 3 Java = 47 migraciones; validación Flyway contra habitual aprobada sin migrar |
+| Esquema habitual frente al FULL original restaurado | 652 líneas canónicas iguales; SHA-256 `7A4C7307B1100EE7CCC274466C32C9E674374969E934CCE5780242C2863FAE29` |
+| Restauración real descifrada | `RESTORE VERIFYONLY WITH CHECKSUM`, restauración y `DBCC CHECKDB` aprobados |
+| Ensayo real V32→V47 | 15 migraciones, cero fallos; 42 tablas, 84 FK y 30 CHECK habilitados/confiables; sin pérdida de filas observada |
+| Fixture sintético con cadena completa | Reconstrucción V32 con 32 migraciones, 15 adicionales hasta V47; conteos, identidades, V43/V44, V45, auditoría inmutable y unicidad V47 aprobados |
+| Integridad del fixture | `DBCC CHECKDB` y `CHECKCONSTRAINTS` aprobados |
+| Protección operativa del ejecutor | Migración habitual rechazada sin autorización; modo predeterminado del helper es Validate |
+
+Se corrigió el ejecutor de ensayo para utilizar `classpath:db/migration`, igual
+que Spring Boot. V16, V17 y V26 son migraciones Java existentes: **no son brechas
+del historial**. El antiguo ejecutor limitado a archivos SQL las había omitido.
+No se modificaron migraciones históricas ni se creó V48.
+
+El FULL real contiene una persona y un usuario, sin vuelos, documentos ni eventos
+de auditoría. Los backfills de esos dominios están cubiertos por el fixture,
+no por una población real inexistente en ese snapshot. Las suites generales ya
+aprobadas (301 backend, 102 frontend y las suites API/Chrome registradas abajo)
+no se repitieron manualmente: esta intervención se concentró en respaldo,
+rotación, cadena completa, build y smoke de los releases. El CI normal de GitHub
+se ejecuta con cada publicación según su configuración vigente.
+
+### Releases, mantenimiento y recuperación
+
+Las imágenes V32 originales se archivaron antes del mantenimiento en
+`habitual_v32_application_images_20261023.tar`, SHA-256
+`5D75DA0DA238D7E32F1D4EBBD4839FABBEABAC3D245F52F23FED3F30B2E46DD4`.
+El JAR habitual contiene migraciones solamente hasta V32: reiniciarlo durante
+la rotación no podía aplicar V33–V47. Se prepararon imágenes V47 y un bundle
+Flyway completo, separados del despliegue habitual; su manifest local registra
+IDs inmutables y hashes. El procedimiento reproducible, las condiciones de
+detención y la recuperación están en
+[ACTUALIZACION_BD_Y_RECUPERACION.md](./ACTUALIZACION_BD_Y_RECUPERACION.md).
+
+No se creó un tercer motor SQL ni se borraron volúmenes, imágenes o respaldos
+válidos. Las aplicaciones E2E se pausaron durante las operaciones de build/smoke
+para reducir competencia en la VM de 3,45 GiB y se restauraron después. Las
+bases y transferencias temporales de este preflight se retiran al cerrar las
+comprobaciones, conservando recibos de evidencia fuera de Git.
+
+### Publicación
+
+La rama de origen es `feature/integracion-funcional-v41`. Los cambios operativos
+se publican sobre ella y se integran por PR con merge normal, conservando los
+commits previos. El resultado remoto y el hash final se registrarán después de
+confirmar CI y merge. **La integración de código no actualiza la base habitual.**
+
+## Registro histórico de consolidación y estabilización
+
+Los apartados siguientes conservan evidencia por fecha. Sus estados de cifrado,
+credenciales, publicación y preparación quedan sustituidos por el estado vigente.
+
 **Fecha:** 22-10-2026
 **Alcance:** migraciones, integridad relacional, regresión, seguridad, concurrencia, tiempos y empaquetado.
 
@@ -19,7 +117,7 @@ La validación respalda la migración sobre el esquema reconstruido y los casos 
 | Integridad | `DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS` | Sin violaciones; claves foráneas y CHECK activos/confiables |
 | Reglas críticas | Pruebas transaccionales reversibles en la base sintética | Auditoría rechaza UPDATE/DELETE; V44 bloquea reversiones terminales; V45 permite historial y una asignación vigente; V47 rechaza DNI y usuario duplicados |
 
-Las brechas V16, V17 y V26 son parte del historial existente: Flyway reconoce 29 migraciones hasta V32 y 44 archivos en el conjunto actual. V44–V47 no requieren renumerar identidades. V44 canceló la solicitud sanitaria sintética enlazada a un vuelo cancelado. V43 preservó un informe incierto como histórico sin evidencia, sin inventar una decisión. V47 completó la responsabilidad de una baja solo cuando había evidencia de auditoría.
+El ejecutor histórico limitado a SQL reconoció 29 migraciones hasta V32 y 44 archivos SQL en el conjunto. V16, V17 y V26 existen como clases Java; el preflight del 23-10-2026 corrigió el classpath y validó la cadena completa de 47. V44–V47 no requieren renumerar identidades. V44 canceló la solicitud sanitaria sintética enlazada a un vuelo cancelado. V43 preservó un informe incierto como histórico sin evidencia, sin inventar una decisión. V47 completó la responsabilidad de una baja solo cuando había evidencia de auditoría.
 
 ## Prevalidación de la base habitual
 

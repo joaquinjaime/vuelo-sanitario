@@ -19,7 +19,6 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$migrationPath = Join-Path $root 'backend-java\src\main\resources\db\migration'
 $runner = Join-Path $PSScriptRoot 'FlywayMigrationRunner.java'
 $seed = Join-Path $PSScriptRoot 'seed-migration-v32-fixture.sql'
 $verify = Join-Path $PSScriptRoot 'verify-migration-v47-fixture.sql'
@@ -30,17 +29,16 @@ if (-not $env:MIGRATION_SQL_USERNAME -or -not $env:SQLCMDPASSWORD -or -not $env:
 }
 
 $classpathFile = Join-Path $root 'backend-java\target\flyway-validation-classpath.txt'
-if (-not (Test-Path -LiteralPath $classpathFile)) {
-    Push-Location (Join-Path $root 'backend-java')
-    try {
-        & mvn -q dependency:build-classpath "-Dmdep.outputFile=target/flyway-validation-classpath.txt"
-        if ($LASTEXITCODE -ne 0) { throw 'Maven could not prepare Flyway dependencies.' }
-    } finally { Pop-Location }
-}
+Push-Location (Join-Path $root 'backend-java')
+try {
+    & mvn -q -DskipTests compile dependency:build-classpath "-Dmdep.outputFile=target/flyway-validation-classpath.txt"
+    if ($LASTEXITCODE -ne 0) { throw 'Maven could not compile all SQL/Java migrations and prepare dependencies.' }
+} finally { Pop-Location }
 $classpath = (Get-Content -Raw -LiteralPath $classpathFile).Trim()
 $combinedClasspath = (Join-Path $root 'backend-java\target\classes') + ';' + $classpath
 $env:MIGRATION_JDBC_URL = "jdbc:sqlserver://$JdbcServer;databaseName=$Database;encrypt=true;trustServerCertificate=true"
-$env:MIGRATION_LOCATION = $migrationPath
+# Match Spring Boot: includes SQL resources and Java migrations V16, V17 and V26.
+$env:MIGRATION_LOCATION = 'classpath:db/migration'
 
 $connectionArgs = @('-S', $Server, '-U', $env:MIGRATION_SQL_USERNAME, '-C', '-I', '-b', '-d', 'master')
 $databaseQuery = "IF DB_ID(N'$Database') IS NOT NULL THROW 51130, 'Refusing to reuse an existing database.', 1; CREATE DATABASE [$Database]; SELECT DB_NAME(database_id) FROM sys.databases WHERE name=N'$Database';"

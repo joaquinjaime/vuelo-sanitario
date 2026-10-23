@@ -16,7 +16,7 @@ const PASSWORD = 'E2E-' + crypto.randomBytes(12).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sql(query, database = DB_NAME) {
-  const r = spawnSync('docker', ['exec', '-i', SQL_CONTAINER, 'bash', '-c', 'exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d ' + database + ' -W -h -1 -s "|" -i /dev/stdin'], { input: 'SET NOCOUNT ON; SET QUOTED_IDENTIFIER ON;\n' + query, encoding: 'utf8' });
+  const r = spawnSync('docker', ['exec', '-i', SQL_CONTAINER, 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d ' + database + ' -W -h -1 -s "|" -i /dev/stdin'], { input: 'SET NOCOUNT ON; SET QUOTED_IDENTIFIER ON;\n' + query, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
   if (r.status !== 0) { const e = new Error('SQL falló: ' + out.slice(0, 600)); e.sqlOutput = out; throw e; }
   return out.trim();

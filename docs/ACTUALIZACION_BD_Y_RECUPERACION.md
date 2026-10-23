@@ -1,5 +1,208 @@
 # Actualización y recuperación de SQL Server
 
+## Procedimiento vigente preparado el 23-10-2026
+
+**Habitual: V32. E2E: V47. La autorización recibida para rotar SA ya se ejecutó;
+no autoriza migrar el esquema habitual. Hace falta otra autorización explícita
+posterior al preflight para ejecutar los pasos de actualización siguientes.**
+
+### Artefactos verificados y destinos
+
+Los archivos se conservan en `%USERPROFILE%\Backups\VuelosSanitarios`, fuera de
+Git y con ACL restringida al operador, SYSTEM y Administradores. No se incorporan
+datos reales, imágenes Docker ni claves al repositorio.
+
+| Artefacto | SHA-256 |
+|---|---|
+| FULL original `vuelos_sanitarios_v32_full_20261023_023018.bak` | `6DF632E1AAF85B26A95E301A763B2EB45C0713C2C76AF0B6227ED976F8E1B32F` |
+| FULL previo a rotar SA `vuelos_sanitarios_v32_full_pre_sa_rotation_20261023_032300.bak` | `7F389AD837BC06B2D7AEB5DA693F5FDB12870447EDA5F46809502670F4299AA5` |
+| Imágenes V32 `habitual_v32_application_images_20261023.tar` | `5D75DA0DA238D7E32F1D4EBBD4839FABBEABAC3D245F52F23FED3F30B2E46DD4` |
+| Imágenes V47 `v47_application_images_20261023.tar` | `6938A03D0CF0A499815A3E85F226DC725BAA8E51BD58F40FE1D320E46BA3F333` |
+| Bundle `v47_flyway_bundle_20261023.zip` | `4AC10E255EB668C55BBCA97FFC47F50311B1E93876113122671C7181A914EBC1` |
+
+IDs inmutables, para no depender de etiquetas movibles:
+
+| Release | Backend | Frontend |
+|---|---|---|
+| V32 conservado | `sha256:baf1b7e054966d7b5f5be5323aa6f1ffba2c0a2436ffc4adf23d276d717a992a` | `sha256:91b0e79b2773d1681af5437de29a23a29571dcf153a43ccd32ce6f75c53d206d` |
+| V47 preparado | `sha256:7b9101528503b9997d6fc7639668ac27aba41bf29442f575d110d585d345993f` | `sha256:9b2b0b6a661a4f464172587d4f1d10fcc1230264bc19348b0e60c7dfcd61b0ba` |
+
+SQL habitual: proyecto `vuelos-sanitarios`, contenedor
+`vuelos-sanitarios-sqlserver-1`, base `vuelos_sanitarios`, volumen
+`vuelos-sanitarios_sqlserver_data`, red `vuelos-sanitarios_internal`.
+Se preservan el volumen `documents_data`, los datos y la imagen SQL actual.
+Los archivos físicos comprobados son `/var/opt/mssql/data/vuelos_sanitarios.mdf`
+y `/var/opt/mssql/data/vuelos_sanitarios_log.ldf`; los nombres lógicos respectivos
+son `vuelos_sanitarios` y `vuelos_sanitarios_log`.
+
+### Recuperación del respaldo cifrado
+
+Ambos FULL tienen archivo compañero `.bak.aesgcm`. AES-256-GCM autentica contenido
+y metadatos. Las claves DPAPI CurrentUser están en
+`%LOCALAPPDATA%\VuelosSanitarios\RecoveryKeys`. Para el FULL original, la clave
+se llama `vuelos_sanitarios_v32_full_20261023_023018.dpapi`; para el segundo,
+`vuelos_sanitarios_v32_full_pre_sa_rotation_20261023_032300.bak.dpapi`.
+Las contraseñas SA no son claves de estos respaldos.
+
+```powershell
+$backupDir = Join-Path $env:USERPROFILE 'Backups\VuelosSanitarios'
+$keyDir = Join-Path $env:LOCALAPPDATA 'VuelosSanitarios\RecoveryKeys'
+$original = 'vuelos_sanitarios_v32_full_20261023_023018'
+./scripts/protect-sql-backup.ps1 -Mode Verify `
+  -InputPath (Join-Path $backupDir "$original.bak.aesgcm") `
+  -KeyPath (Join-Path $keyDir "$original.dpapi")
+./scripts/protect-sql-backup.ps1 -Mode Restore `
+  -InputPath (Join-Path $backupDir "$original.bak.aesgcm") `
+  -KeyPath (Join-Path $keyDir "$original.dpapi") `
+  -OutputPath (Join-Path $backupDir 'recovered_v32_unique.bak')
+```
+
+`Restore` rechaza sobrescribir archivos. Compruebe SHA-256 y `RESTORE VERIFYONLY
+WITH CHECKSUM`, después restaure con nombre nuevo y ejecute `DBCC CHECKDB`.
+Ese circuito ya se ejecutó con el FULL original. El original válido se retiene.
+DPAPI exige el mismo usuario/perfil Windows; conserve ese perfil y no anuncie
+recuperación independiente de otro equipo sin preparar una custodia adicional.
+
+### Preflight actual y repetición antes de la ventana
+
+- SQL habitual ONLINE/V32, sin historial fallido y sin `ISSUE` en el diagnóstico
+  de `scripts/prevalidate-migrations.ps1`; Flyway valida las 47 migraciones.
+- Esquema habitual y restauración del FULL original: huella canónica idéntica
+  de 652 líneas. La copia real migró V32→V47, sin fallos, con DBCC aprobado y
+  conteos preservados. El fixture completo adicional aprobó las reglas V43–V47.
+- Build V47 y smoke sobre la copia real V47: salud backend UP, HTML 200 y login
+  inválido por el proxy 401. El manifest local `release_v47_manifest_20261023.json`
+  identifica hashes, imágenes y commit de aplicación de origen `6d051a8`.
+- La versión activa V32 contiene migraciones hasta V32 solamente. **No arranque
+  la imagen V47 contra habitual para probarla antes de la autorización.**
+- VM Docker: 3,45 GiB. Pausar los web E2E durante la ventana reduce competencia;
+  no iniciar SQL adicionales. Confirmar salud, espacio, memoria y ausencia de OOM
+  antes de seguir; no cambiar límites globales ni borrar volúmenes.
+
+Para recuperar el bundle, compruebe el hash del ZIP y use `Expand-Archive` en una
+carpeta nueva protegida. Debe contener `classes` y `libs`. No depende de Maven ni
+de descargas durante la ventana; usa el JRE de la imagen V47 archivada.
+
+```powershell
+$bundle = Join-Path $backupDir 'recovered_v47_flyway_20261023'
+Expand-Archive -LiteralPath (Join-Path $backupDir 'v47_flyway_bundle_20261023.zip') `
+  -DestinationPath $bundle
+$env:BACKEND_RELEASE_IMAGE = 'sha256:7b9101528503b9997d6fc7639668ac27aba41bf29442f575d110d585d345993f'
+$env:FRONTEND_RELEASE_IMAGE = 'sha256:9b2b0b6a661a4f464172587d4f1d10fcc1230264bc19348b0e60c7dfcd61b0ba'
+./scripts/invoke-prepared-flyway.ps1 -BundlePath $bundle `
+  -RuntimeImage $env:BACKEND_RELEASE_IMAGE
+docker compose --env-file .env -p vuelos-sanitarios -f docker-compose.yml `
+  -f docker-compose.release.yml config --quiet
+```
+
+El helper valida por defecto, con migraciones pendientes permitidas. Lee el
+login de aplicación desde el backend existente y lo pasa por entorno, nunca por
+argumentos ni archivos temporales. El runner resuelve las 44 SQL y 3 Java.
+
+### Actualización exacta — ejecutar solo después de la autorización pendiente
+
+1. Registrar aprobación y comienzo de mantenimiento. Repetir el diagnóstico de
+   lectura, versión V32, huella de esquema, salud, hashes y disponibilidad de los
+   releases V32/V47. Si cambió el esquema o hay conflictos, detenerse y revisar.
+2. Pausar backend/frontend E2E; detener frontend y backend habituales con
+   `docker stop --timeout 30 vuelos-sanitarios-frontend-1 vuelos-sanitarios-backend-1`.
+   Confirmar procesos detenidos, sin transacciones de usuario abiertas ni escritores
+   externos. Mantener ambos web habituales detenidos hasta terminar verificaciones;
+   el frontend V32 no queda accesible mientras cambia el backend/esquema.
+3. Tomar **otro** FULL inmediato `COPY_ONLY,CHECKSUM,COMPRESSION` de habitual con
+   nombre único, `RESTORE VERIFYONLY WITH CHECKSUM`, copia al directorio protegido,
+   SHA-256 y `protect-sql-backup.ps1 -Mode Protect` seguido de `-Mode Verify`.
+   Recuperar y restaurar con nombre temporal en el SQL E2E existente; ejecutar
+   DBCC. Nunca sustituir este FULL de ventana por un snapshot anterior. Registrar
+   conteos exactos por tabla y snapshot de documentos con escritores detenidos.
+4. Aplicar las 15 migraciones con los web habituales detenidos:
+
+   ```powershell
+   ./scripts/invoke-prepared-flyway.ps1 -BundlePath $bundle `
+     -RuntimeImage $env:BACKEND_RELEASE_IMAGE -Mode Migrate `
+     -HabitualMigrationExplicitlyAuthorized
+   ```
+
+   El switch representa la autorización humana recibida para esa ventana; no la
+   otorga. El helper también exige ambos web detenidos. No ejecutar `repair`, no
+   editar historial ni modificar migraciones ya aplicadas si algo falla.
+5. Comprobar Flyway V47 y cero fallidas, DBCC CHECKDB/CHECKCONSTRAINTS, conteos
+   antes/después y cambios esperados de catálogos, relaciones sin huérfanos, FK y
+   CHECK confiables/habilitados, índices V47 y trigger V46. No inyectar fixtures
+   ni ejecutar E2E destructivos sobre habitual.
+6. Arrancar primero el backend V47, con imagen fija y sin ejecutar db-init:
+
+   ```powershell
+   docker compose --env-file .env -p vuelos-sanitarios -f docker-compose.yml `
+     -f docker-compose.release.yml up -d --no-build --pull never --no-deps backend
+   docker exec vuelos-sanitarios-backend-1 curl --fail --silent http://127.0.0.1:8080/actuator/health
+   ```
+
+   Esperar salud UP/healthy, revisar arranque y lecturas acordadas. Arrancar
+   frontend solo después:
+
+   ```powershell
+   docker compose --env-file .env -p vuelos-sanitarios -f docker-compose.yml `
+     -f docker-compose.release.yml up -d --no-build --pull never --no-deps frontend
+   ```
+
+7. Verificar HTML/API/proxy, permisos y sesiones existentes mediante smoke de
+   lectura; mantener la ventana hasta aceptar integridad y salud. Reabrir accesos
+   y restaurar web E2E. Registrar versión V47, imágenes, hashes, salud, memoria y
+   ausencia de OOM. Conservar evidencias y el FULL anterior a la migración.
+
+### Recuperación exacta si falla la ventana
+
+Mantener web detenidos. Guardar evidencia de la base fallida; no descartarla sin
+capturar backup/diagnóstico. Recuperar el FULL inmediato verificado (descifrar si
+corresponde), copiarlo al directorio de backup del SQL habitual y volver a
+verificarlo. Elegir con el responsable restauración completa o corrección hacia
+adelante revisada. Para restauración aprobada, con escritores detenidos y destino
+comprobado, la secuencia SQL es:
+
+```sql
+USE master;
+ALTER DATABASE [vuelos_sanitarios] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+-- Sustituir por el FULL exacto y comprobado de esa ventana.
+RESTORE DATABASE [vuelos_sanitarios]
+FROM DISK=N'/var/opt/mssql/backup/FULL_INMEDIATO_VERIFICADO.bak'
+WITH REPLACE, CHECKSUM, RECOVERY,
+ MOVE N'vuelos_sanitarios' TO N'/var/opt/mssql/data/vuelos_sanitarios.mdf',
+ MOVE N'vuelos_sanitarios_log' TO N'/var/opt/mssql/data/vuelos_sanitarios_log.ldf';
+ALTER DATABASE [vuelos_sanitarios] SET MULTI_USER;
+```
+
+`WITH REPLACE` es destructivo y se reserva a la recuperación decidida, nunca al
+preflight. Si falla el restore, conservar mantenimiento y resolver el estado de
+la base antes de arrancar servicios. Restaurar documentos del mismo punto si
+corresponde. La base actual tenía 0 documentos y el volumen estaba vacío al
+preflight; repetir la comprobación en la ventana. Preservar todos los volúmenes.
+
+Verificar V32/DBCC/conteos y permisos; no restaurar `master` ni revertir la nueva
+contraseña SA. Para recuperar imágenes ausentes, usar `docker image load --input`
+con el TAR V32 cuyo hash se comprobó. Seleccionar los IDs V32 de la tabla anterior
+en `BACKEND_RELEASE_IMAGE` y `FRONTEND_RELEASE_IMAGE`, y ejecutar los comandos
+Compose anteriores (backend primero, frontend después de salud). Usar la `.env`
+actual, con SA ya rotada. Si se permitieron escrituras después del FULL, acordar
+su reconciliación antes de restaurar; no descartarlas silenciosamente.
+
+### Credenciales y cierre
+
+SA E2E usa `.env.e2e` ignorado y protegido; invocar su Compose con
+`--env-file .env --env-file .env.e2e` y ambos YAML. SA habitual usa `.env` actual.
+Los healthchecks/helpers usan SQLCMDPASSWORD, sin `-P` ni valores secretos en
+argumentos. No imprimir `docker inspect` completo, Compose expandido ni entorno.
+Los dos SA activos rechazaron la credencial anterior y aceptaron las nuevas;
+SQL/backend/frontend volvieron saludables. La rotación conservó V32 habitual,
+V47 E2E, imágenes y volúmenes. Los stacks antiguos detenidos requieren revisar
+su configuración/rotar sus propios motores antes de reutilizarlos.
+
+## Referencia histórica anterior al cierre operativo
+
+Los apartados siguientes conservan el procedimiento y evidencia anteriores. El
+procedimiento vigente de arriba prevalece: ahora hay cifrado de archivo verificado,
+credenciales rotadas, restauración real y releases preparados.
+
 ## Alcance
 
 El esquema se versiona con Flyway. La validación V32→V47 se ejecutó en SQL Server 2022 Developer, en una base sintética nueva con filas enlazadas de personas, usuarios, roles, pacientes, aeronaves, vuelos, tripulación, negociaciones, documentos/versiones, informes, obligaciones y auditoría. Esto no valida el contenido de una copia real de producción. La base habitual sigue en V32; antes de actualizarla se requiere una copia de seguridad verificada y una prevalidación sobre sus propios datos.

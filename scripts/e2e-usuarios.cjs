@@ -292,6 +292,6 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   pass('G historial: los eventos de una cuenta desactivada siguen mostrando a su responsable, sus vuelos y su persona se conservan y ningún evento de usuarios contiene hashes, tokens ni contraseñas');
   console.log(`E2E usuarios OK: ${passed} bloques; marca ${MARK}`);
   // la base habitual no se toca: sólo lectura
-  const habitual = spawnSync('docker', ['exec', '-i', 'vuelos-sanitarios-sqlserver-1', 'bash', '-c', 'exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d vuelos_sanitarios -W -h -1 -i /dev/stdin'], { input: 'SELECT TOP 1 version FROM flyway_schema_history ORDER BY installed_rank DESC\nGO\n', encoding: 'utf8' });
+  const habitual = spawnSync('docker', ['exec', '-i', 'vuelos-sanitarios-sqlserver-1', 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d vuelos_sanitarios -W -h -1 -i /dev/stdin'], { input: 'SELECT TOP 1 version FROM flyway_schema_history ORDER BY installed_rank DESC\nGO\n', encoding: 'utf8' });
   assert.equal(habitual.stdout.split(/\r?\n/)[0].trim(), '32', 'la base habitual permanece en V32'); pass('H la base habitual permanece en V32 (consulta de sólo lectura)');
 })().catch((e) => { console.error('FAIL:', e); process.exit(1); });
