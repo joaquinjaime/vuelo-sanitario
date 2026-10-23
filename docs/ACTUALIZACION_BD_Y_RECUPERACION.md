@@ -141,6 +141,8 @@ La operación sobre la base habitual continúa prohibida en esta etapa. El backu
 
 La base habitual permaneció en V32 durante toda la intervención. El backup de esta fecha no reemplaza el backup FULL que se debe tomar y verificar inmediatamente antes de una futura ventana. Antes de esa ventana también debe revisarse el estado de cifrado del almacenamiento con un operador administrador; detener si no se dispone del backup verificado, si la versión no es V32, si reaparecen conflictos de prevalidación o si el ensayo representativo disponible deja de corresponder a los datos actuales.
 
+La consolidación de código y el estado de publicación en GitHub se registran en [CONSOLIDACION_V32_V47.md](./CONSOLIDACION_V32_V47.md).
+
 ### Reconfirmación de evidencia (23-10-2026)
 
 La consulta de solo lectura confirmó Flyway V32 en `vuelos_sanitarios`; el SQL E2E persistente confirmó V47 y cero migraciones fallidas. Se inspeccionó el workspace y el directorio de backup configurado por SQL Server (`/var/opt/mssql/data`): no se encontró `.bak` ni `.trn`. No se ejecutó `RESTORE VERIFYONLY` ni se intentó una restauración sin archivo candidato. El SQL E2E se reutilizó para ejecutar código y suites funcionales; no se presentó esa instancia ni sus fixtures como copia representativa de la base habitual. La aplicación quedó validada y habilitada para nuevas implementaciones, mientras que la preparación de la actualización habitual permanece condicionada a un backup real, checksum/encabezado válidos, restauración aislada y `DBCC CHECKDB`.
