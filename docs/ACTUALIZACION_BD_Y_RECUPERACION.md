@@ -6,6 +6,11 @@
 no autoriza migrar el esquema habitual. Hace falta otra autorización explícita
 posterior al preflight para ejecutar los pasos de actualización siguientes.**
 
+Seguridad y preflight completados. La integración está publicada en `main`
+mediante [PR #1](https://github.com/joaquinjaime/vuelo-sanitario/pull/1), merge
+`d8e596a20ce596adcdb696f256550d3cded0f2ba`, con CI de rama y PR aprobado.
+**CASO 1: preparado para actualizar; la actualización real no se ejecutó.**
+
 ### Artefactos verificados y destinos
 
 Los archivos se conservan en `%USERPROFILE%\Backups\VuelosSanitarios`, fuera de

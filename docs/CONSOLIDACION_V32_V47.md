@@ -88,10 +88,34 @@ comprobaciones, conservando recibos de evidencia fuera de Git.
 
 ### Publicación
 
-La rama de origen es `feature/integracion-funcional-v41`. Los cambios operativos
-se publican sobre ella y se integran por PR con merge normal, conservando los
-commits previos. El resultado remoto y el hash final se registrarán después de
-confirmar CI y merge. **La integración de código no actualiza la base habitual.**
+La rama de origen `feature/integracion-funcional-v41` incorporó ocho commits
+previos y `6e45e63` de cierre operativo. El
+[PR #1](https://github.com/joaquinjaime/vuelo-sanitario/pull/1) se integró mediante
+merge normal en `main`, conservando los nueve commits. Commit de integración:
+`d8e596a20ce596adcdb696f256550d3cded0f2ba`. CI de
+[push](https://github.com/joaquinjaime/vuelo-sanitario/actions/runs/39912475160) y
+[PR](https://github.com/joaquinjaime/vuelo-sanitario/actions/runs/39912518229)
+aprobaron antes del merge. El checkout local se actualizó por fast-forward.
+La documentación de cierre se publica con commit/push normales posteriores.
+**La integración de código no actualiza la base habitual.**
+
+### Decisión de cierre
+
+**CASO 1 — PREPARADO PARA ACTUALIZAR.** Respaldo cifrado y recuperación verificados,
+SA activas rotadas, integración a main completada y preflight satisfactorio.
+Las imágenes V47 aprobaron smoke sobre la copia real migrada (UP/200/401). El ZIP
+Flyway se recuperó y validó contra habitual sin migrar; el TAR V32 se volvió a
+cargar correctamente. Se eliminaron únicamente las dos bases de este ensayo,
+los contenedores smoke y sus transferencias descifradas. Se conservaron los dos
+FULL originales, sus copias cifradas, recibos y los diez volúmenes existentes.
+Los seis servicios habituales/E2E quedaron saludables, sin OOM ni reinicios
+automáticos observados al cierre. Se recrearon intencionalmente ambos SQL al
+rotar SA y se reiniciaron las aplicaciones dentro de ese mantenimiento.
+
+La preparación no tiene otro bloqueo crítico identificado. Solo falta autorización
+expresa para la ventana V32→V47 habitual. El FULL inmediato y los controles del
+runbook deben repetirse dentro de esa ventana. El desarrollo funcional puede
+continuar; el despliegue V47 habitual permanece pendiente de esa autorización.
 
 ## Registro histórico de consolidación y estabilización
 
