@@ -44,7 +44,7 @@ Consulte [`.env.example`](.env.example). `MSSQL_SA_PASSWORD`, `DB_PASSWORD` y `J
 
 ## Migraciones y persistencia
 
-Flyway administra el esquema mediante las migraciones SQL y Java del backend, hasta V47. La base habitual instalada permanece en V32 hasta autorizar y ejecutar el procedimiento de [actualización y recuperación](docs/ACTUALIZACION_BD_Y_RECUPERACION.md); construir o integrar código no actualiza esa base. Los datos SQL se guardan en `sqlserver_data`; los documentos subidos se guardan en `documents_data`. Ambos sobreviven a `docker compose down`. Para la validación aislada existe el overlay optativo `docker-compose.e2e.yml`; no se carga con el comando habitual ni comparte la base o los volúmenes del proyecto normal. E2E requiere la credencial administrativa separada de `.env.e2e` (ignorado): use `--env-file .env --env-file .env.e2e` junto con ambos YAML.
+Flyway administra el esquema mediante las migraciones SQL y Java del backend, hasta V47. La base habitual y E2E están en V47; la actualización habitual autorizada del 23-10-2026, el respaldo portátil y las imágenes activas se registran en [actualización y recuperación](docs/ACTUALIZACION_BD_Y_RECUPERACION.md). Los datos SQL se guardan en `sqlserver_data`; los documentos subidos se guardan en `documents_data`. Ambos sobreviven a `docker compose down`. Para la validación aislada existe el overlay optativo `docker-compose.e2e.yml`; no se carga con el comando habitual ni comparte la base o los volúmenes del proyecto normal. E2E requiere la credencial administrativa separada de `.env.e2e` (ignorado): use `--env-file .env --env-file .env.e2e` junto con ambos YAML.
 
 ## Desarrollo sin Docker
 

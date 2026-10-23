@@ -1,8 +1,92 @@
 # Consolidación V32–V47
 
-## Estado vigente — cierre operativo del 23-10-2026
+## Estado vigente — actualización habitual completada el 23-10-2026
 
-Esta sección prevalece sobre los registros históricos que siguen. **La base habitual
+**CASO 3 — ACTUALIZACIÓN COMPLETADA CON AUTORIZACIÓN.** El operador autorizó
+expresamente la ventana V32→V47 y el despliegue de las imágenes validadas, sujeto
+a un FULL nuevo recuperable sin depender del perfil Windows. Las condiciones se
+cumplieron antes de migrar. Habitual y E2E están en **Flyway V47**, sin fallidas;
+los seis servicios quedaron saludables. La aceptación final terminó a las 04:09
+(America/Buenos_Aires). No se requirió recuperación a V32.
+
+### Respaldo inmediato e independencia del perfil Windows
+
+- FULL `COPY_ONLY,CHECKSUM,COMPRESSION` nuevo:
+  `vuelos_sanitarios_v32_full_pre_v47_20261023_040011.bak`, 3.645.440 bytes;
+  SHA-256 `1EDF8375DC26227F1BDF2B3B03E8F3F1E7DF58D3F2FEE94C22858722258222B3`.
+  `RESTORE VERIFYONLY WITH CHECKSUM` aprobado antes de cambiar el esquema.
+- Original y copia `.bak.aesgcm` en `C:\ProgramData\VuelosSanitarios\Backups`.
+  La clave AES-256 aleatoria está en la carpeta permanente separada
+  `C:\ProgramData\VuelosSanitarios\RecoveryKeys`, con ACL restringida al operador,
+  SYSTEM y Administradores. Este modo `PortableKeyFile` no utiliza DPAPI, EFS ni
+  claves del perfil. La clave es un secreto: no imprimir, versionar ni copiar
+  junto al respaldo para su distribución.
+- `scripts/RecoverPortableSqlBackup.java` descifró el FULL en un contenedor Linux
+  sin red, con clave suministrada por stdin y sin acceso al perfil ni a DPAPI.
+  La etiqueta GCM, tamaño y SHA-256 coincidieron. La copia descifrada se restauró
+  realmente en el SQL E2E existente; DBCC, esquema, conteos, datos originales,
+  roles y entradas Flyway coincidieron con el origen. El rechazo de una etiqueta
+  alterada también se comprobó. Los respaldos DPAPI anteriores siguen verificando.
+- Se respaldó el volumen de documentos en un TAR y una copia cifrada con otra
+  clave portátil. Se conservaron todos los respaldos anteriores. Copias y claves
+  portátiles están fuera del perfil, en este mismo equipo: esta verificación no
+  representa una copia externa ante pérdida física del equipo.
+
+### Protección, migración e integridad
+
+Se detuvieron frontend/backend habituales y E2E. Se comprobaron cero sesiones,
+solicitudes y transacciones de usuario ajenas en habitual, con dos muestras
+consecutivas. Un primer control transitorio no pasó; se mantuvo mantenimiento
+y no se terminó ninguna sesión ni se descartaron operaciones. Los controles
+posteriores aprobaron. La base estuvo READ_ONLY durante el respaldo/restauración
+de ensayo; volvió READ_WRITE únicamente después de aceptar esas verificaciones,
+con los web habituales aún detenidos.
+
+El bundle extraído coincidió byte por byte con el ZIP validado. Flyway aplicó
+**exactamente V33–V47: 15 migraciones exitosas**. No se editaron archivos de
+migración ni se modificaron las 32 entradas históricas. Sus valores originales
+se comprobaron mediante proyección de columnas previa y hashes de contenido.
+
+| Comprobación habitual | Resultado después de migrar y del smoke |
+|---|---|
+| Historial Flyway | 47 entradas exitosas; V47; 0 fallidas |
+| Tablas | 39→42; tres tablas nuevas vacías |
+| Claves foráneas / CHECK | 84 / 30; todas habilitadas y confiables |
+| DBCC CHECKDB / CHECKCONSTRAINTS | Aprobados; sin errores ni violaciones |
+| Personas / usuarios | 1 / 1, preservados |
+| Roles / asociaciones usuario-rol | 5 / 1, preservados; membresías SQL sin cambios |
+| Vuelos / documentos / versiones | 0 / 0 / 0, preservados |
+| Informes / auditoría | 0 / 0, preservados |
+| Catálogos de estado | Vuelo 7→8; solicitud sanitaria 4→5, inserciones previstas |
+| Contenido de columnas originales | Hashes coincidentes; se preservaron filas e identidades |
+| Índices únicos V47, tripulación e informe vigente | Habilitados |
+| Trigger de auditoría inmutable | Habilitado |
+
+### Despliegue y smoke
+
+Se desplegaron los IDs V47 ya validados, sin reconstruir imágenes ni tocar SQL
+o volúmenes. Backend `7b910152…` saludable antes de iniciar frontend `9b2b0b6a…`.
+El frontend se expuso primero solo en loopback para completar diez comprobaciones:
+HTML 200; acceso anónimo y login inválido 401; **login con la contraseña existente
+200**; cuenta, resumen de usuarios, roles, vuelos y auditoría 200; operación de
+consulta sin el rol requerido 403. No se cambiaron contraseñas de usuarios, roles
+ni datos de negocio. Los hashes originales siguieron coincidiendo tras el smoke.
+
+Después de aceptar esas comprobaciones se restauró el puerto normal 80 y se
+reanudó E2E. Se guardaron referencias de imágenes fijas en `.env` ignorado;
+las etiquetas locales normales apuntan a V47 y las imágenes V32 conservan
+etiquetas `preserved-v32-20261023`, IDs y TAR anteriores. Los diez volúmenes
+siguen presentes, sin crear un tercer SQL. No hubo OOM ni reinicios automáticos
+observados durante esta ventana. Las evidencias completas permanecen fuera de Git
+en `ProgramData\VuelosSanitarios\Backups\maintenance_*_20261023_040011.json`.
+
+Solo se modificaron herramientas de respaldo y documentación. El código funcional
+y las migraciones históricas permanecieron iguales. El procedimiento vigente y
+la recuperación están en [ACTUALIZACION_BD_Y_RECUPERACION.md](./ACTUALIZACION_BD_Y_RECUPERACION.md).
+
+## Registro de preparación previo a la actualización — 23-10-2026
+
+Esta sección registra el estado anterior a la autorización de esquema. **La base habitual
 continúa en V32. No se autorizaron ni ejecutaron V33–V47 en ella.** La autorización
 posterior del operador cubrió exclusivamente la rotación administrativa de SA.
 

@@ -1,6 +1,120 @@
 # Actualización y recuperación de SQL Server
 
-## Procedimiento vigente preparado el 23-10-2026
+## Estado vigente — actualización completada el 23-10-2026
+
+**Habitual y E2E están en Flyway V47. La actualización habitual y el despliegue
+fueron autorizados expresamente y terminaron con integridad y smoke aprobados.**
+No hubo migraciones fallidas ni se necesitó restaurar V32. Los seis servicios
+están saludables; frontend habitual accesible por su puerto normal 80.
+
+### Respaldo recuperable sin el perfil Windows
+
+FULL inmediato a la actualización:
+`vuelos_sanitarios_v32_full_pre_v47_20261023_040011.bak`, SHA-256
+`1EDF8375DC26227F1BDF2B3B03E8F3F1E7DF58D3F2FEE94C22858722258222B3`.
+Se conserva en `C:\ProgramData\VuelosSanitarios\Backups`, junto a su copia cifrada
+`.bak.aesgcm`; las claves portátiles permanecen separadas en
+`C:\ProgramData\VuelosSanitarios\RecoveryKeys`, con permisos explícitos únicamente
+para operador, SYSTEM y Administradores. La clave de ese FULL se llama
+`vuelos_sanitarios_v32_full_pre_v47_20261023_040011.key` y contiene 32 bytes
+aleatorios. No depende de DPAPI ni del usuario/perfil para descifrar. El control
+de acceso al archivo sí exige autorización del sistema; un administrador puede
+habilitar el acceso de otro operador sin necesitar secretos del perfil anterior.
+
+Este formato AES-256-GCM autentica contenido y metadatos. Se comprobó la recuperación
+desde Linux, la igualdad del SHA-256 y una restauración real en el SQL E2E existente,
+con DBCC y comparación de datos/roles/historial. Una etiqueta alterada se rechazó.
+No se eliminó ningún respaldo anterior. También hay TAR verificado y copia cifrada
+del volumen de documentos del mismo punto sin escritores. La custodia actual es
+local en el mismo equipo; no equivale a una copia fuera de ese equipo.
+
+Para verificar o recuperar en otro usuario/equipo con PowerShell 7.4+ y .NET con
+AES-GCM, trasladar por canales protegidos el archivo cifrado y la clave, manteniendo
+su custodia separada y permisos restringidos. No mostrar ni pegar el contenido de
+la clave en una consola, chat, argumento, Git o registro:
+
+```powershell
+$store = 'C:\ProgramData\VuelosSanitarios'
+$name = 'vuelos_sanitarios_v32_full_pre_v47_20261023_040011'
+./scripts/protect-sql-backup.ps1 -Mode Verify -KeyProtection PortableKeyFile `
+  -InputPath "$store\Backups\$name.bak.aesgcm" `
+  -KeyPath "$store\RecoveryKeys\$name.key"
+./scripts/protect-sql-backup.ps1 -Mode Restore -KeyProtection PortableKeyFile `
+  -InputPath "$store\Backups\$name.bak.aesgcm" `
+  -KeyPath "$store\RecoveryKeys\$name.key" `
+  -OutputPath "$store\Backups\recovered_v32_unique.bak"
+```
+
+`Restore` rechaza sobrescribir archivos. Verificar el hash anterior, después
+`RESTORE VERIFYONLY WITH CHECKSUM` y restaurar con nombre nuevo antes de usarlo
+en recuperación. El modo DPAPI sigue disponible y compatible para los respaldos
+anteriores, que conservan su dependencia del perfil.
+
+La recuperación alternativa en Linux usa `RecoverPortableSqlBackup.java`, Java 21
+y Jackson del bundle validado. Las clases y dependencias ya compiladas están en
+`C:\ProgramData\VuelosSanitarios\RecoveryTools`. En la comprobación realizada,
+se montaron únicamente ciphertext y herramientas, con red deshabilitada, y la
+clave se envió como una línea base64 por stdin en memoria. No se guardó una clave
+temporal ni se incluyó en el entorno o argumentos del contenedor. El helper valida
+GCM, tamaño y SHA-256 antes de crear el FULL recuperado.
+
+### Release habitual activo y comprobaciones
+
+Se utilizaron los IDs V47 de la tabla de artefactos que sigue; no hubo rebuild.
+`.env` local contiene `BACKEND_RELEASE_IMAGE` y `FRONTEND_RELEASE_IMAGE` con esos
+IDs, y las etiquetas normales locales se alinearon con esas mismas imágenes.
+Para operar el release activo desde la raíz del repo:
+
+```powershell
+docker compose --env-file .env -p vuelos-sanitarios -f docker-compose.yml `
+  -f docker-compose.release.yml config --quiet
+docker compose --env-file .env -p vuelos-sanitarios -f docker-compose.yml `
+  -f docker-compose.release.yml up -d --no-build --pull never --no-deps backend frontend
+```
+
+No imprimir la configuración expandida. No iniciar las imágenes V32 contra V47.
+Se mantienen las imágenes V32 originales con sus IDs, TAR y etiquetas explícitas
+`preserved-v32-20261023` para una recuperación de base y aplicación conjunta.
+
+Resultados: V33–V47 aplicadas, 47 entradas exitosas y ninguna fallida; las 32
+entradas previas intactas. DBCC CHECKDB/CHECKCONSTRAINTS aprobados, 42 tablas,
+84 FK/30 CHECK confiables y habilitados. Conteos y hashes de columnas originales,
+identidades y membresías SQL coincidieron con el FULL. Se preservaron 1 persona,
+1 usuario, 5 roles y 1 asignación; vuelos, documentos, versiones, informes y
+auditoría siguieron en 0. Las dos inserciones nuevas de catálogos y las tres tablas
+nuevas vacías son los cambios de población previstos.
+
+El smoke usó un puerto de loopback temporal y verificó HTML 200, login válido
+con credenciales existentes 200, autenticación/permisos de lectura 200, anónimo
+y login inválido 401 y rol insuficiente 403. Después se restableció puerto 80.
+Los web E2E se reanudaron; todos los servicios saludables, diez volúmenes intactos,
+sin nuevos motores SQL ni OOM. No se repitieron suites destructivas sobre habitual.
+
+### Recuperación de esta ventana si fuera necesaria
+
+Usar el FULL inmediato y las imágenes V32 registradas, con todos los escritores
+detenidos y transacciones ajenas resueltas. Preservar antes la base fallida para
+diagnóstico. El procedimiento SQL `WITH REPLACE` de la referencia siguiente
+requiere el archivo exacto de esta ventana. **Este FULL se tomó con la base
+READ_ONLY**: después de restaurar y validar V32, DBCC y datos, ejecutar
+`ALTER DATABASE [vuelos_sanitarios] SET READ_WRITE WITH NO_WAIT;` antes de reabrir
+la aplicación compatible. No revertir la contraseña SA rotada ni restaurar master.
+Restaurar documentos del mismo punto si cambiasen; en esta ventana permanecieron
+vacíos y no se escribieron durante el smoke.
+
+Seleccionar los IDs V32 tanto en las variables del proceso como en las referencias
+de `.env` antes de redeplegar, y alinear las etiquetas locales si se usan. Arrancar
+backend V32, esperar salud y luego frontend V32. No arrancar servicios si falla
+la restauración/verificación. El rollback preparado no se ejecutó porque la
+actualización y aceptación V47 aprobaron. Una recuperación futura después de
+reabrir escrituras exige acordar el punto y reconciliar datos posteriores al FULL.
+
+## Referencia de preparación y autorización previa
+
+El procedimiento siguiente documenta el estado antes de actualizar. Sus mensajes
+de V32 y autorización pendiente son históricos; el estado vigente es V47.
+
+## Procedimiento preparado el 23-10-2026
 
 **Habitual: V32. E2E: V47. La autorización recibida para rotar SA ya se ejecutó;
 no autoriza migrar el esquema habitual. Hace falta otra autorización explícita

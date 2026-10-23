@@ -1,24 +1,31 @@
 #requires -Version 7.4
 <#
 .SYNOPSIS
-  Protects a local SQL backup with AES-256-GCM and a Windows CurrentUser DPAPI key.
+  Protects a SQL backup with AES-256-GCM and a DPAPI or portable key file.
 .DESCRIPTION
   Never deletes or overwrites the original backup. Keys stay outside Git.
-  DPAPI recovery requires the same Windows user profile; retain the original
-  backup until an independently recoverable off-machine key strategy exists.
+  DPAPI requires the same Windows profile. PortableKeyFile stores a random binary
+  key in the explicitly chosen permanent key directory; protect it with strict ACLs
+  and keep it separate from the ciphertext. Never print or commit the key.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('Protect','Verify','Restore')][string]$Mode,
     [Parameter(Mandatory)][string]$InputPath,
     [Parameter(Mandatory)][string]$KeyPath,
-    [string]$OutputPath
+    [string]$OutputPath,
+    [ValidateSet('DPAPI','PortableKeyFile')][string]$KeyProtection='DPAPI'
 )
 $ErrorActionPreference = 'Stop'
-if (-not $IsWindows) { throw 'Windows DPAPI is required.' }
+if ($KeyProtection -eq 'DPAPI' -and -not $IsWindows) { throw 'Windows DPAPI is required for this key mode.' }
 if (-not [System.Security.Cryptography.AesGcm]::IsSupported) { throw 'AES-GCM is unavailable.' }
 $entropy = [System.Text.Encoding]::UTF8.GetBytes('VuelosSanitarios.SQLBackup.AESGCM.v1')
-$scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+$scope = if ($KeyProtection -eq 'DPAPI') { [System.Security.Cryptography.DataProtectionScope]::CurrentUser } else { $null }
+$keyDescription = if ($KeyProtection -eq 'DPAPI') {
+    'Windows DPAPI CurrentUser; same Windows profile required'
+} else {
+    'Portable AES-256 key file; strict filesystem ACL; no Windows profile dependency'
+}
 
 function Write-NewBytes([string]$Path, [byte[]]$Bytes) {
     $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew,
@@ -30,8 +37,15 @@ function Write-NewBytes([string]$Path, [byte[]]$Bytes) {
 function Read-VerifiedPlaintext([string]$EnvelopePath, [string]$ProtectedKeyPath) {
     $envelope = [System.IO.File]::ReadAllText($EnvelopePath) | ConvertFrom-Json
     if ($envelope.format -ne 'VS-SQLBACKUP-AES256GCM-1') { throw 'Unsupported encrypted backup format.' }
-    $key = [System.Security.Cryptography.ProtectedData]::Unprotect(
-        [System.IO.File]::ReadAllBytes($ProtectedKeyPath), $entropy, $scope)
+    $storedKey = [System.IO.File]::ReadAllBytes($ProtectedKeyPath)
+    try {
+        $key = if ($KeyProtection -eq 'DPAPI') {
+            [System.Security.Cryptography.ProtectedData]::Unprotect($storedKey, $entropy, $scope)
+        } else {
+            if ($storedKey.Length -ne 32) { throw 'A portable AES-256 key must contain exactly 32 bytes.' }
+            $storedKey.Clone()
+        }
+    } finally { [Array]::Clear($storedKey, 0, $storedKey.Length) }
     $ciphertext = [Convert]::FromBase64String($envelope.ciphertext)
     $plain = [byte[]]::new($ciphertext.Length)
     $aes = [System.Security.Cryptography.AesGcm]::new($key, 16)
@@ -40,6 +54,7 @@ function Read-VerifiedPlaintext([string]$EnvelopePath, [string]$ProtectedKeyPath
             [Convert]::FromBase64String($envelope.tag), $plain,
             [System.Text.Encoding]::UTF8.GetBytes($envelope.metadata))
         $metadata = $envelope.metadata | ConvertFrom-Json
+        if ($metadata.keyProtection -cne $keyDescription) { throw 'The selected key mode does not match the authenticated metadata.' }
         $actualHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($plain))
         if ($actualHash -cne $metadata.sha256 -or $plain.Length -ne $metadata.bytes) {
             throw 'Decrypted backup does not match the authenticated manifest.'
@@ -74,13 +89,16 @@ if ($Mode -eq 'Protect') {
         bytes=$plain.Length
         sha256=[Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($plain))
         createdUtc=[DateTime]::UtcNow.ToString('o')
-        keyProtection='Windows DPAPI CurrentUser; same Windows profile required'
+        keyProtection=$keyDescription
     } | ConvertTo-Json -Compress
     $aes = [System.Security.Cryptography.AesGcm]::new($key, 16)
     try {
         $aes.Encrypt($nonce, $plain, $ciphertext, $tag, [System.Text.Encoding]::UTF8.GetBytes($metadata))
-        $protectedKey = [System.Security.Cryptography.ProtectedData]::Protect($key, $entropy, $scope)
-        Write-NewBytes $keyFull $protectedKey
+        $storedKey = if ($KeyProtection -eq 'DPAPI') {
+            [System.Security.Cryptography.ProtectedData]::Protect($key, $entropy, $scope)
+        } else { $key.Clone() }
+        try { Write-NewBytes $keyFull $storedKey }
+        finally { [Array]::Clear($storedKey, 0, $storedKey.Length) }
         $envelope = [ordered]@{
             format='VS-SQLBACKUP-AES256GCM-1'; metadata=$metadata
             nonce=[Convert]::ToBase64String($nonce); tag=[Convert]::ToBase64String($tag)
@@ -89,7 +107,7 @@ if ($Mode -eq 'Protect') {
         Write-NewBytes $outFull ([System.Text.Encoding]::UTF8.GetBytes($envelope))
         $verified = Read-VerifiedPlaintext $outFull $keyFull
         [Array]::Clear($verified.Bytes, 0, $verified.Bytes.Length)
-        [pscustomobject]@{Mode=$Mode;EncryptedFile=$outFull;OriginalSHA256=($metadata|ConvertFrom-Json).sha256;Verified=$true;KeyProtection='DPAPI CurrentUser'}
+        [pscustomobject]@{Mode=$Mode;EncryptedFile=$outFull;OriginalSHA256=($metadata|ConvertFrom-Json).sha256;Verified=$true;KeyProtection=$keyDescription}
     } finally {
         $aes.Dispose()
         [Array]::Clear($plain, 0, $plain.Length)
