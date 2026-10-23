@@ -239,7 +239,7 @@ Esta sección actualiza la evidencia previa: el snapshot V32 real fue respaldado
 
 En esta ejecución `mvn -q test` aprobó 301 pruebas (0 fallos, 0 errores, 0 omitidas), Vitest aprobó 102 pruebas en 9 archivos y `npm run build` aprobó. No se repitieron las suites E2E completas: la validación SQL real de V32→V47 y las regresiones previas documentadas aportaron evidencia suficiente sin volver a iniciar una estabilización general.
 
-La futura actualización habitual queda **LISTA PARA SER AUTORIZADA** dentro de una ventana operativa, con un nuevo backup FULL verificado inmediatamente antes del cambio, escrituras detenidas, confirmación de V32 y prevalidación sin conflictos. El backup de este ensayo no sustituye ese respaldo. Mantener el procedimiento de recuperación completo y detener el cambio ante cualquier migración fallida, conflicto de datos, falta de espacio, OOM o estado de salud inestable.
+La actualización habitual queda **CONDICIONADA POR UN PROBLEMA CONCRETO**: no se pudo confirmar cifrado del volumen que conserva el backup (la consulta BitLocker requirió elevación; no había certificado SQL ni EFS). Antes de autorizar la ventana, un administrador debe confirmar BitLocker o colocar el backup FULL nuevo en un repositorio cifrado y protegido. Después se requiere el backup inmediato verificado, escrituras detenidas, confirmación de V32 y prevalidación sin conflictos. El backup de este ensayo no sustituye ese respaldo. Detener el cambio ante cualquier migración fallida, conflicto de datos, falta de espacio, OOM o estado de salud inestable.
 
 ### Consolidación Git
 
