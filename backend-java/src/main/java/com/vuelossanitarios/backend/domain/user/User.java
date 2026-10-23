@@ -48,6 +48,14 @@ public class User extends BaseEntity {
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
 
+    /** Quién dio de baja la cuenta y por qué (V47); se limpian al reactivarla, el historial permanece en la auditoría. */
+    @jakarta.persistence.ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario_baja")
+    private User bajaPor;
+
+    @Column(name = "motivo_baja", length = 500)
+    private String motivoBaja;
+
     @CreationTimestamp
 @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -82,6 +90,10 @@ public class User extends BaseEntity {
     public void invalidateCredentials() { versionCredenciales = versionCredenciales == null ? 1L : versionCredenciales + 1L; }
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime value) { fechaBaja = value; }
+    public User getBajaPor() { return bajaPor; }
+    public void setBajaPor(User value) { bajaPor = value; }
+    public String getMotivoBaja() { return motivoBaja; }
+    public void setMotivoBaja(String value) { motivoBaja = value; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

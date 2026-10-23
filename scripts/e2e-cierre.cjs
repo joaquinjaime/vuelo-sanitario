@@ -8,8 +8,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { PDF, ROOT, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
-const BASE_URL = 'http://127.0.0.1:18080/api';
+const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const BASE_URL = BASE;
 let passed = 0;
 const pass = (text) => { passed++; console.log('PASS: ' + text); };
 const HOUR = 3600000;
@@ -38,10 +38,10 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
 (async () => {
   const info = JSON.parse(spawnSync('docker', ['inspect', BACKEND], { encoding: 'utf8' }).stdout)[0];
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
-  assert.ok(env.DB_URL.includes('databaseName=vuelos_sanitarios_e2e;'), 'El backend no apunta a la base E2E');
+  assert.ok(env.DB_URL.includes(`databaseName=${DB_NAME};`), 'El backend no apunta a la base E2E');
   assert.equal(env.APP_E2E_CONTROLS_ENABLED, 'true', 'Falta el overlay E2E con reloj ajustable'); assert.ok(env.SPRING_PROFILES_ACTIVE.split(',').includes('e2e'), 'Falta el perfil e2e');
-  assert.equal(one('SELECT DB_NAME()'), 'vuelos_sanitarios_e2e');
-  assert.equal(one("SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL"), '43');
+  assert.equal(one('SELECT DB_NAME()'), DB_NAME);
+  assert.ok(Number(one("SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL")) >= 43);
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   await waitHealthy();
   const adminLogin = async () => (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
@@ -50,7 +50,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   const sweep = async () => (await ok('/e2e/sweep', { method: 'POST', token: admin })).notificacionesNuevas;
   const nowMs = async () => Date.parse((await clock.get()).now);
   await clock.reset();
-  pass('base E2E aislada en Flyway V43, backend saludable y reloj ajustable disponible sólo con el overlay E2E');
+  pass('base E2E aislada en Flyway >= V43, backend saludable y reloj ajustable disponible sólo con el overlay E2E');
 
   // ---------- Fixtures ----------
   const ops = await createUser(admin, 'CENTRO_OPERACIONES', 'ops'), ops2 = await createUser(admin, 'OPERACIONES', 'ops2');
@@ -264,7 +264,8 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   await blocked('rechazar asignación', `/flights/${assignC}/commander-assignment/response`, { method: 'POST', body: { aceptar: false, motivo: 'x' } });
   await blocked('contrapropuesta de horario', `/flights/${assignC}/commander-assignment/response`, { method: 'POST', body: { aceptar: false, motivo: 'x', salidaPropuesta: fmt(new Date(assignSlot.getTime() + 86400000)), llegadaPropuesta: fmt(new Date(assignSlot.getTime() + 86400000 + 7200000)) } });
   await blocked('planificación', `/flights/${pendingC.id}/operational-planning`, { method: 'POST', body: planBody }); await blocked('meteorología', `/flights/${pendingC.id}/weather`, { method: 'POST', body: { condiciones: 'Despejado', favorable: true } });
-  await blocked('cancelación', `/flights/${pendingC.id}/cancel`, { method: 'POST', body: { motivoCancelacionId: reason.id } }); await blocked('ruta', `/flights/${pendingC.id}/route`, { method: 'PUT', body: { version: 0, recorrido: 'Directo' } });
+  await call(`/flights/${pendingC.id}/cancel`, { method: 'POST', token: cmd.cmdC.token, body: { motivoCancelacionId: reason.id }, expect: [403] }); // el comandante no cancela vuelos (rechaza asignaciones)
+  await blocked('ruta', `/flights/${pendingC.id}/route`, { method: 'PUT', body: { version: 0, recorrido: 'Directo' } });
   await blocked('hangar', `/flights/${pendingC.id}/hangar/commander-observation`, { method: 'PUT', body: { version: 1, observaciones: 'Listo' } }); await blocked('bitácora', `/flights/${pendingC.id}/log`, { method: 'POST', body: logBody });
   await blocked('documento nuevo', `/flights/${pendingC.id}/documents/pdf`, { multipartFields: { documentTypeCode: docType, nombreDocumento: 'Otro' }, file: { bytes: PDF, name: 'otro.pdf' } });
   await blocked('bloqueo documental', `/documents/${docItem}/lock`, { method: 'POST' }); await blocked('liberar bloqueo', `/documents/${docItem}/lock`, { method: 'DELETE' }); await blocked('versión documental', `/documents/${docItem}/versions/pdf`, { multipartFields: {}, file: { bytes: PDF, name: 'v2.pdf' } });
@@ -288,7 +289,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   await call(`/documents/${docItem}/lock`, { method: 'POST', token: cmd.cmdC.token }); await multipart(`/documents/${docItem}/versions/pdf`, cmd.cmdC.token, {}, { bytes: pdfWith('% v2'), name: 'v2.pdf' }); await call(`/documents/${docItem}/lock`, { method: 'DELETE', token: cmd.cmdC.token, expect: [204] });
   await multipart(`/flights/${pendingC.id}/documents/pdf`, cmd.cmdC.token, { documentTypeCode: docType, nombreDocumento: 'Otro ' + MARK }, { bytes: PDF, name: 'otro.pdf' });
   await call(`/flights/${pendingC.id}/start`, { method: 'POST', token: ops.token }); assert.equal(stateOf(pendingC.id), 'EN_CURSO');
-  await call(`/flights/${assignC}/cancel`, { method: 'POST', token: cmd.cmdC.token, body: { motivoCancelacionId: reason.id } }); assert.equal(stateOf(assignC), 'CANCELADO');
+  await call(`/flights/${assignC}/cancel`, { method: 'POST', token: ops.token, body: { motivoCancelacionId: reason.id } }); assert.equal(stateOf(assignC), 'CANCELADO');
   const inbox = await ok('/notifications?size=100', { token: cmd.cmdC.token }); assert.ok(inbox.unread > 3); const target = inbox.items.find((n) => !n.leido); await call(`/notifications/${target.id}/read`, { method: 'POST', token: cmd.cmdC.token });
   assert.equal(count(`SELECT COUNT(*) FROM notificaciones WHERE id_notificaciones=${target.id} AND leido=1`), 1); assert.equal(await ok('/notifications/read-all', { method: 'POST', token: cmd.cmdC.token }), inbox.unread - 1); assert.equal((await ok('/notifications', { token: cmd.cmdC.token })).unread, 0);
   pass('C plazo con reloj controlado: aviso próximo exacto e idempotente, bloqueo exacto en el vencimiento SIN barrido previo, 14 acciones de escritura rechazadas con COMANDANTE_BLOQUEADO (asignación, rechazo, contrapropuesta, planificación, clima, cancelación, ruta, hangar, bitácora, documentos, inicio, nuevas asignaciones), consultas/login permitidos, avisos de vencida/bloqueo una sola vez y al responsable, desbloqueo y regresión de todas las funciones');

@@ -17,4 +17,6 @@ public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
     List<Aircraft> findByActivoTrueAndAeropuertoActualIdOrderByMatriculaAsc(Long aeropuertoId);
     @Query("select a from Aircraft a join fetch a.aeropuertoActual ap join ap.provinciaReferencial p where a.activo=true and p.id=:provinceId order by a.matricula")
     List<Aircraft> findActiveLocatedInProvince(@Param("provinceId") Long provinceId);
+    boolean existsByMatriculaIgnoreCase(String matricula);
+    boolean existsByMatriculaIgnoreCaseAndIdNot(String matricula, Long id);
 }

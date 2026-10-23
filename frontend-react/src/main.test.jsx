@@ -272,6 +272,7 @@ test("admin users stay visible when an unrelated admin resource fails (regressio
  localStorage.setItem("vs-session",JSON.stringify({username:"admin",roles:["ADMINISTRADOR"]}));
  window.location.hash="#/admin/usuarios";
  vi.mocked(api).mockImplementation((path) => {
+   if(path.startsWith("/auth/users/search")){const inactive=new URLSearchParams(path.split("?")[1]).get("status")==="INACTIVOS";const items=adminUsersFixture.filter(u=>inactive?u.activo===false:u.activo!==false);return Promise.resolve({items,total:items.length,page:0,size:20,totalPages:1});} // el listado ahora lo pagina el servidor
    if(path==="/auth/users")return Promise.resolve(adminUsersFixture);
    if(path==="/auth/me")return Promise.resolve({nombre:"Admin",apellido:"Inicial",dni:null,correos:[],telefonos:[]});
    if(path==="/catalogs/aircraft/admin")return Promise.reject(new Error("Error interno"));

@@ -3,17 +3,17 @@
  * Requiere el paquete `playwright` resoluble (NODE_PATH) y Chrome (E2E_CHROME opcional). Sólo crea datos marcados. */
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { PDF, ROOT, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { PDF, ROOT, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const UI = 'http://127.0.0.1:18081/';
+const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN estados_vuelo e ON e.id_estados_vuelo=v.id_estados_vuelo WHERE v.id_vuelos=${id}`);
 const obligation = (id) => one(`SELECT estado_obligacion FROM obligaciones_informe_final WHERE id_vuelos=${id} AND es_actual=1`);
 
 (async () => {
-  assert.equal(one('SELECT DB_NAME()'), 'vuelos_sanitarios_e2e'); await waitHealthy();
+  assert.equal(one('SELECT DB_NAME()'), DB_NAME); await waitHealthy();
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
   const ops = await createUser(admin, 'CENTRO_OPERACIONES', 'uiops'); const cmd = await createUser(admin, 'COMANDANTE', 'uicmd'); await provision(admin, cmd);

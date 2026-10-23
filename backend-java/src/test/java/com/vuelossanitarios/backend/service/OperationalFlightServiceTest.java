@@ -78,17 +78,23 @@ class OperationalFlightServiceTest {
  }
  @Test void crewReadIsRestrictedAndShowsCommander(){
   Flight f=new Flight();f.setId(40L);f.setComandante(commander);when(flights.findById(40L)).thenReturn(Optional.of(f));
-  CrewRole role=new CrewRole();role.setCodigo("COMANDANTE");role.setNombre("Comandante");FlightCrew c=new FlightCrew();c.setId(41L);c.setFlight(f);c.setUser(commander);c.setCrewRole(role);when(crews.findByFlightIdOrderByIdAsc(40L)).thenReturn(List.of(c));
+  CrewRole role=new CrewRole();role.setCodigo("COMANDANTE");role.setNombre("Comandante");FlightCrew c=new FlightCrew();c.setId(41L);c.setFlight(f);c.setUser(commander);c.setCrewRole(role);when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(40L)).thenReturn(List.of(c));
   assertTrue(service.crew(40L,commander.getId()).get(0).comandante());
   assertThrows(ApiException.class,()->service.crew(40L,admin.getId()));
  }
- @Test void crewRemovalIsAuditedAndCannotRemoveCommander(){
+ @Test void crewRemovalRequiresOperationsAndIsDelegatedToTheCrewService(){
   User ops=user("ops","OPERACIONES",null);when(users.findById(ops.getId())).thenReturn(Optional.of(ops));when(users.findWithRolesByUsername("ops")).thenReturn(Optional.of(ops));
-  Flight f=new Flight();f.setId(40L);f.setComandante(commander);FlightStatus status=new FlightStatus();status.setCodigo("PLANIFICADO");f.setEstadoVuelo(status);when(flights.lockById(40L)).thenReturn(Optional.of(f));
-  CrewRole role=new CrewRole();role.setCodigo("MEDICO");FlightCrew member=new FlightCrew();member.setId(41L);member.setFlight(f);member.setUser(admin);member.setCrewRole(role);when(crews.findById(41L)).thenReturn(Optional.of(member));
-  service.removeCrew(40L,41L,ops.getId());verify(crews).delete(member);verify(audit).record(eq(f),eq(ops),eq("FLIGHT_CREW"),eq(41L),eq("DELETE"),contains("MEDICO"),isNull());
-  member.setUser(commander);assertThrows(ApiException.class,()->service.removeCrew(40L,41L,ops.getId()));
-  status.setCodigo("FINALIZADO");member.setUser(admin);assertThrows(ApiException.class,()->service.removeCrew(40L,41L,ops.getId()));verify(crews,times(1)).delete(any());
+  service.removeCrew(40L,41L,ops.getId());verify(crewManagement).remove(40L,41L,ops.getId());
+  assertThrows(ApiException.class,()->service.removeCrew(40L,41L,admin.getId()));verify(crewManagement,times(1)).remove(any(),any(),any());verify(crews,never()).delete(any());
+ }
+ @Test void crewHistoryKeepsRemovedMembersAndMarksThemAsNotCurrent(){
+  Flight f=new Flight();f.setId(40L);f.setComandante(commander);when(flights.findById(40L)).thenReturn(Optional.of(f));
+  CrewRole role=new CrewRole();role.setCodigo("MEDICO");role.setNombre("Médico");User medic=user("medic","MEDICO",null);medic.setId(77L);
+  FlightCrew removed=new FlightCrew();removed.setId(42L);removed.setFlight(f);removed.setUser(medic);removed.setCrewRole(role);removed.darDeBaja(LocalDateTime.of(2030,1,1,10,0),commander,"RETIRO");
+  when(crews.findByFlightIdOrderByIdAsc(40L)).thenReturn(List.of(removed));when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(40L)).thenReturn(List.of());
+  assertTrue(service.crew(40L,commander.getId()).isEmpty());
+  var history=service.crew(40L,commander.getId(),true);
+  assertEquals(1,history.size());assertFalse(history.get(0).vigente());assertEquals("RETIRO",history.get(0).motivoBaja());assertEquals("cmd",history.get(0).bajaPor());assertFalse(history.get(0).comandante());
  }
  private Airport airport(String name,Province province){Airport a=new Airport();a.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));a.setNombre(name);a.setActivo(true);a.setProvinciaReferencial(province);return a;}
  private User user(String username,String role,Province province){User u=new User();u.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));u.setUsername(username);u.setEstadoCuenta("ACTIVO");Person p=new Person();CommanderProfile profile=new CommanderProfile();profile.setLicenseNumber("LIC-1");profile.setProvinciaActual(province);p.setCommanderProfile(profile);u.setPerson(p);Role r=new Role();r.setCodigo(role);UserRole link=new UserRole();link.setRole(r);u.setUserRoles(Set.of(link));return u;}

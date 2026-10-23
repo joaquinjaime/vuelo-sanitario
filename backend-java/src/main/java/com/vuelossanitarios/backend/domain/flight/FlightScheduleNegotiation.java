@@ -14,7 +14,10 @@ public class FlightScheduleNegotiation extends BaseEntity {
  @Column(name="fecha_hora_llegada_propuesta") private LocalDateTime fechaHoraLlegadaPropuesta;
  @Column(name="motivo_negociacion",columnDefinition="NVARCHAR(MAX)") private String motivo;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_actor") private User actor;
- @Column(name="fecha_ocurrencia",nullable=false) private LocalDateTime fechaOcurrencia=LocalDateTime.now();
+ @Column(name="fecha_ocurrencia",nullable=false) private LocalDateTime fechaOcurrencia;
+ /** Propuesta a la que responde (o que reemplaza) este evento; cada propuesta admite una sola respuesta. */
+ @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_negociacion_respondida") private FlightScheduleNegotiation respondida;
+ public FlightScheduleNegotiation getRespondida(){return respondida;} public void setRespondida(FlightScheduleNegotiation v){respondida=v;}
  public Flight getFlight(){return flight;} public void setFlight(Flight v){flight=v;}
  public String getTipo(){return tipo;} public void setTipo(String v){tipo=v;}
  public LocalDateTime getFechaHoraPropuesta(){return fechaHoraPropuesta;} public void setFechaHoraPropuesta(LocalDateTime v){fechaHoraPropuesta=v;}

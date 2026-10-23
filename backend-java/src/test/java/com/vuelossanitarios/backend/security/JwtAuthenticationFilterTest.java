@@ -45,6 +45,28 @@ class JwtAuthenticationFilterTest {
         assertNotNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
+    /** El 403 por contraseña temporal no puede pasar por sendError: el reenvío a /error sale sin autenticación y el punto de entrada lo convertiría en 401. */
+    @Test void aTemporaryPasswordTokenIsAuthenticatedButOnlyReachesTheMinimumEndpointsAndTheRejectionIsAFinal403() throws Exception {
+        JwtService jwt = new JwtService("01234567890123456789012345678901", 60_000);
+        User user = enabledUser(); user.setVersionCredenciales(3L); user.setDebeCambiarContrasena(true);
+        UserRepository repository = mock(UserRepository.class);
+        when(repository.findWithRolesByUsername("ana")).thenReturn(Optional.of(user));
+        String token = jwt.create(new CurrentUser(user.getId(), "ana", true), List.of("DTS"), 3L);
+        for (String[] allowed : new String[][] {{"GET", "/api/auth/me"}, {"POST", "/api/auth/me/password"}}) {
+            MockHttpServletRequest request = new MockHttpServletRequest(allowed[0], allowed[1]); request.addHeader("Authorization", "Bearer " + token);
+            FilterChain chain = mock(FilterChain.class); MockHttpServletResponse response = new MockHttpServletResponse();
+            new JwtAuthenticationFilter(jwt, repository).doFilter(request, response, chain);
+            verify(chain).doFilter(any(), any()); assertNotNull(SecurityContextHolder.getContext().getAuthentication(), "el contexto se establece antes de decidir"); SecurityContextHolder.clearContext();
+        }
+        for (String[] denied : new String[][] {{"GET", "/api/flights"}, {"POST", "/api/auth/me"}, {"GET", "/api/auth/users"}}) {
+            MockHttpServletRequest request = new MockHttpServletRequest(denied[0], denied[1]); request.addHeader("Authorization", "Bearer " + token);
+            FilterChain chain = mock(FilterChain.class); MockHttpServletResponse response = new MockHttpServletResponse();
+            new JwtAuthenticationFilter(jwt, repository).doFilter(request, response, chain);
+            assertEquals(403, response.getStatus()); assertNull(response.getErrorMessage(), "no se usa sendError (reenvío a /error)"); assertTrue(response.getContentAsString().contains("PASSWORD_CHANGE_REQUIRED"));
+            verify(chain, never()).doFilter(any(), any()); SecurityContextHolder.clearContext();
+        }
+    }
+
     private User enabledUser() {
         Person person = new Person(); person.setNombre("Ana"); person.setApellido("Pérez");
         User user = new User(); user.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); user.setPerson(person); user.setUsername("ana"); user.setActivo(true); user.setEstadoCuenta("ACTIVO");

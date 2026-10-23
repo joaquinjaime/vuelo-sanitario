@@ -6,15 +6,16 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const BASE = 'http://127.0.0.1:18080/api';
-const PROJECT = 'vuelos-sanitarios-e2e';
-const SQL_CONTAINER = `${PROJECT}-sqlserver-1`;
-const BACKEND = `${PROJECT}-backend-1`;
+const PROJECT = process.env.E2E_PROJECT || 'vuelos-sanitarios-e2e';
+const BASE = process.env.E2E_BASE || 'http://127.0.0.1:18080/api';
+const DB_NAME = process.env.E2E_DB_NAME || 'vuelos_sanitarios_e2e';
+const SQL_CONTAINER = process.env.E2E_SQL_CONTAINER || `${PROJECT}-sqlserver-1`;
+const BACKEND = process.env.E2E_BACKEND_CONTAINER || `${PROJECT}-backend-1`;
 const MARK = 'cie' + crypto.randomBytes(3).toString('hex');
 const PASSWORD = 'E2E-' + crypto.randomBytes(12).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function sql(query, database = "vuelos_sanitarios_e2e") {
+function sql(query, database = DB_NAME) {
   const r = spawnSync('docker', ['exec', '-i', SQL_CONTAINER, 'bash', '-c', 'exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d ' + database + ' -W -h -1 -s "|" -i /dev/stdin'], { input: 'SET NOCOUNT ON; SET QUOTED_IDENTIFIER ON;\n' + query, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
   if (r.status !== 0) { const e = new Error('SQL falló: ' + out.slice(0, 600)); e.sqlOutput = out; throw e; }
@@ -70,9 +71,10 @@ async function provision(admin, user) {
 }
 
 async function waitHealthy() {
-  for (let i = 0; i < 120; i++) { try { const r = await fetch('http://127.0.0.1:18080/actuator/health'); if (r.status === 200) return; } catch { /* reintentar */ } await sleep(2000); }
+  const health = process.env.E2E_HEALTH_URL || BASE.replace(/\/api\/?$/, '') + '/actuator/health';
+  for (let i = 0; i < 120; i++) { try { const r = await fetch(health); if (r.status === 200) return; } catch { /* reintentar */ } await sleep(2000); }
   throw new Error('El backend E2E no volvió a estar saludable');
 }
 
 
-module.exports = { PDF, ROOT, BASE, PROJECT, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy };
+module.exports = { PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy };

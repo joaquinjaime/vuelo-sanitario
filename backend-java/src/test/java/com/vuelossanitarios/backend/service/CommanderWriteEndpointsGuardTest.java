@@ -19,7 +19,7 @@ class CommanderWriteEndpointsGuardTest {
  private static final Set<String> REGULARIZATION=Set.of("FinalReportController.submit","FinalReportController.submitWithFile","FinalReportController.extension","NotificationController.read","NotificationController.readAll");
  /** Acciones operativas del comandante: cada una está cubierta por requireOperationalAccess en su servicio y por el E2E de bloqueo. */
  private static final Set<String> GUARDED=Set.of(
-  "FlightController.respondCommanderAssignment","FlightController.operationalPlanning","FlightController.cancel","FlightController.weather",
+  "FlightController.respondCommanderAssignment","FlightController.operationalPlanning","FlightController.weather",
   "FlightLogController.create","FlightRouteController.save","HangarInfoController.observe",
   "DocumentController.createPdf","DocumentController.replacePdf","DocumentController.acquireLock","DocumentController.releaseLock");
 

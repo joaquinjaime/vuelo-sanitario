@@ -273,6 +273,21 @@ export function LifecycleActions({ flight, run }) {
 }
 
 export const NOTIFICATION_LABEL = {
+  NEW_SANITARY_REQUEST: "Nueva solicitud",
+  EXTREME_URGENCY_REQUEST: "⚠ Extrema urgencia",
+  SCHEDULE_ACCEPTED: "Solicitud aprobada",
+  REQUEST_REJECTED: "Solicitud rechazada",
+  SCHEDULE_COUNTERPROPOSAL: "Propuesta de horario",
+  SCHEDULE_PROPOSAL_ACCEPTED: "Propuesta aceptada",
+  SCHEDULE_PROPOSAL_REJECTED: "Propuesta rechazada",
+  FLIGHT_CANCELLED: "Vuelo cancelado",
+  COMMANDER_ASSIGNED: "Asignación de vuelo",
+  COMMANDER_ASSIGNMENT_PENDING: "Asignación pendiente",
+  COMMANDER_ASSIGNMENT_ACCEPTED: "Comandante confirmó",
+  COMMANDER_ASSIGNMENT_REJECTED: "Comandante rechazó",
+  COMMANDER_SCHEDULE_PROPOSED: "Contrapropuesta del comandante",
+  COMMANDER_SCHEDULE_ACCEPTED: "Horario aceptado",
+  COMMANDER_SCHEDULE_REJECTED: "Horario rechazado",
   FLIGHT_FINISHED: "Vuelo finalizado",
   FLIGHT_COMPLETED: "Vuelo completado",
   FINAL_REPORT_PENDING: "Informe pendiente",

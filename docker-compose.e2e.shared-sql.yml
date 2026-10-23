@@ -1,0 +1,20 @@
+# Reutiliza una instancia SQL Server E2E ya estable, pero con una base de datos
+# nueva e independiente. No inicia el servicio sqlserver de este proyecto.
+services:
+  db-init:
+    environment:
+      DB_NAME: ${E2E_DB_NAME:?Set a unique synthetic E2E database name}
+
+  backend:
+    environment:
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${E2E_DB_NAME:?Set a unique synthetic E2E database name};encrypt=true;trustServerCertificate=true
+      CORS_ALLOWED_ORIGIN: ${E2E_UI_ORIGIN:-http://127.0.0.1:18083}
+
+  frontend:
+    image: vuelos-sanitarios-e2e-frontend
+    ports: !override ["127.0.0.1:18083:80"]
+
+networks:
+  internal: !override
+    external: true
+    name: ${E2E_SHARED_NETWORK:?Set a dedicated E2E-only Docker network}

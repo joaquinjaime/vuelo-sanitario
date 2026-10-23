@@ -22,6 +22,11 @@ import java.util.*;
  @PostMapping("/me/telefonos/{id}/principal") public void mainPhone(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){service.makePrimaryPhone(u.id(),id);}
  @GetMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<UserView> users(){return service.listUsers();}
  @GetMapping("/users/commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES','ADMINISTRADOR')") public List<CommanderView> commanders(){return service.listActiveCommanders();}
+ @GetMapping("/users/search") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserPage search(@RequestParam(required=false) String q,@RequestParam(required=false) String role,@RequestParam(required=false) String status,@RequestParam(required=false) Integer page,@RequestParam(required=false) Integer size){return service.search(q,role,status,page,size);}
+ @GetMapping("/users/summary") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserCounts summary(){return service.counts();}
+ @GetMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserDetail detail(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id){return service.detail(id,actor.id());}
+ @GetMapping("/roles") @PreAuthorize("hasRole('ADMINISTRADOR')") public List<RoleOption> roleOptions(){return service.roleOptions();}
+ @PostMapping("/users/{id}/credential-reset") @PreAuthorize("hasRole('ADMINISTRADOR')") public CredentialResetResponse resetCredentials(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id){return service.resetCredentials(id,actor.id());}
  @PostMapping("/users") @PreAuthorize("hasRole('ADMINISTRADOR')") public ActivationCodeResponse create(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody CreatePendingUserRequest r){return service.createPending(r,u.id());}
  @PutMapping("/users/{id}") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView update(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody UpdateUserRequest r){return service.updateUser(id,r,actor.id());}
  @PatchMapping("/users/{id}/deactivate") @PreAuthorize("hasRole('ADMINISTRADOR')") public UserView deactivate(@AuthenticationPrincipal CurrentUser actor,@PathVariable Long id,@Valid @RequestBody DeactivateUserRequest r){return service.deactivateUser(id,actor.id(),r.motivo());}
