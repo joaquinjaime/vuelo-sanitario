@@ -15,9 +15,9 @@ import org.springframework.http.HttpStatus;
 
 /** Ciclo de revisión de rutas (I-4) sobre repositorios simulados; la serialización real contra bloqueos está en las pruebas de integración y en el E2E de SQL Server. */
 class FlightRouteServiceTest {
- FlightRepository flights=mock(FlightRepository.class); FlightRouteRepository routes=mock(FlightRouteRepository.class); AirportRepository airports=mock(AirportRepository.class); UserRepository users=mock(UserRepository.class); FlightAuthorizationService access=mock(FlightAuthorizationService.class); AuditService audit=mock(AuditService.class); CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class);
+ FlightRepository flights=mock(FlightRepository.class); FlightRouteRepository routes=mock(FlightRouteRepository.class); AirportRepository airports=mock(AirportRepository.class); UserRepository users=mock(UserRepository.class); FlightAuthorizationService access=mock(FlightAuthorizationService.class); AuditService audit=mock(AuditService.class); NotificationService notifications=mock(NotificationService.class); CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class);
  Clock clock=Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"),ZoneId.of("UTC"));
- FlightRouteService service=new FlightRouteService(flights,routes,airports,users,access,audit,new ObjectMapper().findAndRegisterModules(),commanderAccess,clock);
+ FlightRouteService service=new FlightRouteService(flights,routes,airports,users,access,audit,notifications,new ObjectMapper().findAndRegisterModules(),commanderAccess,clock);
  Flight f; User commander,ops,otherOps; Airport origin,destination,alternate; final List<FlightRoute> store=new ArrayList<>();
  FlightRouteService.Input input(int version,Long alternate){return new FlightRouteService.Input(version,"Punto A, punto B",alternate,null,null,null,"Observación",null,null);}
  FlightRouteService.Input input(int version,String route,String reason,Boolean present){return new FlightRouteService.Input(version,route,null,null,null,null,null,reason,present);}
@@ -74,6 +74,7 @@ class FlightRouteServiceTest {
   service.save(1L,2L,input(0,null));present(2L);
   assertEquals(FlightRoute.PENDIENTE_REVISION,current().getEstadoRevision());assertSame(commander,current().getPresentadoPor());assertNotNull(current().getFechaPresentacion());
   verify(audit).record(eq(f),eq(commander),eq("FLIGHT_ROUTE"),any(),eq("SUBMIT"),contains("BORRADOR"),contains("PENDIENTE_REVISION"));
+  verify(notifications).createOncePreferred(eq(f),eq("ROUTE_PENDING_REVIEW"),contains("versión 1"),eq("ROUTE_SUBMITTED:100"),eq(List.of()),eq("OPERACIONES"),eq("CENTRO_OPERACIONES"));
   ApiException again=thrown(()->present(2L));assertEquals("TRANSICION_RUTA_NO_PERMITIDA",again.code());
  }
  @Test void operationsApprovesTheVersionRecordingWhoAndWhen(){
@@ -82,6 +83,7 @@ class FlightRouteServiceTest {
   FlightRoute r=current();assertEquals(FlightRoute.APROBADA,r.getEstadoRevision());assertSame(ops,r.getRevisadoPor());assertEquals(LocalDateTime.of(2030,1,1,0,0),r.getFechaRevision());assertEquals("Conforme",r.getObservacionesRevision());
   assertEquals("APROBADA",view.estado());assertTrue(view.inicio().permitido());
   verify(audit).record(eq(f),eq(ops),eq("FLIGHT_ROUTE"),any(),eq("APPROVE"),contains("PENDIENTE_REVISION"),contains("APROBADA"));
+  verify(notifications).createOnce(eq(commander),eq(f),eq("ROUTE_APPROVED"),contains("versión 1"),eq("ROUTE_APPROVED:100"));
  }
  @Test void theCommanderCannotApproveHisOwnRouteAndOtherRolesAreRejected(){
   service.save(1L,2L,input(0,null));present(2L);
@@ -119,6 +121,7 @@ class FlightRouteServiceTest {
   assertEquals(FlightRoute.DEVUELTA,current().getEstadoRevision());assertEquals("Falta indicar el aeropuerto alternativo",current().getObservacionesRevision());assertSame(ops,current().getRevisadoPor());
   assertEquals("PLANIFICADO",f.getEstadoVuelo().getCodigo());
   verify(audit).record(eq(f),eq(ops),eq("FLIGHT_ROUTE"),any(),eq("RETURN"),any(),contains("Falta indicar"));
+  verify(notifications).createOnce(eq(commander),eq(f),eq("ROUTE_RETURNED"),contains("Falta indicar el aeropuerto alternativo"),eq("ROUTE_RETURNED:100"));
   FlightRouteService.View view=service.get(1L,2L);assertEquals("DEVUELTA",view.estado());assertFalse(view.inicio().permitido());assertEquals("RUTA_DEVUELTA",view.inicio().codigo());
  }
  @Test void theCommanderCorrectsAReturnedRouteCreatingAnHistoricalVersionAndMustExplainTheChange(){
@@ -158,6 +161,8 @@ class FlightRouteServiceTest {
   approved();f.setOrigen(airport(20L,true));service.reassess(f,ops);
   FlightRoute r=current();assertEquals(FlightRoute.REQUIERE_REVISION,r.getEstadoRevision());assertSame(ops,r.getRevisadoPor());assertNotNull(r.getFechaInvalidacion());assertTrue(r.getCausaInvalidacion().contains("aeropuerto de origen"));
   verify(audit).record(eq(f),eq(ops),eq("FLIGHT_ROUTE"),any(),eq("INVALIDATE"),contains("APROBADA"),contains("REQUIERE_REVISION"));
+  verify(notifications).createOnce(eq(commander),eq(f),eq("ROUTE_REVIEW_REQUIRED"),contains("aeropuerto de origen"),eq("ROUTE_INVALIDATED:100"));
+  verify(notifications).createOncePreferred(eq(f),eq("ROUTE_REVIEW_REQUIRED"),contains("dejó de ser vigente"),eq("ROUTE_INVALIDATED:100"),eq(List.of()),eq("OPERACIONES"),eq("CENTRO_OPERACIONES"));
   assertEquals("RUTA_REQUIERE_REVISION",thrown(()->service.requireApprovedForStart(f)).code());
  }
  @Test void changingTheDestinationTheScheduleOrTheResourcesInvalidatesTheApproval(){

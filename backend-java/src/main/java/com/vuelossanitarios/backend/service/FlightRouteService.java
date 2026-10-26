@@ -61,8 +61,8 @@ public class FlightRouteService {
  private static final Set<String> UNDECIDED=Set.of(FlightRoute.BORRADOR,FlightRoute.PENDIENTE_REVISION);
  private static final String[] CONTEXT_LABELS={"el aeropuerto de origen","el aeropuerto de destino","el horario de salida","el horario de llegada","la aeronave","el comandante asignado"};
 
- private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess; private final Clock clock;
- public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,ObjectMapper j,CommanderReportAccessService ca,Clock c){commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;json=j;clock=c;}
+ private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final NotificationService notifications; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess; private final Clock clock;
+ public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,NotificationService n,ObjectMapper j,CommanderReportAccessService ca,Clock c){commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;notifications=n;json=j;clock=c;}
 
  @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->missing("Vuelo"));access.mayRead(f,actor);return view(f,actor);}
  @Transactional(readOnly=true) public List<Status> statuses(){
@@ -136,6 +136,8 @@ public class FlightRouteService {
   String before=serialize(auditView(r));
   r.setEstadoRevision(FlightRoute.REQUIERE_REVISION);r.setFechaInvalidacion(LocalDateTime.now(clock));r.setCausaInvalidacion(limit(String.join("; ",causes),500));routes.saveAndFlush(r);
   audit.record(f,actor,"FLIGHT_ROUTE",r.getId(),"INVALIDATE",before,serialize(auditView(r)));
+  notifyCommander(f,r,"ROUTE_REVIEW_REQUIRED","La ruta del vuelo "+f.getCodigo()+" requiere una nueva revisión: "+r.getCausaInvalidacion(),"ROUTE_INVALIDATED:");
+  notifyOperations(f,r,"ROUTE_REVIEW_REQUIRED","La ruta del vuelo "+f.getCodigo()+" dejó de ser vigente y requiere una nueva revisión.","ROUTE_INVALIDATED:");
  }
 
  /** Condición de inicio: la versión vigente debe estar aprobada y ser coherente con el vuelo. El vuelo ya está bloqueado por quien inicia. */
@@ -188,11 +190,22 @@ public class FlightRouteService {
   String before=serialize(auditView(r));
   r.setEstadoRevision(FlightRoute.PENDIENTE_REVISION);r.setPresentadoPor(actor);r.setFechaPresentacion(LocalDateTime.now(clock));routes.saveAndFlush(r);
   audit.record(f,actor,"FLIGHT_ROUTE",r.getId(),"SUBMIT",before,serialize(auditView(r)));
+  notifyOperations(f,r,"ROUTE_PENDING_REVIEW","La ruta versión "+r.getVersion()+" del vuelo "+f.getCodigo()+" está pendiente de revisión.","ROUTE_SUBMITTED:");
  }
  private void decide(Flight f,FlightRoute r,User reviewer,String state,String note,String op){
   String before=serialize(auditView(r));
   r.setEstadoRevision(state);r.setRevisadoPor(reviewer);r.setFechaRevision(LocalDateTime.now(clock));r.setObservacionesRevision(note);routes.saveAndFlush(r);
   audit.record(f,reviewer,"FLIGHT_ROUTE",r.getId(),op,before,serialize(auditView(r)));
+  if(FlightRoute.APROBADA.equals(state))notifyCommander(f,r,"ROUTE_APPROVED","Operaciones aprobó la ruta versión "+r.getVersion()+" del vuelo "+f.getCodigo()+".","ROUTE_APPROVED:");
+  else notifyCommander(f,r,"ROUTE_RETURNED","Operaciones devolvió la ruta versión "+r.getVersion()+" del vuelo "+f.getCodigo()+": "+note,"ROUTE_RETURNED:");
+ }
+
+ /** Las rutas se notifican dentro de la misma transacción que su transición. La clave por versión evita redelivery ante reintentos. */
+ private void notifyCommander(Flight f,FlightRoute r,String type,String message,String keyPrefix){
+  if(f.getComandante()!=null)notifications.createOnce(f.getComandante(),f,type,message,keyPrefix+r.getId());
+ }
+ private void notifyOperations(Flight f,FlightRoute r,String type,String message,String keyPrefix){
+  notifications.createOncePreferred(f,type,message,keyPrefix+r.getId(),List.of(),"OPERACIONES","CENTRO_OPERACIONES");
  }
 
  private View view(Flight f,Long actor){
