@@ -78,6 +78,19 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
+        <!-- Validación y normalización internacional de teléfonos (metadatos de numeración de Google) -->
+        <dependency>
+            <groupId>com.googlecode.libphonenumber</groupId>
+            <artifactId>libphonenumber</artifactId>
+            <version>9.0.42</version>
+        </dependency>
+
+        <!-- Envío de correo saliente (verificación de correos); sólo se activa con app.mail.enabled=true -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Driver JDBC de SQL Server -->
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>

@@ -6,5 +6,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.*;
 public interface DocumentItemRepository extends JpaRepository<FlightDocumentItem, Long> {
  List<FlightDocumentItem> findByFlightIdAndActivoTrueOrderByCreatedAtDesc(Long flightId);
+ List<FlightDocumentItem> findByFlightIdAndActivoFalseOrderByFechaBajaDesc(Long flightId);
+ boolean existsByFlightIdAndActivoTrueAndNombreDocumentoIgnoreCase(Long flightId, String nombreDocumento);
  @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select d from FlightDocumentItem d where d.id=:id") Optional<FlightDocumentItem> lockById(@Param("id") Long id);
 }

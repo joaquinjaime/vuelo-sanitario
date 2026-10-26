@@ -68,7 +68,7 @@ class AccountActivationIntegrationTest {
   auth.createBootstrapAdmin("admin.http","ClaveAdmin123","admin.http@example.test");
   String token=auth.login(new LoginRequest("admin.http","ClaveAdmin123")).accessToken();
   String dni="47355303";
-  String payload=json.writeValueAsString(new CreatePendingUserRequest("Ana","Pérez",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("ana.http@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","PERSONAL"))));
+  String payload=json.writeValueAsString(new CreatePendingUserRequest("Ana","Pérez",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("ana.http@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","AR","PERSONAL"))));
   var result=mvc.perform(post("/api/auth/users").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload))
    .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").isNotEmpty()).andExpect(jsonPath("$.expiraEn").value("24 horas")).andReturn();
   String code=json.readTree(result.getResponse().getContentAsString()).get("codigo").asText();
@@ -92,7 +92,7 @@ class AccountActivationIntegrationTest {
   auth.createBootstrapAdmin("admin.http","ClaveAdmin123","admin.http@example.test");
   String token=auth.login(new LoginRequest("admin.http","ClaveAdmin123")).accessToken();
   for(String dni:List.of("47355304","47355305")){
-   String payload=json.writeValueAsString(new CreatePendingUserRequest("Prueba","Pendiente",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("pending."+dni+"@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","PERSONAL"))));
+   String payload=json.writeValueAsString(new CreatePendingUserRequest("Prueba","Pendiente",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("pending."+dni+"@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","AR","PERSONAL"))));
    mvc.perform(post("/api/auth/users").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload))
     .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").isNotEmpty());
   }
@@ -102,7 +102,7 @@ class AccountActivationIntegrationTest {
   ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
    "Ana","Pérez","30111222",null,null,Set.of("OPERACIONES"),
    List.of(new ContactRequest("ana@example.test","PERSONAL")),
-   List.of(new PhoneRequest("3815555555","PERSONAL"))), null);
+   List.of(new PhoneRequest("3815555555","AR","PERSONAL"))), null);
 
   String body="{\"dni\":\"30111222\",\"codigo\":\""+activation.codigo()+"\",\"username\":\"ana.operaciones\",\"password\":\"NuevaClave123\",\"confirmacionPassword\":\"NuevaClave123\"}";
   mvc.perform(post("/api/auth/activar-cuenta").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNoContent());
@@ -121,7 +121,7 @@ class AccountActivationIntegrationTest {
   ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
    "Usuario", "JWT", dni, null, null, Set.of("OPERACIONES"),
    List.of(new ContactRequest("jwt." + dni + "@example.test", "PERSONAL")),
-   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+   List.of(new PhoneRequest("3815555555", "AR", "PERSONAL"))), null);
   String username = "jwt." + dni;
   mvc.perform(post("/api/auth/activar-cuenta")
     .contentType(MediaType.APPLICATION_JSON)
@@ -146,7 +146,7 @@ class AccountActivationIntegrationTest {
   ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
    "Usuario", "Temporal", dni, null, null, Set.of("OPERACIONES"),
    List.of(new ContactRequest("temporary." + dni + "@example.test", "PERSONAL")),
-   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+   List.of(new PhoneRequest("3815555555", "AR", "PERSONAL"))), null);
   String username = "temporary." + dni;
   mvc.perform(post("/api/auth/activar-cuenta")
     .contentType(MediaType.APPLICATION_JSON)
@@ -173,7 +173,7 @@ class AccountActivationIntegrationTest {
   ActivationCodeResponse activation=auth.createPending(new CreatePendingUserRequest(
    "Usuario","Reactivado",dni,null,null,Set.of("OPERACIONES"),
    List.of(new ContactRequest("reactivate."+dni+"@example.test","PERSONAL")),
-   List.of(new PhoneRequest("3815555555","PERSONAL"))), administratorId);
+   List.of(new PhoneRequest("3815555555","AR","PERSONAL"))), administratorId);
   auth.activate(new ActivateAccountRequest(dni,activation.codigo(),"reactiva."+dni,"ClaveReactiva12","ClaveReactiva12"));
   Long userId=users.findWithRolesByUsername("reactiva."+dni).orElseThrow().getId();
   var inactive=users.findById(userId).orElseThrow();
@@ -193,7 +193,7 @@ class AccountActivationIntegrationTest {
   ActivationCodeResponse activation = auth.createPending(new CreatePendingUserRequest(
    "Usuario", "DTS", dni, null, null, Set.of("DTS"),
    List.of(new ContactRequest("dts." + dni + "@example.test", "PERSONAL")),
-   List.of(new PhoneRequest("3815555555", "PERSONAL"))), null);
+   List.of(new PhoneRequest("3815555555", "AR", "PERSONAL"))), null);
   String username = "dts." + dni;
   mvc.perform(post("/api/auth/activar-cuenta").contentType(MediaType.APPLICATION_JSON)
     .content(json.writeValueAsString(new ActivateAccountRequest(dni, activation.codigo(), username, "ClaveJWT1234", "ClaveJWT1234"))))

@@ -65,7 +65,7 @@ class UserAdministrationIntegrationTest {
   var b=request(org.springframework.http.HttpMethod.valueOf(method),path).header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON);return mvc.perform(body==null?b:b.content(body));
  }
  private String createBody(String name,String dni,String roles,String license){
-  return "{\"nombre\":\""+name+"\",\"apellido\":\"Nueva\",\"dni\":\""+dni+"\",\"roles\":["+roles+"],"+(license==null?"":"\"licenciaAeronautica\":\""+license+"\",")+"\"correos\":[{\"direccion\":\""+name.toLowerCase()+"@example.test\",\"tipo\":\"PERSONAL\"}],\"telefonos\":[{\"numero\":\"3815550000\",\"tipo\":\"PERSONAL\"}]}";
+  return "{\"nombre\":\""+name+"\",\"apellido\":\"Nueva\",\"dni\":\""+dni+"\",\"roles\":["+roles+"],"+(license==null?"":"\"licenciaAeronautica\":\""+license+"\",")+"\"correos\":[{\"direccion\":\""+name.toLowerCase()+"@example.test\",\"tipo\":\"PERSONAL\"}],\"telefonos\":[{\"pais\":\"AR\",\"numero\":\"3815550000\",\"tipo\":\"PERSONAL\"}]}";
  }
  /** Alta, activación y primer ingreso de una cuenta; devuelve su id y nombre de usuario. */
  private long[] provision(String name,String roles,String license) throws Exception {

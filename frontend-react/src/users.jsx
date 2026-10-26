@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "./api";
 import { formatInstant } from "./audit";
+import { DniRectification } from "./dniRectification";
 
 const message = (e, fallback = "No se pudo completar la operación") => e?.message || fallback;
 const dt = (v) => (v ? String(v).replace("T", " ").slice(0, 16) : "—");
@@ -22,15 +23,15 @@ export function SecretNotice({ eyebrow, title, intro, label, secret, onClose }) 
 }
 
 /** Historial administrativo de la cuenta: reutiliza la auditoría V46 (sólo administración) con los eventos USER y USER_ROLE. */
-function UserHistory({ userId, refresh }) {
+function UserHistory({ userId, patientId, refresh }) {
   const [items, setItems] = useState(null), [error, setError] = useState(""), [zone, setZone] = useState("America/Argentina/Tucuman");
   useEffect(() => {
     let active = true; setItems(null); setError("");
-    Promise.all(["USER", "USER_ROLE"].map((t) => api(`/audit?entityType=${t}&entityId=${userId}&size=20`)))
+    Promise.all([["USER", userId], ["USER_ROLE", userId], ...(patientId ? [["PATIENT_IDENTITY", patientId]] : [])].map(([t, entity]) => api(`/audit?entityType=${t}&entityId=${entity}&size=20`)))
       .then((pages) => { if (!active) return; setZone(pages[0]?.timeZone || zone); setItems(pages.flatMap((p) => p?.items || []).sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt) || b.id - a.id)); })
       .catch((e) => { if (active) setError(message(e, "No se pudo cargar el historial")); });
     return () => { active = false; };
-  }, [userId, refresh]);
+  }, [userId, patientId, refresh]);
   return <section className="user-history" aria-label="Historial administrativo"><h4>Historial administrativo</h4>
     {error && <p role="alert" className="error">{error}</p>}{!items && !error && <p role="status">Cargando historial…</p>}
     {items && items.length === 0 && <p>Esta cuenta todavía no tiene operaciones administrativas registradas.</p>}
@@ -72,9 +73,11 @@ function Detail({ id, roleOptions, notify, onChanged, onClose }) {
     <dl className="audit-facts">
       <div><dt>DNI</dt><dd>{d.dni || "—"}</dd></div><div><dt>Usuario</dt><dd>{d.username || "Sin activar"}</dd></div><div><dt>Fecha de nacimiento</dt><dd>{d.fechaNacimiento || "—"}</dd></div><div><dt>Alta</dt><dd>{dt(d.fechaCreacion)}</dd></div>
       <div><dt>Roles</dt><dd>{roleText(d.roles)}</dd></div>{d.licenciaAeronautica && <div><dt>Licencia aeronáutica</dt><dd>{d.licenciaAeronautica}</dd></div>}{d.provinciaActual && <div><dt>Provincia actual</dt><dd>{d.provinciaActual}</dd></div>}
-      <div><dt>Correos</dt><dd>{d.correos.map((c) => c.valor).join(", ") || "—"}</dd></div><div><dt>Teléfonos</dt><dd>{d.telefonos.map((c) => c.valor).join(", ") || "—"}</dd></div>
+      <div><dt>Correos</dt><dd>{d.correos.map((c) => `${c.valor} (${c.verificacion === "VERIFICADO" ? "verificado" : "sin verificar"})`).join(", ") || "—"}</dd></div><div><dt>Teléfonos</dt><dd>{d.telefonos.map((c) => `${c.valor} (${c.pais ? "formato validado" : "sin validar"})`).join(", ") || "—"}</dd></div>
       {inactive && <><div><dt>Desactivada</dt><dd>{dt(d.fechaBaja)}</dd></div><div><dt>Desactivada por</dt><dd>{d.bajaPor || "No registrado"}</dd></div><div><dt>Motivo</dt><dd>{d.motivoBaja || "No registrado"}</dd></div></>}
     </dl>
+    <DniRectification key={`dni-${d.id}`} path={`/auth/users/${id}/dni`} current={{ dni: d.dni, version: d.versionIdentidad, cuentaEstado: d.estado }} scope={d.pacienteId ? "cuenta de usuario y ficha de paciente" : "cuenta de usuario"} reloadLabel="Volver a cargar la cuenta" notify={notify}
+      onReload={load} onChanged={async () => { await load(); setRefresh((x) => x + 1); await onChanged?.(); }} />
     <Blockers items={blockers} title="La operación fue rechazada" />
     <form className="grid-form" onSubmit={inactive ? reactivate : save} aria-label={inactive ? "Reactivar cuenta" : "Edición administrativa"}>
       <h4 className="wide">{inactive ? "Reactivar cuenta" : "Edición administrativa"}</h4>
@@ -84,7 +87,7 @@ function Detail({ id, roleOptions, notify, onChanged, onClose }) {
       {form.roles.includes("COMANDANTE") && <label>Licencia aeronáutica<input value={form.licenciaAeronautica} onChange={(e) => setForm({ ...form, licenciaAeronautica: e.target.value })} /></label>}
       <fieldset className="wide"><legend>Roles</legend>{roleOptions.map((r) => <label className="check" key={r.codigo}><input type="checkbox" disabled={d.esUsted && !inactive} checked={form.roles.includes(r.codigo)} onChange={() => toggleRole(r.codigo)} />{ROLE_LABEL[r.codigo] || r.nombre}</label>)}
         {d.esUsted && !inactive && <p className="hint">No puede modificar sus propios roles.</p>}{!inactive && <p className="hint">Al cambiar los roles se cierran las sesiones abiertas de la cuenta. No se puede retirar un rol con responsabilidades vigentes.</p>}</fieldset>
-      <p className="hint wide">El DNI identifica a la persona en todo el sistema y no se modifica desde aquí. Los datos de contacto los mantiene cada usuario desde Mi cuenta.</p>
+      <p className="hint wide">El DNI identifica a la persona en todo el sistema: se corrige únicamente con "Rectificar DNI", que exige motivo y cotejo documental. Los datos de contacto los mantiene cada usuario desde Mi cuenta.</p>
       <div className="wide form-actions"><button disabled={busy}>{busy ? "Guardando…" : inactive ? "Reactivar y generar contraseña temporal" : "Guardar cambios"}</button></div>
     </form>
     {!inactive && d.username && <section className="user-actions" aria-label="Acciones sobre la cuenta">
@@ -96,7 +99,7 @@ function Detail({ id, roleOptions, notify, onChanged, onClose }) {
       {blockedReason && <p className="hint">No se puede desactivar: {blockedReason}</p>}
     </section>}
     {pending && <div className="form-actions"><button type="button" disabled={busy} onClick={regenerate}>Regenerar código de activación</button></div>}
-    <UserHistory userId={id} refresh={refresh} />
+    <UserHistory userId={id} patientId={d.pacienteId} refresh={refresh} />
     {secret && secret.kind === "activation" && <SecretNotice eyebrow="CÓDIGO DE ACTIVACIÓN" title="Código de activación" intro="Este código se mostrará una sola vez. Guardalo antes de cerrar este aviso." label="" secret={secret.secret} onClose={() => setSecret(null)} />}
     {secret && secret.kind !== "activation" && <SecretNotice eyebrow={secret.kind === "reset" ? "CREDENCIALES RESTABLECIDAS" : "USUARIO REACTIVADO"} title="Contraseña temporal" intro="Se muestra una única vez y no puede consultarse después. El usuario deberá cambiarla al iniciar sesión." label={<>Usuario: <strong>{secret.username}</strong></>} secret={secret.secret} onClose={() => setSecret(null)} />}
   </section>;

@@ -33,7 +33,7 @@ class UserAdministrationServiceTest {
  private Role role(String code){Role r=new Role();r.setCodigo(code);r.setActivo(true);return r;}
  private User account(String... codes){Person p=new Person();p.setId(ThreadLocalRandom.current().nextLong(1,Long.MAX_VALUE));p.setNombre("Ana");p.setApellido("Pérez");p.setDni("30111222");User u=new User();u.setId(ThreadLocalRandom.current().nextLong(1,Long.MAX_VALUE));u.setPerson(p);u.setUsername("ana"+u.getId());u.setActivo(true);u.setEstadoCuenta("ACTIVO");u.setPasswordHash("hash:old");
   Set<UserRole> rs=new HashSet<>();for(String c:codes)rs.add(new UserRole(u,role(c)));u.setUserRoles(rs);return u;}
- private CreatePendingUserRequest create(String name,String lastName,String dni,Long personId){return new CreatePendingUserRequest(name,lastName,dni,null,null,Set.of("DTS"),List.of(new ContactRequest("a@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","PERSONAL")),personId);}
+ private CreatePendingUserRequest create(String name,String lastName,String dni,Long personId){return new CreatePendingUserRequest(name,lastName,dni,null,null,Set.of("DTS"),List.of(new ContactRequest("a@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","AR","PERSONAL")),personId);}
  private ApiException thrown(org.junit.jupiter.api.function.Executable e){return assertThrows(ApiException.class,e);}
 
  // ---------- identidad única ----------
@@ -44,7 +44,7 @@ class UserAdministrationServiceTest {
  }
  @Test void confirmedLinkReusesTheSamePersonAndKeepsItsMainContacts(){
   Person known=new Person();known.setId(7L);known.setNombre("Ana");known.setApellido("Pérez");known.setDni("30111222");when(persons.existsByDni("30111222")).thenReturn(true);when(persons.findByDni("30111222")).thenReturn(Optional.of(known));
-  EmailContact mainEmail=new EmailContact();mainEmail.setDireccion("principal@example.test");mainEmail.setPrincipal(true);when(emails.findByPersonIdOrderByPrincipalDesc(7L)).thenReturn(List.of(mainEmail));when(phones.findByPersonIdOrderByPrincipalDesc(7L)).thenReturn(List.of());
+  EmailContact mainEmail=new EmailContact();mainEmail.setDireccion("principal@example.test");mainEmail.setPrincipal(true);when(emails.findActiveByPersonId(7L)).thenReturn(List.of(mainEmail));when(phones.findActiveByPersonId(7L)).thenReturn(List.of());
   service.createPending(create(" ana ","PEREZ","30111222",7L),null);   // mayúsculas y acentos no cambian la identidad
   verify(persons,never()).save(any());ArgumentCaptor<User> created=ArgumentCaptor.forClass(User.class);verify(users).save(created.capture());assertSame(known,created.getValue().getPerson());
   ArgumentCaptor<EmailContact> email=ArgumentCaptor.forClass(EmailContact.class);verify(emails).save(email.capture());assertFalse(email.getValue().getPrincipal(),"no se disputa el contacto principal existente");

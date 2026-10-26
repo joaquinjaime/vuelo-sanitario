@@ -20,9 +20,11 @@ services:
 
   backend:
     environment:
+      CORS_ALLOWED_ORIGIN: http://127.0.0.1:18081
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_e2e;encrypt=true;trustServerCertificate=true
-      # Sólo en E2E: permite verificar recuperación de leases vencidos sin esperas largas.
-      DOCUMENT_LOCK_SECONDS: 1
+      # Los leases documentales conservan su duración real (300 s) para poder editar con calma; el vencimiento y la
+      # recuperación se provocan adelantando el reloj ajustable (/api/e2e/clock), nunca modificando filas SQL.
+      DOCUMENT_LOCK_SECONDS: 300
       # Sólo en E2E: reloj ajustable y barrido a demanda (/api/e2e, requiere ADMINISTRADOR). El barrido periódico queda
       # prácticamente desactivado para que las pruebas controlen cuándo corre y verifiquen el bloqueo sin él.
       SPRING_PROFILES_ACTIVE: docker,e2e
@@ -30,8 +32,34 @@ services:
       APP_AUDIT_DIAGNOSTICS_ENABLED: ${APP_AUDIT_DIAGNOSTICS_ENABLED:-false}
       FINAL_REPORT_SWEEP_MS: 3600000
       FINAL_REPORT_SWEEP_INITIAL_MS: 3600000
+      APP_CREW_ELIGIBILITY_SWEEP_MS: 3600000
+      APP_CREW_ELIGIBILITY_SWEEP_INITIAL_MS: 3600000
+      # Bandeja de pruebas (Mailpit): un servidor SMTP real que no entrega a nadie, sólo retiene los mensajes. Es un transporte controlado:
+      # permite comprobar el envío y el consumo del código, no la entrega a un proveedor externo.
+      MAIL_ENABLED: "true"
+      MAIL_HOST: mailbox
+      MAIL_PORT: 1025
+      MAIL_STARTTLS: "false"
+      MAIL_FROM: no-reply@vuelos-e2e.test
+      APP_PUBLIC_URL: http://localhost:18081
+      # Plazos cortos sólo para las pruebas: el intervalo de reenvío real es de 60 s; el límite por correo (5 por día) se conserva para probarlo.
+      EMAIL_VERIFICATION_RESEND_SECONDS: 2
+      EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
+    depends_on:
+      mailbox:
+        condition: service_started
     ports:
       - "18080:8080"
 
+  mailbox:
+    image: axllent/mailpit:latest
+    environment:
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks: [internal]
+    restart: unless-stopped
+
   frontend:
     profiles: ["ui"]
+    ports: !override ["18081:80"]

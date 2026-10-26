@@ -14,7 +14,10 @@ import org.slf4j.LoggerFactory;
  private static final Logger log=LoggerFactory.getLogger(ApiExceptionHandler.class);
  @ExceptionHandler(ApiException.class) ResponseEntity<Map<String,Object>> app(ApiException e){Map<String,Object> body=new LinkedHashMap<>();body.put("error",e.getMessage());if(e.code()!=null)body.put("code",e.code());body.putAll(e.details());return ResponseEntity.status(e.status()).body(body);}
  @ExceptionHandler(MethodArgumentNotValidException.class) ResponseEntity<Map<String,String>> validation(MethodArgumentNotValidException e){return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
- @ExceptionHandler(HttpMessageNotReadableException.class) ResponseEntity<Map<String,String>> unreadableBody(HttpMessageNotReadableException e){return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
+ /** Un campo que el contrato no define se rechaza y se nombra: nunca se descarta en silencio. */
+ @ExceptionHandler(HttpMessageNotReadableException.class) ResponseEntity<Map<String,String>> unreadableBody(HttpMessageNotReadableException e){
+  if(e.getCause() instanceof com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException u)return ResponseEntity.badRequest().body(Map.of("error","Campo no admitido: "+u.getPropertyName()));
+  return ResponseEntity.badRequest().body(Map.of("error","Datos de entrada inválidos"));}
  @ExceptionHandler(MethodArgumentTypeMismatchException.class) ResponseEntity<Map<String,String>> invalidParameter(){return ResponseEntity.badRequest().body(Map.of("error","Parámetro inválido"));}
  @ExceptionHandler(NoResourceFoundException.class) ResponseEntity<Map<String,String>> resourceNotFound(){return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error","Recurso inexistente"));}
  @ExceptionHandler(HttpRequestMethodNotSupportedException.class) ResponseEntity<Map<String,String>> methodNotAllowed(){return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Map.of("error","Método no permitido"));}

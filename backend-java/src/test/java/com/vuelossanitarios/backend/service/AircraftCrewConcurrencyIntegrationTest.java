@@ -61,7 +61,7 @@ class AircraftCrewConcurrencyIntegrationTest {
  private User commander(){return qualified(user("cmd","COMANDANTE",true),"COMANDANTE");}
  private CreateOperationalFlight create(Aircraft plane,User cmd,Airport destination,LocalDateTime from,LocalDateTime to){return new CreateOperationalFlight("REGRESO_BASE","Prueba concurrente",plane.getId(),cmd.getId(),destination.getId(),from,to);}
 
- @BeforeEach void stubCredentials(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.sufficient(any(),any(),any())).thenReturn(true);}
+ @BeforeEach void stubCredentials(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   Province p=new Province();p.setCodigoOficial("C1");p.setNombre("Provincia concurrencia");p.setActivo(true);province=provinces.save(p);

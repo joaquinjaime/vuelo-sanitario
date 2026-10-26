@@ -53,12 +53,35 @@ app:
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
   cors:
     allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
+  # Correo saliente (verificación de correos). Sin MAIL_ENABLED=true y un servidor, el servicio informa "no configurado":
+  # nada se envía, no se simula una entrega y ningún correo queda verificado. Las credenciales sólo llegan por entorno.
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    starttls: ${MAIL_STARTTLS:true}
+    ssl: ${MAIL_SSL:false}
+    from: ${MAIL_FROM:}
+    # Dirección pública de la aplicación, que se menciona en el mensaje ("ingrese en Mi cuenta de ...").
+    public-url: ${APP_PUBLIC_URL:}
+  # Verificación de correos: código de un solo uso, vencimiento, intentos y límites de envío.
+  verification:
+    code-minutes: ${EMAIL_VERIFICATION_CODE_MINUTES:30}
+    max-attempts: ${EMAIL_VERIFICATION_MAX_ATTEMPTS:5}
+    resend-seconds: ${EMAIL_VERIFICATION_RESEND_SECONDS:60}
+    max-per-email-per-day: ${EMAIL_VERIFICATION_MAX_PER_EMAIL_PER_DAY:5}
+    max-per-user-per-day: ${EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY:10}
 
 management:
   endpoints:
     web:
       exposure:
         include: health
+  health:
+    mail:
+      enabled: false   # la salud del backend no depende de que el servidor de correo responda
   endpoint:
     health:
       probes:

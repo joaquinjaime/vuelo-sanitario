@@ -6,6 +6,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.*;
 /** Salvo {@link #findByFlightIdOrderByIdAsc}, todas las consultas consideran únicamente asignaciones vigentes (sin baja). */
 public interface FlightCrewRepository extends JpaRepository<FlightCrew, Long> {
+ /** Personas de la tripulación vigente (sin cargar entidades) en una sola consulta. */
+ @Query("select new com.vuelossanitarios.backend.repository.CrewPersonRow(fc.id,u.id,u.activo,u.estadoCuenta,p.id,p.nombre,p.apellido,r.codigo,r.nombre) from FlightCrew fc join fc.user u join u.person p join fc.crewRole r where fc.flight.id=:flightId and fc.fechaBaja is null order by fc.id") List<CrewPersonRow> findCurrentPeopleByFlightId(@Param("flightId") Long flightId);
  boolean existsByFlightIdAndUserIdAndFechaBajaIsNull(Long flightId, Long userId);
  /** Historial completo del vuelo (vigentes y dadas de baja). */
  List<FlightCrew> findByFlightIdOrderByIdAsc(Long flightId);

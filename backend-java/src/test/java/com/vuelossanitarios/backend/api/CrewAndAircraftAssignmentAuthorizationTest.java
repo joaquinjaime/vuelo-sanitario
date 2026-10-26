@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @WebMvcTest(controllers=FlightController.class)
 @Import({SecurityConfig.class,JwtAuthenticationFilter.class})
 class CrewAndAircraftAssignmentAuthorizationTest {
- @Autowired MockMvc mvc; @MockBean JwtService jwt; @MockBean UserRepository users; @MockBean FlightService flights; @MockBean CrewManagementService crewManagement;
+ @Autowired MockMvc mvc; @MockBean JwtService jwt; @MockBean UserRepository users; @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean com.vuelossanitarios.backend.service.CrewContactService crewContacts; @MockBean SanitaryRequestRegistrationService registration;
  private static final String CREW="{\"userId\":2,\"crewRoleCode\":\"MEDICO\"}",AIRCRAFT="{\"aircraftId\":9,\"motivo\":\"Mantenimiento\"}";
  private RequestPostProcessor as(String role){return SecurityMockMvcRequestPostProcessors.authentication(new UsernamePasswordAuthenticationToken(new CurrentUser(7L,"u"),null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));}
  private void allowed(String role,boolean can,org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {mvc.perform(request.with(as(role)).contentType(MediaType.APPLICATION_JSON)).andExpect(can?status().is2xxSuccessful():status().isForbidden());}

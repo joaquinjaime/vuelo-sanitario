@@ -40,7 +40,7 @@ class AircraftAssignmentFlightServiceTest {
  private FlightCrew crew(long crewId,Flight f,User u,String role){CrewRole r=new CrewRole();r.setCodigo(role);r.setNombre(role);FlightCrew c=new FlightCrew();c.setId(crewId);c.setFlight(f);c.setUser(u);c.setCrewRole(r);return c;}
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),Clock.systemDefaultZone());
+  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),Clock.systemDefaultZone());
   province=new Province();province.setId(id());province.setNombre("Tucumán");otherProvince=new Province();otherProvince.setId(id());otherProvince.setNombre("Salta");
   tuc=airport("TUC",province);tuc2=airport("TUC2",province);aep=airport("AEP",province);salta=airport("SLA",otherProvince);
   oldPlane=plane("LV-OLD",tuc,4);newPlane=plane("LV-NEW",tuc2,4);
@@ -50,7 +50,7 @@ class AircraftAssignmentFlightServiceTest {
   when(aircraft.lockById(oldPlane.getId())).thenReturn(Optional.of(oldPlane));when(aircraft.lockById(newPlane.getId())).thenReturn(Optional.of(newPlane));
   when(flights.activeAircraftAssignments(any(),any())).thenReturn(List.of());when(flights.aircraftBusyIn(any(),any(),any())).thenReturn(List.of());when(flights.overlappingAircraft(any(),any(),any())).thenReturn(List.of());
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(any())).thenReturn(List.of());
-  when(crewManagement.qualified(any(),eq("COMANDANTE"),nullable(java.time.LocalDate.class))).thenReturn(true);
+  when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
   status("PLANIFICADO");status("PENDIENTE_CONFIRMACION_COMANDANTE");
   LocalDateTime from=LocalDateTime.now().plusDays(3);
   operational=new Flight();operational.setId(id());operational.setCodigo("V-OP");operational.setTipoVuelo(type("REGRESO_BASE"));operational.setAircraft(oldPlane);operational.setComandante(commander);operational.setOrigen(tuc);operational.setDestino(aep);

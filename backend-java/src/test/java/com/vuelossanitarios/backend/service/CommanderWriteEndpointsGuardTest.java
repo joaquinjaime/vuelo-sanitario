@@ -20,8 +20,8 @@ class CommanderWriteEndpointsGuardTest {
  /** Acciones operativas del comandante: cada una está cubierta por requireOperationalAccess en su servicio y por el E2E de bloqueo. */
  private static final Set<String> GUARDED=Set.of(
   "FlightController.respondCommanderAssignment","FlightController.operationalPlanning","FlightController.weather",
-  "FlightLogController.create","FlightRouteController.save","HangarInfoController.observe",
-  "DocumentController.createPdf","DocumentController.replacePdf","DocumentController.acquireLock","DocumentController.releaseLock");
+  "FlightLogController.create","FlightRouteController.save","FlightRouteController.submit","HangarInfoController.observe",
+  "DocumentController.createPdf","DocumentController.replacePdf","DocumentController.acquireLock","DocumentController.releaseLock","DocumentController.deactivate");
 
  @Test void everyCommanderWriteEndpointIsEitherGuardedOrAnExplicitRegularizationAction()throws Exception{
   Set<String> found=new TreeSet<>();

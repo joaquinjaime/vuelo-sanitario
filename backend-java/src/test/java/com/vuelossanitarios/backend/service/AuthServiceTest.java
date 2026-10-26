@@ -22,7 +22,7 @@ class AuthServiceTest {
  AuthService service;
  @BeforeEach void init(){MockitoAnnotations.openMocks(this);service=new AuthService(users,persons,roles,userRoles,emails,phones,activations,commanderProfiles,audit,encoder,jwt);when(roles.findByCodigo(anyString())).thenAnswer(x->Optional.of(role(x.getArgument(0))));when(encoder.encode(anyString())).thenAnswer(x->"hash:"+x.getArgument(0));}
  CreatePendingUserRequest request(Set<String> role,List<ContactRequest> es,List<PhoneRequest> ps){return new CreatePendingUserRequest("Ana","Pérez","123",null,role.contains("COMANDANTE")?"LIC1":null,role,es,ps);}
- List<ContactRequest> email(){return List.of(new ContactRequest("ana@example.test","PERSONAL"));} List<PhoneRequest> phone(){return List.of(new PhoneRequest("3815555555","PERSONAL"));}
+ List<ContactRequest> email(){return List.of(new ContactRequest("ana@example.test","PERSONAL"));} List<PhoneRequest> phone(){return List.of(new PhoneRequest("3815555555","AR","PERSONAL"));}
  @Test void createPendingRequiresEmail(){ApiException e=assertThrows(ApiException.class,()->service.createPending(request(Set.of("DTS"),List.of(),phone()),null));assertEquals(HttpStatus.BAD_REQUEST,e.status());}
  @Test void createPendingRequiresPhone(){assertThrows(ApiException.class,()->service.createPending(request(Set.of("DTS"),email(),List.of()),null));}
  @Test void createPendingRejectsDuplicateDni(){when(persons.existsByDni("123")).thenReturn(true);ApiException e=assertThrows(ApiException.class,()->service.createPending(request(Set.of("DTS"),email(),phone()),null));assertEquals(HttpStatus.CONFLICT,e.status());}

@@ -12,6 +12,7 @@ import com.vuelossanitarios.backend.domain.catalog.CrewRole;
 import com.vuelossanitarios.backend.domain.catalog.FlightStatus;
 import com.vuelossanitarios.backend.domain.flight.Flight;
 import com.vuelossanitarios.backend.domain.flight.FlightCrew;
+import com.vuelossanitarios.backend.domain.flight.CrewQualification;
 import com.vuelossanitarios.backend.domain.person.Person;
 import com.vuelossanitarios.backend.domain.user.User;
 import com.vuelossanitarios.backend.repository.*;
@@ -41,6 +42,7 @@ class CrewManagementServiceTest {
  private static User user(long id,String username){User u=new User();u.setId(id);u.setUsername(username);u.setActivo(true);u.setEstadoCuenta("ACTIVO");Person p=new Person();p.setNombre("N"+id);p.setApellido("A"+id);u.setPerson(p);return u;}
  private static Flight flightWithState(long id,String state,LocalDateTime from,LocalDateTime to){Flight f=new Flight();f.setId(id);FlightStatus s=new FlightStatus();s.setCodigo(state);f.setEstadoVuelo(s);f.setFechaPlanificadaSalida(from);f.setFechaPlanificadaLlegada(to);f.setCodigo("V-"+id);return f;}
  private FlightCrew row(long id,Flight f,User u,CrewRole r){FlightCrew c=new FlightCrew();c.setId(id);c.setFlight(f);c.setUser(u);c.setCrewRole(r);return c;}
+ private CrewQualification classified(User u){CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(medico);return q;}
 
  @BeforeEach void setup(){
   flight=flightWithState(1L,"PLANIFICADO",LocalDateTime.of(2030,1,1,23,0),LocalDateTime.of(2030,1,2,1,0));
@@ -49,7 +51,7 @@ class CrewManagementServiceTest {
   flight.setComandante(commander);
   when(flights.lockById(1L)).thenReturn(Optional.of(flight));when(flights.findById(1L)).thenReturn(Optional.of(flight));
   when(users.lockById(2L)).thenReturn(Optional.of(member));when(users.lockById(9L)).thenReturn(Optional.of(commander));when(users.findById(3L)).thenReturn(Optional.of(actor));
-  when(credentials.sufficient(any(),eq("MEDICO"),any())).thenReturn(true);
+  when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
   when(roles.findByCodigo("MEDICO")).thenReturn(Optional.of(medico));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(true);
   when(crews.saveAndFlush(any(FlightCrew.class))).thenAnswer(i->i.getArgument(0));
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(1L)).thenReturn(List.of(row(100L,flight,commander,commanderRole)));
@@ -102,8 +104,8 @@ class CrewManagementServiceTest {
  @Test void deactivatedOrPendingUsersAndUnqualifiedUsersAreRejected(){
   member.setActivo(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
   member.setActivo(true);member.setEstadoCuenta("PENDIENTE_ACTIVACION");assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
-  member.setEstadoCuenta("ACTIVO");when(credentials.sufficient(any(),eq("MEDICO"),any())).thenReturn(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
-  when(credentials.sufficient(any(),eq("MEDICO"),any())).thenReturn(true);when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
+  member.setEstadoCuenta("ACTIVO");when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(false,"HABILITACION_AUSENTE","Sin habilitación",null));assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
+  when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
   verify(crews,never()).saveAndFlush(any());
  }
  @Test void startedFinishedOrCancelledFlightsDoNotAllowCrewChanges(){
@@ -142,7 +144,7 @@ class CrewManagementServiceTest {
  @Test void replacementClosesTheOldAssignmentAndCreatesANewOneKeepingBothAsHistory(){
   User newcomer=user(4L,"otro");CrewRole enfermero=new CrewRole();enfermero.setCodigo("ENFERMERO");enfermero.setNombre("Enfermero");
   FlightCrew existing=row(101L,flight,member,medico);when(crews.findById(101L)).thenReturn(Optional.of(existing));
-  when(users.lockById(4L)).thenReturn(Optional.of(newcomer));when(roles.findByCodigo("ENFERMERO")).thenReturn(Optional.of(enfermero));when(qualifications.existsByUserIdAndRoleCodigo(4L,"ENFERMERO")).thenReturn(true);when(credentials.sufficient(any(),eq("ENFERMERO"),any())).thenReturn(true);
+  when(users.lockById(4L)).thenReturn(Optional.of(newcomer));when(roles.findByCodigo("ENFERMERO")).thenReturn(Optional.of(enfermero));when(qualifications.existsByUserIdAndRoleCodigo(4L,"ENFERMERO")).thenReturn(true);when(credentials.assess(any(),eq("ENFERMERO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(1L)).thenReturn(List.of(row(100L,flight,commander,commanderRole),existing));
   service.replace(1L,101L,new Crew(4L,"ENFERMERO"),3L);
   assertEquals("REEMPLAZO",existing.getMotivoBaja());assertNotNull(existing.getFechaBaja());
@@ -161,7 +163,7 @@ class CrewManagementServiceTest {
  @Test void candidatesExposeTheConflictInsteadOfHidingTheReason(){
   User busy=user(5L,"ocupado");busy.getPerson().setNombre("Ocupado");
   Flight other=flightWithState(8L,"PLANIFICADO",LocalDateTime.of(2030,1,2,0,30),LocalDateTime.of(2030,1,2,2,0));
-  when(users.findAllWithPersonAndRoles()).thenReturn(List.of(member,busy));when(qualifications.existsByUserIdAndRoleCodigo(5L,"MEDICO")).thenReturn(true);
+  when(qualifications.findByRoleCodigo("MEDICO")).thenReturn(List.of(classified(member),classified(busy)));when(qualifications.existsByUserIdAndRoleCodigo(5L,"MEDICO")).thenReturn(true);
   when(crews.findByUserIdAndFechaBajaIsNull(5L)).thenReturn(List.of(row(60L,other,busy,medico)));
   List<CrewCandidateView> list=service.candidates(1L,"MEDICO");
   assertEquals(2,list.size());

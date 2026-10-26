@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { api } from "./api";
 vi.mock("./api", () => ({ api: vi.fn((path) => path === "/auth/users" ? Promise.resolve([]) : path === "/auth/me" ? Promise.resolve({ nombre:"Admin", apellido:"Inicial", dni:null, correos:[], telefonos:[] }) : Promise.resolve({})), uploadFile: vi.fn(), downloadFile: vi.fn(), credentialFile: vi.fn() }));
@@ -385,7 +385,7 @@ test("ruta: comandante guarda la versión cargada y operaciones solo consulta", 
   return Promise.resolve([]);
  });
  const {FlightRoute}=await import('./main.jsx');const view=render(<FlightRoute flightId={42} canEdit msg={vi.fn()}/>);
- await screen.findByText(/SIN PLANIFICAR/);fireEvent.change(screen.getByLabelText('Recorrido y puntos intermedios en orden'),{target:{value:'Punto Alfa'}});fireEvent.click(screen.getByRole('button',{name:'Guardar ruta'}));
+ await screen.findByText(/Sin planificar/);fireEvent.change(screen.getByLabelText('Recorrido y puntos intermedios en orden'),{target:{value:'Punto Alfa'}});fireEvent.click(screen.getByRole('button',{name:'Guardar ruta'}));
  await waitFor(()=>expect(api).toHaveBeenCalledWith('/flights/42/route',expect.objectContaining({method:'PUT',body:expect.stringContaining('"version":0')})));
  await screen.findByText('Punto Alfa',{selector:'p'});view.unmount();render(<FlightRoute flightId={42} msg={vi.fn()}/>);
  await screen.findByText('Punto Alfa',{selector:'p'});expect(screen.queryByRole('button',{name:'Guardar ruta'})).toBeNull();
@@ -408,4 +408,34 @@ test("regresión: el trayecto de un vuelo operativo se muestra desde el contrato
  expect(rows.some((t) => t.includes("Tafí Viejo, Tucumán → Rosario, Santa Fe"))).toBe(true);
  expect(rows.some((t) => t.includes("V-SIN") && t.includes("— → —"))).toBe(true);
  expect(container.textContent).not.toContain("undefined");
+});
+test("every operational workspace reaches Mi cuenta with its own contacts, and the page survives a reload through the hash", async () => {
+ const { OperationalApp } = await import("./main.jsx");
+ for (const [workspace, role] of [["DTS", "DTS"], ["COMANDANTE", "COMANDANTE"], ["OPERACIONES", "CENTRO_OPERACIONES"]]) {
+  document.body.innerHTML = '<div id="root"></div>'; history.replaceState(null, "", "/");
+  const replace = vi.spyOn(history, "replaceState");
+  localStorage.setItem("vs-session", JSON.stringify({ username: role.toLowerCase(), roles: [role] }));
+  vi.mocked(api).mockReset();
+  vi.mocked(api).mockImplementation((path) => {
+   if (path === "/auth/me") return Promise.resolve({ nombre: "Ana", apellido: "Paz", dni: "30111222", correos: [{ id: 1, valor: "ana@example.test", tipo: "PERSONAL", principal: true, version: 0 }], telefonos: [{ id: 2, valor: "3815551234", tipo: "PERSONAL", principal: true, version: 0 }] });
+   if (path === "/notifications") return Promise.resolve({ content: [] });
+   return Promise.resolve([]);
+  });
+  const view = render(<OperationalApp workspace={workspace} />);
+  expect(screen.queryByRole("heading", { name: "Mis datos de contacto" })).toBeNull();
+  fireEvent.click(screen.getByText("Mi cuenta"));
+  expect(await screen.findByRole("heading", { name: "Mis datos de contacto" })).toBeInTheDocument();
+  expect(await screen.findByText("ana@example.test")).toBeInTheDocument();
+  expect(screen.queryByText("Vuelos visibles")).toBeNull();
+  expect(replace).toHaveBeenLastCalledWith(null, "", "#/mi-cuenta");
+  view.unmount();
+  location.hash = "#/mi-cuenta";   // lo que deja el navegador al recargar
+  render(<OperationalApp workspace={workspace} />);
+  expect(await screen.findByRole("heading", { name: "Mis datos de contacto" })).toBeInTheDocument();
+  fireEvent.click(screen.getByText(workspace === "DTS" ? "Dirección de Tránsito Sanitario" : workspace === "COMANDANTE" ? "Comandante" : "Centro de Operaciones"));
+  expect(await screen.findByText("Vuelos visibles")).toBeInTheDocument();
+  expect(replace).toHaveBeenLastCalledWith(null, "", "/");
+  replace.mockRestore();
+  cleanup();
+ }
 });

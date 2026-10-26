@@ -3,6 +3,9 @@ import com.vuelossanitarios.backend.api.dto.FlightDtos.*;
 import com.vuelossanitarios.backend.security.CurrentUser;
 import com.vuelossanitarios.backend.service.FlightService;
 import com.vuelossanitarios.backend.service.CrewManagementService;
+import com.vuelossanitarios.backend.service.CrewContactService;
+import com.vuelossanitarios.backend.api.dto.CrewContactDtos;
+import com.vuelossanitarios.backend.service.SanitaryRequestRegistrationService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -10,8 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import org.springframework.http.HttpStatus;
 @RestController @RequestMapping("/api/flights") public class FlightController {
- private final FlightService service; private final CrewManagementService crewService; public FlightController(FlightService s,CrewManagementService c){service=s;crewService=c;}
- @PostMapping @PreAuthorize("hasRole('DTS')") public FlightView create(@Valid @RequestBody CreateFlight r,@AuthenticationPrincipal CurrentUser u){return service.create(r,u.id());}
+ private final FlightService service; private final CrewManagementService crewService; private final CrewContactService crewContacts; private final SanitaryRequestRegistrationService registration; public FlightController(FlightService s,CrewManagementService c,CrewContactService cc,SanitaryRequestRegistrationService r){service=s;crewService=c;crewContacts=cc;registration=r;}
+ @PostMapping @PreAuthorize("hasRole('DTS')") public FlightView create(@Valid @RequestBody CreateFlight r,@AuthenticationPrincipal CurrentUser u){return registration.createForExistingPatient(r,u.id());}
+ @PostMapping("/with-patient") @PreAuthorize("hasRole('DTS')") public FlightView createWithPatient(@Valid @RequestBody CreateFlightWithPatient r,@AuthenticationPrincipal CurrentUser u){return registration.createWithPatient(r,u.id());}
  @PostMapping("/operational") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES','ADMINISTRADOR')") public FlightView createOperational(@Valid @RequestBody CreateOperationalFlight r,@AuthenticationPrincipal CurrentUser u){return service.createOperational(r,u.id());}
  @PostMapping("/{id}/operational-replanning") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView replanOperational(@PathVariable Long id,@Valid @RequestBody ReplanOperationalFlight r,@AuthenticationPrincipal CurrentUser u){return service.replanOperational(id,r,u.id());}
  @GetMapping @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE','ADMINISTRADOR')") public List<FlightView> list(@AuthenticationPrincipal CurrentUser u){return service.list(u.id());}
@@ -30,12 +34,14 @@ import org.springframework.http.HttpStatus;
  @GetMapping("/{id}/available-commanders") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<AvailableCommanderView> availableCommanders(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return service.availableCommanders(id,u.id());}
  @GetMapping("/{id}/aircraft-candidates") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<AvailableAircraftView> aircraftCandidates(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return service.aircraftCandidates(id,u.id());}
  @PostMapping("/{id}/aircraft") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView changeAircraft(@PathVariable Long id,@Valid @RequestBody ChangeAircraft r,@AuthenticationPrincipal CurrentUser u){return service.changeAircraft(id,r,u.id());}
- @PostMapping("/{id}/start") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView start(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return service.start(id,u.id());}
+ @PostMapping("/{id}/start") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView start(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){try{return service.start(id,u.id());}catch(ApiException e){if(e.code()!=null&&e.details().containsKey("crewRoleCode"))service.auditRejectedStart(id,u.id(),e.code(),e.details());else if(e.code()!=null&&e.code().startsWith("RUTA_"))service.auditRejectedRouteStart(id,u.id(),e.code(),e.getMessage());throw e;}}
  @PostMapping("/{id}/finish") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public FlightView finish(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return service.finish(id,u.id());}
  @PostMapping("/{id}/cancel") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES')") public FlightView cancel(@PathVariable Long id,@Valid @RequestBody Cancel r,@AuthenticationPrincipal CurrentUser u){return service.cancel(id,r,u.id());}
  @GetMapping("/{id}/weather") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE','ADMINISTRADOR')") public List<WeatherView> weatherHistory(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return service.weatherHistory(id,u.id());}
  @PostMapping("/{id}/weather") @PreAuthorize("hasRole('COMANDANTE')") public WeatherView weather(@PathVariable Long id,@Valid @RequestBody Weather r,@AuthenticationPrincipal CurrentUser u){return service.registerWeather(id,r,u.id());}
  @GetMapping("/{id}/crew") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public List<CrewView> crew(@PathVariable Long id,@RequestParam(defaultValue="false") boolean history,@AuthenticationPrincipal CurrentUser u){return service.crew(id,u.id(),history);}
+ /** Contactos laborales de la tripulación vigente: acción explícita de Operaciones sobre un vuelo abierto; se audita cada consulta. */
+ @GetMapping("/{id}/crew/contacts") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public CrewContactDtos.CrewContactsView crewContacts(@PathVariable Long id,@AuthenticationPrincipal CurrentUser u){return crewContacts.list(id,u.id());}
  @GetMapping("/{id}/crew/available") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<AvailableCrewView> availableCrew(@PathVariable Long id,@RequestParam String role){return crewService.available(id,role);}
  @GetMapping("/{id}/crew/candidates") @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public List<CrewCandidateView> crewCandidates(@PathVariable Long id,@RequestParam String role){return crewService.candidates(id,role);}
  @PostMapping("/{id}/crew") @ResponseStatus(HttpStatus.NO_CONTENT) @PreAuthorize("hasAnyRole('OPERACIONES','CENTRO_OPERACIONES')") public void addCrew(@PathVariable Long id,@Valid @RequestBody Crew r,@AuthenticationPrincipal CurrentUser u){crewService.assign(id,r,u.id());}

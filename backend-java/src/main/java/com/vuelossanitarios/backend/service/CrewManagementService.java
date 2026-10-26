@@ -22,6 +22,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class CrewManagementService {
  private final FlightRepository flights; private final FlightCrewRepository crews; private final UserRepository users;
  private final CrewRoleRepository roles; private final CrewQualificationRepository qualifications; private final AuditService audit; private final ProfessionalCredentialService credentials; private final NotificationService notifications; private final Clock clock;
+ @org.springframework.beans.factory.annotation.Autowired(required=false) private CommanderReportAccessService commanderAccess;
+ public record Eligibility(boolean eligible,String code,String message,java.time.LocalDate expires) {
+  public ApiException conflict(Long userId,String role){return new ApiException(HttpStatus.CONFLICT,code,message,Map.of("userId",userId,"crewRoleCode",role));}
+ }
+ private Eligibility denied(String code,String message){return new Eligibility(false,code,message,null);}
+ /** Una misma decisión se usa al seleccionar, asignar, replanificar, consultar e iniciar. */
+ public Eligibility evaluate(Flight flight,User member,String code,boolean availability){
+  return evaluateOn(flight,member,code,flight.getFechaPlanificadaSalida()==null?null:flight.getFechaPlanificadaSalida().toLocalDate(),availability);
+ }
+ public Eligibility evaluateOn(Flight flight,User member,String code,java.time.LocalDate on,boolean availability){
+  if(!active(member))return denied("CUENTA_INACTIVA","La cuenta del tripulante no está activa");
+  if(!qualifications.existsByUserIdAndRoleCodigo(member.getId(),code))return denied("CLASIFICACION_INCOMPATIBLE","Falta la clasificación administrativa para esta función");
+  if("COMANDANTE".equals(code)){
+   var profile=member.getPerson()==null?null:member.getPerson().getCommanderProfile();
+   if(profile==null||profile.getLicenseNumber()==null||profile.getLicenseNumber().isBlank()||member.getUserRoles().stream().noneMatch(r->"COMANDANTE".equals(r.getRole().getCodigo())))return denied("PERFIL_COMANDANTE_INCOMPLETO","El comandante requiere rol de acceso y licencia registrada");
+   if(commanderAccess!=null&&commanderAccess.isBlocked(member.getId()))return denied("INFORME_FINAL_VENCIDO","El comandante tiene informes finales vencidos");
+  }
+  var credential=credentials.assess(member,code,on);
+  if(!credential.eligible())return new Eligibility(false,credential.code(),credential.message(),credential.expires());
+  if(availability&&flight.getId()!=null){Optional<Flight> clash=conflictingFlight(flight,member);if(clash.isPresent())return denied("CONFLICTO_ASIGNACION","Tiene el vuelo "+clash.get().getCodigo()+" comprometido en un horario incompatible");}
+  return new Eligibility(true,credential.code(),credential.message(),credential.expires());
+ }
  public CrewManagementService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewRoleRepository r,CrewQualificationRepository q,AuditService a,ProfessionalCredentialService p,NotificationService n,Clock clock){flights=f;crews=c;users=u;roles=r;qualifications=q;audit=a;credentials=p;notifications=n;this.clock=clock;}
  private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}
  private ApiException conflict(String s){return new ApiException(HttpStatus.CONFLICT,s);}
@@ -53,9 +75,9 @@ public class CrewManagementService {
  @Transactional(readOnly=true) public List<CrewCandidateView> candidates(Long id,String code){
   if("COMANDANTE".equals(code))throw bad("El comandante se asigna mediante recursos");
   Flight f=flights.findById(id).orElseThrow(()->bad("Vuelo inexistente"));mutable(f);interval(f);CrewRole role=role(code);
-  return users.findAllWithPersonAndRoles().stream().filter(this::active).filter(u->qualified(u,code,f.getFechaPlanificadaLlegada().toLocalDate())).filter(u->!crews.existsByFlightIdAndUserIdAndFechaBajaIsNull(id,u.getId())).map(u->{
-   Optional<Flight> clash=conflictingFlight(f,u);
-   return new CrewCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),role.getCodigo(),role.getNombre(),clash.isEmpty(),clash.map(o->"Tiene el vuelo "+o.getCodigo()+" comprometido en un horario incompatible").orElse(null));
+  return qualifications.findByRoleCodigo(code).stream().map(CrewQualification::getUser).filter(u->!crews.existsByFlightIdAndUserIdAndFechaBajaIsNull(id,u.getId())).map(u->{
+   Eligibility result=evaluate(f,u,code,true);
+   return new CrewCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),role.getCodigo(),role.getNombre(),result.eligible(),result.eligible()?null:result.message());
   }).toList();
  }
 
@@ -102,14 +124,12 @@ public class CrewManagementService {
 
  private void validate(Flight f,User member,CrewRole role,FlightCrew existing){
   if("COMANDANTE".equals(role.getCodigo()))throw bad("El comandante se asigna mediante recursos");
-  if(!active(member))throw bad("El tripulante debe tener una cuenta activa");
-  if(!qualified(member,role.getCodigo(),f.getFechaPlanificadaLlegada().toLocalDate()))throw bad("Se requiere clasificación y habilitación profesional verificada y vigente para esta función");
+  Eligibility eligibility=evaluate(f,member,role.getCodigo(),true);if(!eligibility.eligible())throw eligibility.conflict(member.getId(),role.getCodigo());
   if(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()).stream().anyMatch(c->c.getUser().getId().equals(member.getId())&&(existing==null||!c.getId().equals(existing.getId()))))throw conflict("El usuario ya integra la tripulación");
   if(f.getComandante()!=null&&f.getComandante().getId().equals(member.getId()))throw conflict("El usuario ya integra la tripulación como comandante");
   if(f.getAircraft()!=null&&f.getAircraft().getCapacidadTripulacion()!=null&&crewSize(f,existing)+1>f.getAircraft().getCapacidadTripulacion())throw conflict("La aeronave "+f.getAircraft().getMatricula()+" admite como máximo "+f.getAircraft().getCapacidadTripulacion()+" tripulantes");
   Optional<Flight> clash=conflictingFlight(f,member);if(clash.isPresent())throw conflict("El tripulante tiene otro compromiso incompatible ("+clash.get().getCodigo()+")");
  }
- public boolean qualified(User u,String code,java.time.LocalDate date){return qualifications.existsByUserIdAndRoleCodigo(u.getId(),code)&&credentials.sufficient(u,code,date);}
  @Transactional(readOnly=true) public List<QualificationView> qualifications(Long userId){return qualifications.findByUserId(userId).stream().map(q->new QualificationView(userId,q.getRole().getCodigo(),q.getRole().getNombre())).toList();}
  @Transactional public void classify(Long userId,String code,Long actor){User u=lockUser(userId);CrewRole r=role(code);if(qualifications.existsByUserIdAndRoleCodigo(userId,code))return;CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(r);q.setClassifier(users.findById(actor).orElseThrow());qualifications.saveAndFlush(q);audit.record(null,q.getClassifier(),"CREW_QUALIFICATION",q.getId(),"CREATE",null,"{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\"}");}
  @Transactional public void unclassify(Long userId,String code,Long actor){lockUser(userId);CrewQualification q=qualifications.findByUserIdAndRoleCodigo(userId,code).orElseThrow(()->bad("Clasificación inexistente"));if(crews.findByUserIdAndFechaBajaIsNull(userId).stream().anyMatch(c->code.equals(c.getCrewRole().getCodigo())&&committed(c.getFlight())))throw conflict("Retire primero las asignaciones activas de esta función");audit.record(null,users.findById(actor).orElseThrow(),"CREW_QUALIFICATION",q.getId(),"DELETE","{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\"}",null);qualifications.delete(q);}

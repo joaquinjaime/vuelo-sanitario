@@ -5,11 +5,21 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import com.vuelossanitarios.backend.api.dto.FinalReportDtos;
+import com.vuelossanitarios.backend.api.dto.PatientDtos.CreatePatient;
+import jakarta.validation.Valid;
 
 public final class FlightDtos { private FlightDtos(){}
  public record Medical(@Size(max=10000) String diagnostico,@Size(max=100) String condicionMedica,boolean requiereEquipamientoEspecial,@Size(max=10000) String observaciones){}
  /** DTS-only request. Type is deliberately absent: it is always SANITARIO. */
- public record CreateFlight(@NotNull Long patientId,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical){}
+ @StrictJson
+ public record CreateFlight(@NotNull Long patientId,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical,@Valid List<TransferContactDtos.Input> contactos){
+  public CreateFlight(Long patientId,Long localidadOrigenId,Long localidadDestinoId,String priorityCode,String motivoVuelo,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,Medical medical){this(patientId,localidadOrigenId,localidadDestinoId,priorityCode,motivoVuelo,fechaSolicitada,extremaUrgencia,justificacionExtremaUrgencia,fechaLimiteTraslado,medical,null);}
+ }
+ /** Alta de paciente y solicitud en una única transacción. La selección de pacientes existentes usa CreateFlight. */
+ @StrictJson
+ public record CreateFlightWithPatient(@NotNull @Valid CreatePatient patient,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull @Valid Medical medical,boolean identidadConfirmada,@Valid List<TransferContactDtos.Input> contactos){
+  public CreateFlightWithPatient(CreatePatient patient,Long localidadOrigenId,Long localidadDestinoId,String priorityCode,String motivoVuelo,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,Medical medical,boolean identidadConfirmada){this(patient,localidadOrigenId,localidadDestinoId,priorityCode,motivoVuelo,fechaSolicitada,extremaUrgencia,justificacionExtremaUrgencia,fechaLimiteTraslado,medical,identidadConfirmada,null);}
+ }
  public record CreateOperationalFlight(@NotBlank @Size(max=40) String tipoVueloCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
  public record ReplanOperationalFlight(@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
  public record Evaluation(@NotNull Boolean aprobar,Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado,String priorityCode){}
@@ -25,7 +35,7 @@ public final class FlightDtos { private FlightDtos(){}
  public record WeatherView(Long id,String condiciones,Boolean favorable,String observaciones,LocalDateTime fechaRegistro,String registradoPor){}
  public record Crew(@NotNull Long userId,@NotBlank String crewRoleCode){}
  /** vigente=false: asignación dada de baja (retiro, reemplazo o cambio de comandante), conservada como historial. */
- public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante,boolean vigente,LocalDateTime asignadoEn,String asignadoPor,LocalDateTime fechaBaja,String bajaPor,String motivoBaja){}
+ public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante,boolean vigente,LocalDateTime asignadoEn,String asignadoPor,LocalDateTime fechaBaja,String bajaPor,String motivoBaja,String elegibilidadCodigo,String elegibilidadMotivo,java.time.LocalDate habilitacionVence){}
  public record CrewCandidateView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean disponible,String motivoNoDisponible){}
  public record AvailableCrewView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName){}
  public record QualificationView(Long userId,String crewRoleCode,String crewRoleName){}

@@ -19,19 +19,21 @@ import org.springframework.http.HttpStatus;
 /** Ciclo terminal del vuelo: inicio, finalización, cancelación y restricciones del comandante bloqueado. */
 class FlightClosureServiceTest {
  private final FlightRepository flights=mock(FlightRepository.class); private final SanitaryFlightRepository sanitary=mock(SanitaryFlightRepository.class); private final UserRepository users=mock(UserRepository.class); private final FlightStatusRepository statuses=mock(FlightStatusRepository.class); private final AircraftRepository aircraft=mock(AircraftRepository.class); private final AirportRepository airports=mock(AirportRepository.class); private final CancellationReasonRepository reasons=mock(CancellationReasonRepository.class); private final WeatherSnapshotRepository weather=mock(WeatherSnapshotRepository.class); private final FlightTypeRepository types=mock(FlightTypeRepository.class);
- private final AuditService audit=mock(AuditService.class); private final FlightAuthorizationService access=mock(FlightAuthorizationService.class); private final NotificationService notifications=mock(NotificationService.class); private final FinalReportWorkflowService reportWorkflow=mock(FinalReportWorkflowService.class); private final CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class); private final FlightLogService log=mock(FlightLogService.class); private final CrewManagementService crewManagement=mock(CrewManagementService.class);
+ private final AuditService audit=mock(AuditService.class); private final FlightAuthorizationService access=mock(FlightAuthorizationService.class); private final NotificationService notifications=mock(NotificationService.class); private final FinalReportWorkflowService reportWorkflow=mock(FinalReportWorkflowService.class); private final CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class); private final FlightLogService log=mock(FlightLogService.class); private final CrewManagementService crewManagement=mock(CrewManagementService.class); private final FlightCrewRepository crews=mock(FlightCrewRepository.class);
+ private final FlightRouteService routeReview=mock(FlightRouteService.class);
  private final Clock clock=Clock.fixed(Instant.parse("2026-10-20T03:30:00Z"),ZoneId.of("America/Argentina/Tucuman"));
  private FlightService service; private User ops,commander; private Flight flight; private Aircraft plane; private Airport origin,destination;
  private final Map<String,FlightStatus> catalog=new HashMap<>();
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),mock(FlightCrewRepository.class),mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,clock);
+  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,routeReview,clock);
   Province province=new Province();province.setId(1L);province.setNombre("Tucumán");
   origin=airport(1L,"TUC",province);destination=airport(2L,"AEP",province);
   ops=user(10L,"ops","CENTRO_OPERACIONES");commander=user(11L,"cmd","COMANDANTE");commander.getPerson().getCommanderProfile().setProvinciaActual(province);
   plane=new Aircraft();plane.setId(5L);plane.setActivo(true);plane.setAeropuertoActual(origin);
   for(String code:List.of("PLANIFICADO","EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO","PENDIENTE_CONFIRMACION_COMANDANTE")){FlightStatus s=new FlightStatus();s.setCodigo(code);catalog.put(code,s);when(statuses.findByCodigo(code)).thenReturn(Optional.of(s));}
-  when(users.findById(10L)).thenReturn(Optional.of(ops));when(users.findById(11L)).thenReturn(Optional.of(commander));when(users.findWithRolesByUsername("ops")).thenReturn(Optional.of(ops));when(users.findWithRolesByUsername("cmd")).thenReturn(Optional.of(commander));
+  when(users.findById(10L)).thenReturn(Optional.of(ops));when(users.findById(11L)).thenReturn(Optional.of(commander));when(users.lockById(11L)).thenReturn(Optional.of(commander));when(users.findWithRolesByUsername("ops")).thenReturn(Optional.of(ops));when(users.findWithRolesByUsername("cmd")).thenReturn(Optional.of(commander));
+  when(crewManagement.evaluateOn(any(),any(),any(),any(),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
   flight=flight("EN_CURSO");when(flights.lockById(7L)).thenReturn(Optional.of(flight));when(flights.findById(7L)).thenReturn(Optional.of(flight));
   FlightType type=new FlightType();type.setCodigo("REGRESO_BASE");type.setActivo(true);when(types.findByCodigoAndActivoTrue("REGRESO_BASE")).thenReturn(Optional.of(type));when(airports.findById(2L)).thenReturn(Optional.of(destination));when(aircraft.lockById(5L)).thenReturn(Optional.of(plane));when(flights.activeAircraftAssignments(any(),any())).thenReturn(List.of());
  }
@@ -65,6 +67,20 @@ class FlightClosureServiceTest {
   doNothing().when(commanderAccess).requireOperationalAccess(11L); service.start(7L,10L);
   assertEquals("EN_CURSO",flight.getEstadoVuelo().getCodigo()); assertEquals(LocalDateTime.of(2026,10,20,0,30),flight.getFechaSalidaReal());
  }
+ @Test void startRejectsACommanderWhoseCredentialChangedAfterPlanning(){
+  flight.setEstadoVuelo(catalog.get("PLANIFICADO"));
+  when(crewManagement.evaluateOn(eq(flight),eq(commander),eq("COMANDANTE"),any(),eq(true))).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_REVOCADA","Verificación revocada",null));
+  ApiException e=assertThrows(ApiException.class,()->service.start(7L,10L));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_REVOCADA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());assertNull(flight.getFechaSalidaReal());
+ }
+ @Test void startRejectsAnAssignedCrewMemberWhoseCredentialExpired(){
+  flight.setEstadoVuelo(catalog.get("PLANIFICADO"));User copiloto=user(12L,"cop","DTS");when(users.lockById(12L)).thenReturn(Optional.of(copiloto));when(users.findById(12L)).thenReturn(Optional.of(copiloto));
+  CrewRole role=new CrewRole();role.setCodigo("COPILOTO");FlightCrew assignment=new FlightCrew();assignment.setUser(copiloto);assignment.setCrewRole(role);
+  when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(7L)).thenReturn(List.of(assignment));
+  when(crewManagement.evaluateOn(eq(flight),eq(copiloto),eq("COPILOTO"),any(),eq(true))).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_VENCIDA","Vencida",null));
+  ApiException e=assertThrows(ApiException.class,()->service.start(7L,10L));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_VENCIDA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());verify(log,never()).automatic(any(),any(),eq("INICIO"),anyString());
+ }
  @Test void startAndFinishCannotRunOutOfOrder(){
   flight.setEstadoVuelo(catalog.get("COMPLETADO")); assertThrows(ApiException.class,()->service.start(7L,10L));
   flight.setEstadoVuelo(catalog.get("FINALIZADO")); assertThrows(ApiException.class,()->service.start(7L,10L));
@@ -91,7 +107,7 @@ class FlightClosureServiceTest {
   assertTrue(e.getMessage().contains("vencidos")); verify(flights,never()).save(any());
  }
 
- private Flight flight(String state){Flight f=new Flight();f.setId(7L);f.setCodigo("V-7");f.setEstadoVuelo(catalog.get(state)==null?status(state):catalog.get(state));FlightType t=new FlightType();t.setCodigo("REGRESO_BASE");t.setNombre("Regreso");f.setTipoVuelo(t);f.setAircraft(plane);f.setComandante(commander);f.setOrigen(origin);f.setDestino(destination);f.setFechaPlanificadaLlegada(LocalDateTime.of(2026,10,20,5,0));return f;}
+ private Flight flight(String state){Flight f=new Flight();f.setId(7L);f.setCodigo("V-7");f.setEstadoVuelo(catalog.get(state)==null?status(state):catalog.get(state));FlightType t=new FlightType();t.setCodigo("REGRESO_BASE");t.setNombre("Regreso");f.setTipoVuelo(t);f.setAircraft(plane);f.setComandante(commander);f.setOrigen(origin);f.setDestino(destination);f.setFechaPlanificadaSalida(LocalDateTime.of(2026,10,20,3,0));f.setFechaPlanificadaLlegada(LocalDateTime.of(2026,10,20,5,0));return f;}
  private FlightStatus status(String code){FlightStatus s=new FlightStatus();s.setCodigo(code);return s;}
  private Airport airport(Long id,String name,Province p){Airport a=new Airport();a.setId(id);a.setNombre(name);a.setActivo(true);a.setProvinciaReferencial(p);return a;}
  private User user(Long id,String name,String role){User u=new User();u.setId(id);u.setUsername(name);u.setActivo(true);u.setEstadoCuenta("ACTIVO");Person p=new Person();CommanderProfile profile=new CommanderProfile();profile.setLicenseNumber("LIC");p.setCommanderProfile(profile);u.setPerson(p);Role r=new Role();r.setCodigo(role);UserRole link=new UserRole();link.setRole(r);u.setUserRoles(Set.of(link));return u;}

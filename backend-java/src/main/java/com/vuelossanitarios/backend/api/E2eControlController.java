@@ -2,6 +2,7 @@ package com.vuelossanitarios.backend.api;
 
 import com.vuelossanitarios.backend.config.AdjustableClock;
 import com.vuelossanitarios.backend.service.FinalReportDeadlineService;
+import com.vuelossanitarios.backend.service.CrewEligibilityMonitoringService;
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import java.time.Duration;
@@ -24,8 +25,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api/e2e") @Profile("e2e") @ConditionalOnProperty(name = "app.e2e-controls.enabled", havingValue = "true")
 public class E2eControlController {
     private static final Logger log = LoggerFactory.getLogger(E2eControlController.class);
-    private final AdjustableClock clock; private final FinalReportDeadlineService deadlines;
-    public E2eControlController(Clock clock, FinalReportDeadlineService deadlines) { this.clock = (AdjustableClock) clock; this.deadlines = deadlines; }
+    private final AdjustableClock clock; private final FinalReportDeadlineService deadlines; private final CrewEligibilityMonitoringService crewEligibility;
+    public E2eControlController(Clock clock, FinalReportDeadlineService deadlines,CrewEligibilityMonitoringService crewEligibility) { this.clock = (AdjustableClock) clock; this.deadlines = deadlines; this.crewEligibility=crewEligibility; }
     @PostConstruct void warn() { log.warn("CONTROLES E2E ACTIVOS: el reloj del servidor es ajustable. No usar fuera de entornos de prueba aislados."); }
 
     @GetMapping("/clock") @PreAuthorize("hasRole('ADMINISTRADOR')") public Map<String, Object> get() { return view(); }
@@ -38,5 +39,7 @@ public class E2eControlController {
         return view();
     }
     @PostMapping("/sweep") @PreAuthorize("hasRole('ADMINISTRADOR')") public Map<String, Object> sweep() { Map<String, Object> m = new LinkedHashMap<>(); m.put("notificacionesNuevas", deadlines.sweep()); return m; }
+    @PostMapping("/crew-eligibility/sweep") @PreAuthorize("hasRole('ADMINISTRADOR')") public Map<String,Object> crewSweep(){crewEligibility.sweep();return Map.of("evaluado",true);}
+    @PostMapping("/crew-eligibility/sweep/{flightId}") @PreAuthorize("hasRole('ADMINISTRADOR')") public Map<String,Object> crewSweepFlight(@PathVariable Long flightId){crewEligibility.reviewFlight(flightId);return Map.of("evaluado",true);}
     private Map<String, Object> view() { Map<String, Object> m = new LinkedHashMap<>(); m.put("now", clock.instant().toString()); m.put("offsetSeconds", clock.getOffset().getSeconds()); m.put("zone", clock.getZone().getId()); return m; }
 }

@@ -26,4 +26,5 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @Query("select (count(f) > 0) from Flight f where f.comandante.id = :userId and f.estadoVuelo.codigo in :states") boolean existsOperationalCommanderAssignment(@Param("userId") Long userId,@Param("states") Collection<String> states);
     @Query("select f from Flight f join f.sanitario s where s.solicitadoPor.id=:userId") List<Flight> findSanitaryBySolicitadoPorId(@Param("userId") Long userId);
     List<Flight> findByComandanteId(Long userId);
+    List<Flight> findByEstadoVueloCodigoIn(Collection<String> codes);
 }

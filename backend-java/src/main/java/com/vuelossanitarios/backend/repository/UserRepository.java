@@ -15,6 +15,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findActiveByRoleCode(@Param("role") String role);
     @Query("select distinct u from User u join fetch u.person p join fetch p.commanderProfile cp join cp.provinciaActual pr join u.userRoles ur join ur.role r where r.codigo='COMANDANTE' and u.activo=true and u.estadoCuenta='ACTIVO' and pr.id=:provinceId")
     List<User> findAvailableCommandersInProvince(@Param("provinceId") Long provinceId);
+    /** [userId, activo, estadoCuenta, personaId, nombre, apellido] sin cargar las entidades (para vistas mínimas de tripulación). */
+    @Query("select u.id,u.activo,u.estadoCuenta,p.id,p.nombre,p.apellido from User u join u.person p where u.id=:id") List<Object[]> findCrewPersonRowById(@Param("id") Long id);
     boolean existsByUsername(String username);
     @Query("select count(distinct u) from User u join u.userRoles ur join ur.role r where r.codigo='ADMINISTRADOR' and u.activo=true and u.estadoCuenta='ACTIVO'") long countActiveAdministrators();
     @Query("select distinct u from User u join fetch u.person left join fetch u.userRoles ur left join fetch ur.role")

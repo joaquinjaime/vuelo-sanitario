@@ -53,6 +53,39 @@ public class FlightRoute extends BaseEntity {
     @Column(name = "observaciones_ruta", columnDefinition = "NVARCHAR(MAX)")
     private String observaciones;
 
+    /** Estado de revisión de ESTA versión (ver V55); la aprobación pertenece a la versión y al contexto con que se planificó. */
+    @Column(name = "estado_revision", nullable = false, length = 25) private String estadoRevision = BORRADOR;
+    @Column(name = "motivo_modificacion", length = 500) private String motivoModificacion;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "id_usuario_presenta") private User presentadoPor;
+    @Column(name = "fecha_presentacion") private LocalDateTime fechaPresentacion;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "id_usuario_revisor") private User revisadoPor;
+    @Column(name = "fecha_revision") private LocalDateTime fechaRevision;
+    @Column(name = "observaciones_revision", length = 1000) private String observacionesRevision;
+    @Column(name = "fecha_invalidacion") private LocalDateTime fechaInvalidacion;
+    @Column(name = "causa_invalidacion", length = 500) private String causaInvalidacion;
+
+    public static final String BORRADOR = "BORRADOR", PENDIENTE_REVISION = "PENDIENTE_REVISION", APROBADA = "APROBADA",
+            DEVUELTA = "DEVUELTA", REQUIERE_REVISION = "REQUIERE_REVISION", SIN_REVISION = "SIN_REVISION";
+
+    public String getEstadoRevision() { return estadoRevision; }
+    public void setEstadoRevision(String v) { estadoRevision = v; }
+    public String getMotivoModificacion() { return motivoModificacion; }
+    public void setMotivoModificacion(String v) { motivoModificacion = v; }
+    public User getPresentadoPor() { return presentadoPor; }
+    public void setPresentadoPor(User v) { presentadoPor = v; }
+    public LocalDateTime getFechaPresentacion() { return fechaPresentacion; }
+    public void setFechaPresentacion(LocalDateTime v) { fechaPresentacion = v; }
+    public User getRevisadoPor() { return revisadoPor; }
+    public void setRevisadoPor(User v) { revisadoPor = v; }
+    public LocalDateTime getFechaRevision() { return fechaRevision; }
+    public void setFechaRevision(LocalDateTime v) { fechaRevision = v; }
+    public String getObservacionesRevision() { return observacionesRevision; }
+    public void setObservacionesRevision(String v) { observacionesRevision = v; }
+    public LocalDateTime getFechaInvalidacion() { return fechaInvalidacion; }
+    public void setFechaInvalidacion(LocalDateTime v) { fechaInvalidacion = v; }
+    public String getCausaInvalidacion() { return causaInvalidacion; }
+    public void setCausaInvalidacion(String v) { causaInvalidacion = v; }
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
 @JoinColumn(name = "id_usuario_creador", nullable = false)
     private User creadoPor;
