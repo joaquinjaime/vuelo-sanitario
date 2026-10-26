@@ -26,7 +26,7 @@ async function provisionRole(admin, user, roleCode) {
 }
 
 (async () => {
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47'); await waitHealthy();
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47); await waitHealthy();
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   const adminLogin = await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } }); const admin = adminLogin.accessToken;
   const adminUser = await createUser(admin, 'ADMINISTRADOR', 'uadm'), ops = await createUser(admin, 'CENTRO_OPERACIONES', 'uops');
@@ -108,7 +108,7 @@ async function provisionRole(admin, user, roleCode) {
     await o.reload(); await select(o, fU);
     await o.getByLabel('Función de tripulación').selectOption('MEDICO'); await o.getByLabel('Personal disponible').waitFor();
     assert.equal(await o.getByLabel('Personal disponible').locator(`option[value="${med1.id}"]`).count(), 0, 'med1 tiene un vuelo superpuesto'); assert.equal(await o.getByLabel('Personal disponible').locator(`option[value="${med2.id}"]`).count(), 1);
-    const conflictBox = o.locator('details', { hasText: 'No disponibles por conflicto' }); await conflictBox.getByText(/No disponibles por conflicto/).click(); await conflictBox.getByText(new RegExp(`${one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${fOverlap}`)}`)).waitFor(); await snap(o, 'o03-conflicto-tripulacion');
+    const conflictBox = o.locator('details', { hasText: 'Personal que requiere revisión' }); await conflictBox.getByText(/Personal que requiere revisión/).click(); await conflictBox.getByText(new RegExp(`${one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${fOverlap}`)}`)).waitFor(); await snap(o, 'o03-conflicto-tripulacion');
     await o.getByLabel('Personal disponible').selectOption(String(med2.id)); await o.getByRole('button', { name: 'Asignar tripulante' }).click(); await toast(o, '✓ Tripulante asignado');
     assert.equal(activeCrew(fU), 2); assert.deepEqual(crewState(fU, med2), ['NULL', 'NULL']); assert.equal(count(`SELECT COUNT(*) FROM eventos_auditoria WHERE id_vuelos=${fU} AND tipo_entidad=N'FLIGHT_CREW' AND operacion=N'CREATE'`) >= 2, true);
     await o.reload(); await select(o, fU); const crewBox = o.locator('div.wide', { has: o.locator('h4', { hasText: /^Tripulación$/ }) }).last(); await crewBox.getByText('E2E umed2').waitFor();

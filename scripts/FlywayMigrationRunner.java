@@ -15,9 +15,13 @@ public final class FlywayMigrationRunner {
             if (part.regionMatches(true, 0, "databaseName=", 0, 13)) database = part.substring(13).trim();
         }
         if (database == null || database.isBlank()) throw new IllegalArgumentException("Use an explicit databaseName");
-        if (!validateOnly && database.equalsIgnoreCase("vuelos_sanitarios")
-                && !"V32_TO_V47_AUTHORIZED".equals(System.getenv("MIGRATION_HABITUAL_AUTHORIZATION")))
-            throw new IllegalStateException("Habitual database migration requires explicit maintenance authorization");
+        // Cada actualización autorizada de la base habitual tiene su propia contraseña de autorización, ligada a la versión objetivo:
+        // una autorización anterior (V32 a V47) no habilita una migración posterior (V47 a V55) ni a la inversa.
+        String authorization = System.getenv("MIGRATION_HABITUAL_AUTHORIZATION");
+        boolean authorized = (args[0].equals("47") && "V32_TO_V47_AUTHORIZED".equals(authorization))
+                || (args[0].equals("55") && "V47_TO_V55_AUTHORIZED".equals(authorization));
+        if (!validateOnly && database.equalsIgnoreCase("vuelos_sanitarios") && !authorized)
+            throw new IllegalStateException("Habitual database migration requires explicit maintenance authorization for the exact target version");
         var config = Flyway.configure()
                 .dataSource(url, user, password)
                 .locations(location.startsWith("classpath:") || location.startsWith("filesystem:")

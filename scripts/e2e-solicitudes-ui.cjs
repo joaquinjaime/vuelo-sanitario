@@ -16,7 +16,7 @@ const civilDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
 const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-local
 
 (async () => {
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47'); await waitHealthy();
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47); await waitHealthy();
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
   const ops = await createUser(admin, 'CENTRO_OPERACIONES', 'uiops'), dts = await createUser(admin, 'DTS', 'uidts'), cmdU = await createUser(admin, 'COMANDANTE', 'uicmdu'), cmdO = await createUser(admin, 'COMANDANTE', 'uicmdo');
@@ -26,7 +26,13 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
   for (const c of [cmdU, cmdO]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
   const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'W' + Math.floor(Math.random() * 1e5)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0]; const reasons = await ok('/catalogs/cancellation-reasons', { token: ops.token }); const reason = reasons.find((r) => r.codigo !== 'OTRO');
-  const patient = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'Interfaz', apellido: MARK, dni: String(30000000 + Math.floor(Math.random() * 9999999)) } });
+  // La búsqueda por nombre exige letras: el apellido de prueba se deriva de la marca sin dígitos.
+  const surname = MARK.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]);
+  const patientDni = String(30000000 + Math.floor(Math.random() * 9999990));
+  const patient = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'Interfaz', apellido: surname, dni: patientDni } });
+  // Homónimo con otro DNI: la búsqueda paginada devuelve ambos y la selección debe recaer en el correcto.
+  const namesake = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'Interfaz', apellido: surname, dni: String(Number(patientDni) + 1) } });
+  assert.notEqual(patient.id, namesake.id);
   const nowMs = Date.now(); const body = (motive, when, extra = {}) => ({ patientId: patient.id, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority.codigo, motivoVuelo: motive, fechaSolicitada: when, extremaUrgencia: false, medical: { diagnostico: 'Dx-' + MARK, condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false }, ...extra });
   const mk = async (motive, days, hh, extra) => (await ok('/flights', { method: 'POST', token: dts.token, body: body(motive, `${civilDay(nowMs + days * DAY)}T${hh}:00:00`, extra) })).id;
   const mUrgent = 'UI urgente ' + MARK, mA = 'UI A negociar ' + MARK, mB = 'UI B rechazar ' + MARK, mC = 'UI C aceptar ' + MARK, mNew = 'UI nueva ' + MARK, mNewUrgent = 'UI nueva urgente ' + MARK;
@@ -45,7 +51,14 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
     // ---- DTS crea solicitudes desde el formulario ----
     const dtsPage = await login(dts.name); const form = dtsPage.locator('form').first();
     async function fillRequest(motive, when, urgent) {
-      await form.getByLabel('Paciente').selectOption({ label: `Interfaz ${MARK}` });
+      // Flujo actual: búsqueda explícita y paginada; no existe un desplegable con todos los pacientes.
+      await form.locator('label', { hasText: /^Paciente/ }).locator('select').first().selectOption('search');
+      await form.getByLabel('Nombre', { exact: true }).fill('Interfaz'); await form.getByLabel('Apellido', { exact: true }).fill(surname);
+      await form.getByRole('button', { name: 'Buscar paciente' }).click();
+      const results = form.locator('.patient-results li'); await results.first().waitFor(); assert.equal(await results.count(), 2, 'la búsqueda por nombre devuelve a ambos homónimos');
+      assert.equal(await form.getByText(patientDni).count(), 0, 'el DNI completo no se muestra en los resultados');
+      await results.filter({ hasText: `DNI ••••${patientDni.slice(-4)}` }).getByRole('button', { name: 'Seleccionar' }).click();
+      await form.getByText(/Paciente seleccionado/).waitFor();
       for (const [kind, locality] of [['origen', localities[0]], ['destino', localities[1]]]) { await dtsPage.getByLabel(`Provincia ${kind}`).selectOption(String(province.id)); await dtsPage.getByLabel(`Buscar localidad ${kind}`).fill(locality.nombre.slice(0, 5)); await dtsPage.getByLabel(`Buscar localidad ${kind}`).focus(); await dtsPage.getByRole('option', { name: new RegExp(locality.nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click(); }
       await form.getByLabel('Fecha y hora solicitada').fill(when);
       if (urgent) { await form.getByLabel('Extrema urgencia').check(); await form.getByLabel('Justificación de extrema urgencia').fill('Riesgo vital por interfaz'); await form.getByLabel('Fecha y hora límite para el traslado').fill(urgent); }
@@ -54,8 +67,10 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
     }
     await fillRequest(mNew, input(nowMs + 5 * DAY, '10:00')); await dtsPage.getByText('✓ Solicitud registrada').waitFor();
     const fNew = flightByMotive(mNew); assert.equal(reqState(fNew), 'SOLICITADO'); assert.equal(stateOf(fNew), 'NULL'); assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_vuelos=${fNew} AND extrema_urgencia=0 AND id_usuario_solicitante=${dts.id}`), 1);
+    assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_vuelos=${fNew} AND id_pacientes=${patient.id}`), 1, 'la solicitud quedó asociada al paciente seleccionado');
+    assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_pacientes=${namesake.id}`), 0, 'el homónimo no recibió ninguna solicitud');
     await fillRequest(mNewUrgent, input(nowMs + DAY, '07:00'), input(nowMs + DAY, '23:00')); await dtsPage.waitForTimeout(1500);
-    const fNewUrgent = flightByMotive(mNewUrgent); assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_vuelos=${fNewUrgent} AND extrema_urgencia=1 AND justificacion_extrema_urgencia=N'Riesgo vital por interfaz'`), 1);
+    const fNewUrgent = flightByMotive(mNewUrgent); assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_vuelos=${fNewUrgent} AND extrema_urgencia=1 AND justificacion_extrema_urgencia=N'Riesgo vital por interfaz' AND id_pacientes=${patient.id}`), 1);
     await snap(dtsPage, 's01-dts-solicitudes');
     pass('UI-1 DTS crea desde el formulario una solicitud normal y una de extrema urgencia (justificación y horario límite) que se persisten en SQL Server');
 

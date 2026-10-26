@@ -14,7 +14,7 @@ const row = (id) => sql(`SELECT esta_activo, estado_cuenta, debe_cambiar_contras
 const rolesOf = (id) => sql(`SELECT r.codigo_rol FROM usuarios_roles ur JOIN roles r ON r.id_roles=ur.id_roles WHERE ur.id_usuarios=${id} ORDER BY r.codigo_rol`).split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
 (async () => {
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47'); await waitHealthy();
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47); await waitHealthy();
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   const boot = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
   const adm = await createUser(boot, 'ADMINISTRADOR', 'uuadm'), ops = await createUser(boot, 'CENTRO_OPERACIONES', 'uuops'), dts = await createUser(boot, 'DTS', 'uudts');

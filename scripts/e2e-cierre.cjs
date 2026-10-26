@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 const BASE_URL = BASE;
 let passed = 0;
 const pass = (text) => { passed++; console.log('PASS: ' + text); };
@@ -80,6 +80,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   }
   async function finishedOperational(commander) {
     const f = await plannedOperational(commander);
+    await approveRoute(f.id, commander.token, ops.token);
     await call(`/flights/${f.id}/start`, { method: 'POST', token: ops.token }); await call(`/flights/${f.id}/finish`, { method: 'POST', token: ops.token });
     return f;
   }
@@ -98,6 +99,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   await call(`/flights/${sanitary}/finish`, { method: 'POST', token: ops.token, expect: [400] });
   await call(`/flights/${sanitary}/start`, { method: 'POST', token: cmd.cmdA.token, expect: [403] }); await call(`/flights/${sanitary}/start`, { method: 'POST', token: dts.token, expect: [403] });
   assert.equal(stateOf(sanitary), 'PLANIFICADO'); assert.equal(count(`SELECT COUNT(*) FROM obligaciones_informe_final WHERE id_vuelos=${sanitary}`), 0);
+  await approveRoute(sanitary, cmd.cmdA.token, ops.token);
   await call(`/flights/${sanitary}/start`, { method: 'POST', token: ops.token });
   assert.equal(stateOf(sanitary), 'EN_CURSO'); assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_vuelos=${sanitary} AND fecha_salida_real IS NOT NULL AND fecha_llegada_real IS NULL`), 1);
   await call(`/flights/${sanitary}/start`, { method: 'POST', token: ops.token, expect: [400] });
@@ -211,7 +213,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   pass('F permisos: comandantes ajenos, DTS, CO y anónimo rechazados (presentar texto y PDF, prórroga, consulta, descarga, revisión); admin y operaciones leen; rechazo sanitario no se cancela ni finaliza');
 
   // ---------- G: concurrencia y reintentos ----------
-  const gFlight = await plannedOperational(cmd.cmdG); await call(`/flights/${gFlight.id}/start`, { method: 'POST', token: ops.token });
+  const gFlight = await plannedOperational(cmd.cmdG); await approveRoute(gFlight.id, cmd.cmdG.token, ops.token); await call(`/flights/${gFlight.id}/start`, { method: 'POST', token: ops.token });
   const finishes = await Promise.all(Array.from({ length: 6 }, () => call(`/flights/${gFlight.id}/finish`, { method: 'POST', token: ops.token, expect: [200, 400, 409, 500] })));
   assert.equal(finishes.filter((r) => r.status === 200).length, 1); assert.ok(finishes.every((r) => r.status === 200 || r.status === 400), 'estados: ' + finishes.map((r) => r.status));
   assert.equal(count(`SELECT COUNT(*) FROM obligaciones_informe_final WHERE id_vuelos=${gFlight.id}`), 1); assert.equal(notifCount('FINAL_REPORT_PENDING', cmd.cmdG, gFlight.id), 1); assert.equal(notifCount('FLIGHT_FINISHED', cmd.cmdG, gFlight.id), 1); assert.equal(auditCount(gFlight.id, 'FLIGHT', 'FINISH'), 1);
@@ -265,10 +267,10 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   await blocked('contrapropuesta de horario', `/flights/${assignC}/commander-assignment/response`, { method: 'POST', body: { aceptar: false, motivo: 'x', salidaPropuesta: fmt(new Date(assignSlot.getTime() + 86400000)), llegadaPropuesta: fmt(new Date(assignSlot.getTime() + 86400000 + 7200000)) } });
   await blocked('planificación', `/flights/${pendingC.id}/operational-planning`, { method: 'POST', body: planBody }); await blocked('meteorología', `/flights/${pendingC.id}/weather`, { method: 'POST', body: { condiciones: 'Despejado', favorable: true } });
   await call(`/flights/${pendingC.id}/cancel`, { method: 'POST', token: cmd.cmdC.token, body: { motivoCancelacionId: reason.id }, expect: [403] }); // el comandante no cancela vuelos (rechaza asignaciones)
-  await blocked('ruta', `/flights/${pendingC.id}/route`, { method: 'PUT', body: { version: 0, recorrido: 'Directo' } });
+  await blocked('ruta', `/flights/${pendingC.id}/route`, { method: 'PUT', body: { version: 0, recorrido: 'Directo' } }); await blocked('presentación de ruta', `/flights/${pendingC.id}/route/submit`, { method: 'POST', body: { version: 1 } });
   await blocked('hangar', `/flights/${pendingC.id}/hangar/commander-observation`, { method: 'PUT', body: { version: 1, observaciones: 'Listo' } }); await blocked('bitácora', `/flights/${pendingC.id}/log`, { method: 'POST', body: logBody });
   await blocked('documento nuevo', `/flights/${pendingC.id}/documents/pdf`, { multipartFields: { documentTypeCode: docType, nombreDocumento: 'Otro' }, file: { bytes: PDF, name: 'otro.pdf' } });
-  await blocked('bloqueo documental', `/documents/${docItem}/lock`, { method: 'POST' }); await blocked('liberar bloqueo', `/documents/${docItem}/lock`, { method: 'DELETE' }); await blocked('versión documental', `/documents/${docItem}/versions/pdf`, { multipartFields: {}, file: { bytes: PDF, name: 'v2.pdf' } });
+  await blocked('bloqueo documental', `/documents/${docItem}/lock`, { method: 'POST' }); await blocked('liberar bloqueo', `/documents/${docItem}/lock`, { method: 'DELETE' }); await blocked('baja de documento', `/flights/${pendingC.id}/documents/${docItem}/deactivate`, { method: 'POST', body: { motivo: 'Baja de prueba' } }); await blocked('versión documental', `/documents/${docItem}/versions/pdf`, { multipartFields: {}, file: { bytes: PDF, name: 'v2.pdf' } });
   await call(`/flights/${pendingC.id}/start`, { method: 'POST', token: ops.token, expect: [403] }); assert.equal(stateOf(pendingC.id), 'PLANIFICADO');
   const planeBlocked = await newPlane(); const slot = futureSlot();
   await call('/flights/operational', { method: 'POST', token: ops.token, body: { tipoVueloCode: 'REGRESO_BASE', motivoVuelo: 'No debe crearse', aircraftId: planeBlocked.id, comandanteId: cmd.cmdC.id, destinoId: airports[1].id, salida: fmt(slot), llegada: fmt(new Date(slot.getTime() + 7200000)) }, expect: [409] });
@@ -288,11 +290,12 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
   await call(`/flights/${pendingC.id}/log`, { method: 'POST', token: cmd.cmdC.token, body: { ...logBody, ocurrido: new Date(Date.now() - 60000).toISOString() } });
   await call(`/documents/${docItem}/lock`, { method: 'POST', token: cmd.cmdC.token }); await multipart(`/documents/${docItem}/versions/pdf`, cmd.cmdC.token, {}, { bytes: pdfWith('% v2'), name: 'v2.pdf' }); await call(`/documents/${docItem}/lock`, { method: 'DELETE', token: cmd.cmdC.token, expect: [204] });
   await multipart(`/flights/${pendingC.id}/documents/pdf`, cmd.cmdC.token, { documentTypeCode: docType, nombreDocumento: 'Otro ' + MARK }, { bytes: PDF, name: 'otro.pdf' });
+  await approveRoute(pendingC.id, cmd.cmdC.token, ops.token);
   await call(`/flights/${pendingC.id}/start`, { method: 'POST', token: ops.token }); assert.equal(stateOf(pendingC.id), 'EN_CURSO');
   await call(`/flights/${assignC}/cancel`, { method: 'POST', token: ops.token, body: { motivoCancelacionId: reason.id } }); assert.equal(stateOf(assignC), 'CANCELADO');
   const inbox = await ok('/notifications?size=100', { token: cmd.cmdC.token }); assert.ok(inbox.unread > 3); const target = inbox.items.find((n) => !n.leido); await call(`/notifications/${target.id}/read`, { method: 'POST', token: cmd.cmdC.token });
   assert.equal(count(`SELECT COUNT(*) FROM notificaciones WHERE id_notificaciones=${target.id} AND leido=1`), 1); assert.equal(await ok('/notifications/read-all', { method: 'POST', token: cmd.cmdC.token }), inbox.unread - 1); assert.equal((await ok('/notifications', { token: cmd.cmdC.token })).unread, 0);
-  pass('C plazo con reloj controlado: aviso próximo exacto e idempotente, bloqueo exacto en el vencimiento SIN barrido previo, 14 acciones de escritura rechazadas con COMANDANTE_BLOQUEADO (asignación, rechazo, contrapropuesta, planificación, clima, cancelación, ruta, hangar, bitácora, documentos, inicio, nuevas asignaciones), consultas/login permitidos, avisos de vencida/bloqueo una sola vez y al responsable, desbloqueo y regresión de todas las funciones');
+  pass('C plazo con reloj controlado: aviso próximo exacto e idempotente, bloqueo exacto en el vencimiento SIN barrido previo, 15 acciones de escritura rechazadas con COMANDANTE_BLOQUEADO (asignación, rechazo, contrapropuesta, planificación, clima, cancelación, ruta, presentación de ruta, hangar, bitácora, documentos, inicio, nuevas asignaciones), consultas/login permitidos, avisos de vencida/bloqueo una sola vez y al responsable, desbloqueo y regresión de todas las funciones');
 
   // ---------- D: reinicio del plazo con reloj controlado (cruza medianoche local) ----------
   const base = await nowMs(); const nextMidnightLocal = (() => { const d = new Date(base); d.setUTCHours(2, 30, 0, 0); if (d.getTime() <= base) d.setUTCDate(d.getUTCDate() + 1); return d.getTime(); })(); // 23:30 en Tucumán (UTC-3)

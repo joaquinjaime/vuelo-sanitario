@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
-const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 const { chromium } = require('playwright');
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 const DAY = 86400000, TZ = -3 * 3600000;
@@ -15,7 +15,7 @@ const civilDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
 const z = (n) => String(n).padStart(2, '0');
 
 (async () => {
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47'); await waitHealthy();
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47); await waitHealthy();
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   const boot = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
   const adm = await createUser(boot, 'ADMINISTRADOR', 'uiaadm'), ops = await createUser(boot, 'CENTRO_OPERACIONES', 'uiaops'), dts = await createUser(boot, 'DTS', 'uiadts'), dts2 = await createUser(boot, 'DTS', 'uiadts2');
@@ -34,6 +34,7 @@ const z = (n) => String(n).padStart(2, '0');
   const p1 = await plane(); await ok(`/flights/${F}/resources`, { method: 'POST', token: ops.token, body: { aircraftId: p1.id, comandanteId: cmdA.id } });
   await ok(`/flights/${F}/resources`, { method: 'POST', token: ops.token, body: { aircraftId: p1.id, comandanteId: cmdB.id } });
   await ok(`/flights/${F}/operational-planning`, { method: 'POST', token: cmdB.token, body: { origenId: airports[0].id, destinoId: airports[1].id, llegada: `${civilDay(now + 7 * DAY)}T11:00:00` } });
+  await approveRoute(F, cmdB.token, ops.token);
   await call(`/flights/${F}/start`, { method: 'POST', token: ops.token });
   const p2 = await plane(); await ok(`/catalogs/aircraft/${p2.id}/location`, { method: 'POST', token: boot, body: { locationId: airports[1].id, motivo: 'Reposicionamiento UI ' + MARK } });
   const other = (await ok('/flights', { method: 'POST', token: dts2.token, body: { patientId: (await ok('/patients', { method: 'POST', token: dts2.token, body: { nombre: 'Ajeno', apellido: MARK } })).id, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority, motivoVuelo: 'Ajena ' + MARK, fechaSolicitada: `${civilDay(now + 6 * DAY)}T10:00:00`, extremaUrgencia: false, medical: { diagnostico: DX + 'b', condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false } } })).id;

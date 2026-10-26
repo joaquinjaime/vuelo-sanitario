@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PDF } = require('./e2e-cierre-support.cjs');
+const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PDF, approveRoute } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const dniSeq = () => String(60000000 + Math.floor(Math.random() * 30000000));
 const NEW_PASSWORD = 'Definitiva-' + MARK + '-1';
@@ -19,12 +19,15 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
   assert.ok(env.DB_URL.includes(`databaseName=${DB_NAME};`) && env.SPRING_PROFILES_ACTIVE.includes('e2e'), 'El backend no es el stack E2E aislado');
   assert.equal(one('SELECT DB_NAME()'), DB_NAME);
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47', 'La base aislada debe estar en V47');
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47, 'La base aislada debe estar en V47');
   for (const ix of ['uq_personas_dni', 'uq_usuarios_nombre_usuario', 'idx_usuarios_id_usuario_baja']) assert.equal(count(`SELECT COUNT(*) FROM sys.indexes WHERE name=N'${ix}'`), 1, ix);
   assert.equal(count("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID('usuarios') AND name IN ('id_usuario_baja','motivo_baja')"), 2);
   assert.equal(count('SELECT COUNT(*) FROM usuarios WHERE esta_activo=0 AND id_usuario_baja IS NOT NULL'), count("SELECT COUNT(*) FROM usuarios u WHERE u.esta_activo=0 AND EXISTS (SELECT 1 FROM eventos_auditoria x WHERE x.tipo_entidad=N'USER' AND x.operacion=N'USUARIO_DESACTIVADO' AND x.entidad_id=u.id_usuarios AND x.id_usuario_actor IS NOT NULL)"), 'el relleno de V47 sólo usa bajas con responsable auditado');
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   await waitHealthy();
+  // La base habitual nunca se modifica: se anota su versión al empezar (sólo lectura) y se compara al terminar.
+  const habitualVersionAtStart = spawnSync('docker', ['exec', '-i', 'vuelos-sanitarios-sqlserver-1', 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d vuelos_sanitarios -W -h -1 -i /dev/stdin'], { input: 'SELECT TOP 1 version FROM flyway_schema_history ORDER BY installed_rank DESC\nGO\n', encoding: 'utf8' }).stdout.split(/\r?\n/)[0].trim();
+  assert.match(habitualVersionAtStart, /^\d+$/, 'no se pudo leer la versión de la base habitual');
   let admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
   let adminId = Number(one(`SELECT id_usuarios FROM usuarios WHERE nombre_usuario=N'${dotenv.BOOTSTRAP_ADMIN_USERNAME}'`));
   const bootstrapAdminId = adminId;
@@ -78,7 +81,7 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   const requestBody = (when) => ({ patientId: patient.id, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority, motivoVuelo: 'Usuarios ' + MARK, fechaSolicitada: when, extremaUrgencia: false, medical: { diagnostico: 'Dx-' + MARK, condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false } });
   const stateOf = (id) => one(`SELECT ISNULL(e.codigo_estado_vuelo,'NULL') FROM vuelos v LEFT JOIN estados_vuelo e ON e.id_estados_vuelo=v.id_estados_vuelo WHERE v.id_vuelos=${id}`);
   const userRow = (id) => sql(`SELECT esta_activo, estado_cuenta, debe_cambiar_contrasena, version_credenciales, ISNULL(CAST(id_usuario_baja AS varchar),'NULL'), ISNULL(motivo_baja,'NULL'), ISNULL(CONVERT(varchar(19),fecha_baja,120),'NULL'), LEFT(ISNULL(hash_contrasena,''),4) FROM usuarios WHERE id_usuarios=${id}`).split('|').map((x) => x.trim());
-  const createBody = (nombre, dni, roles, extra = {}) => ({ nombre, apellido: 'E2E' + MARK, dni, roles, correos: [{ direccion: nombre.toLowerCase() + '.' + MARK + '@example.test', tipo: 'PERSONAL' }], telefonos: [{ numero: '3815550000', tipo: 'PERSONAL' }], ...extra });
+  const createBody = (nombre, dni, roles, extra = {}) => ({ nombre, apellido: 'E2E' + MARK, dni, roles, correos: [{ direccion: nombre.toLowerCase() + '.' + MARK + '@example.test', tipo: 'PERSONAL' }], telefonos: [{ pais: 'AR', numero: '3815550000', tipo: 'PERSONAL' }], ...extra });
   const activate = (dni, code, username, password = PASSWORD) => call('/auth/activar-cuenta', { method: 'POST', body: { dni, codigo: code, username, password, confirmacionPassword: password }, expect: [204, 409, 400] });
   const auditOps = (userId) => sql(`SELECT operacion FROM eventos_auditoria WHERE entidad_id=${userId} AND tipo_entidad IN (N'USER',N'USER_ROLE') ORDER BY id_eventos_auditoria`).split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
@@ -184,13 +187,16 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   await call(`/flights/${fLock.id}/cancel`, { method: 'POST', token: ops.token, body: cancelBody });
   await call(`/auth/users/${cmdC.id}/deactivate`, { method: 'PATCH', token: admin, body: { motivo: 'baja con documento bloqueado' } });
   assert.equal(count(`SELECT COUNT(*) FROM bloqueos_documento_vuelo WHERE id_usuario_propietario=${cmdC.id} AND fecha_vencimiento > SYSUTCDATETIME()`), 0, 'el bloqueo vence al desactivar'); assert.equal(count(`SELECT COUNT(*) FROM bloqueos_documento_vuelo WHERE id_usuario_propietario=${cmdC.id}`), 1, 'el registro se conserva'); assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_usuario_comandante=${cmdC.id}`), 2, 'los vuelos históricos conservan al comandante');
-  const successorLock = await ok(`/documents/${doc.id}/lock`, { method: 'POST', token: ops.token });
-  assert.equal(successorLock.ownerId, ops.id, 'otro usuario autorizado adquiere el documento al liberar el lease');
-  assert.equal(successorLock.active, true, 'el nuevo lease queda vigente');
+  const expiredLease = await ok(`/documents/${doc.id}/lock`, { token: ops.token });
+  assert.equal(expiredLease.active, false, 'el lease de la cuenta desactivada ya no está vigente');
+  // El vuelo quedó cancelado: sus documentos son de sólo consulta, así que el rechazo es por estado y no por un lease ajeno (la
+  // recuperación del lease en un vuelo abierto se comprueba en e2e-documentos.cjs, bloque H).
+  const successorLock = await call(`/documents/${doc.id}/lock`, { method: 'POST', token: ops.token, expect: [400] });
+  assert.match(successorLock.data.error, /sólo consulta documental/);
   assert.equal(count(`SELECT COUNT(*) FROM versiones_documento_vuelo WHERE id_documentos_vuelo=${doc.id}`), 1, 'la baja no elimina la version documental');
   const cmdCdetail = await ok(`/audit?entityType=USER&entityId=${cmdC.id}&operation=USUARIO_DESACTIVADO`, { token: admin }); assert.ok((await ok(`/audit/events/${cmdCdetail.items[0].id}`, { token: admin })).changes.some((c) => c.field === 'bloqueosDocumentalesLiberados'), 'la baja informa los bloqueos liberados');
   // informe final pendiente: bloquea; presentado y aprobado, deja de bloquear
-  const cmdR = await newCommander('ucmdr'); const fR = await planned(cmdR); await call(`/flights/${fR.id}/start`, { method: 'POST', token: ops.token }); await call(`/auth/users/${cmdR.id}/deactivate`, { method: 'PATCH', token: admin, body: {}, expect: [409] });
+  const cmdR = await newCommander('ucmdr'); const fR = await planned(cmdR); await approveRoute(fR.id, cmdR.token, ops.token); await call(`/flights/${fR.id}/start`, { method: 'POST', token: ops.token }); await call(`/auth/users/${cmdR.id}/deactivate`, { method: 'PATCH', token: admin, body: {}, expect: [409] });
   await call(`/flights/${fR.id}/finish`, { method: 'POST', token: ops.token }); const pendingReport = (await call(`/auth/users/${cmdR.id}/deactivate`, { method: 'PATCH', token: admin, body: {}, expect: [409] })).data; assert.ok(pendingReport.impedimentos.some((b) => b.tipo === 'INFORME_FINAL_PENDIENTE' && b.vueloCodigo === fR.code), JSON.stringify(pendingReport));
   await call(`/auth/users/${cmdR.id}`, { method: 'PUT', token: admin, body: { nombre: 'Cmd', apellido: 'E2E' + MARK, roles: ['DTS'], activo: true }, expect: [409] });
   const obligation = (await ok('/final-reports/mine', { token: cmdR.token })).find((x) => x.flightId === fR.id); await ok(`/final-reports/${obligation.id}/submit`, { method: 'POST', token: cmdR.token, body: { texto: 'Informe ' + MARK, horasVuelo: 1.5, combustibleConsumidoLitros: 300, incidentes: 'Ninguno' } });
@@ -293,5 +299,5 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   console.log(`E2E usuarios OK: ${passed} bloques; marca ${MARK}`);
   // la base habitual no se toca: sólo lectura
   const habitual = spawnSync('docker', ['exec', '-i', 'vuelos-sanitarios-sqlserver-1', 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d vuelos_sanitarios -W -h -1 -i /dev/stdin'], { input: 'SELECT TOP 1 version FROM flyway_schema_history ORDER BY installed_rank DESC\nGO\n', encoding: 'utf8' });
-  assert.equal(habitual.stdout.split(/\r?\n/)[0].trim(), '32', 'la base habitual permanece en V32'); pass('H la base habitual permanece en V32 (consulta de sólo lectura)');
+  assert.equal(habitual.stdout.split(/\r?\n/)[0].trim(), habitualVersionAtStart, 'la base habitual conserva la versión de Flyway que tenía al empezar'); pass(`H la base habitual permanece en V${habitualVersionAtStart}, la que tenía al empezar (consulta de sólo lectura)`);
 })().catch((e) => { console.error('FAIL:', e); process.exit(1); });

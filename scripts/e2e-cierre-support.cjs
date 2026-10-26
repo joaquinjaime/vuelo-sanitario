@@ -11,8 +11,9 @@ const BASE = process.env.E2E_BASE || 'http://127.0.0.1:18080/api';
 const DB_NAME = process.env.E2E_DB_NAME || 'vuelos_sanitarios_e2e';
 const SQL_CONTAINER = process.env.E2E_SQL_CONTAINER || `${PROJECT}-sqlserver-1`;
 const BACKEND = process.env.E2E_BACKEND_CONTAINER || `${PROJECT}-backend-1`;
-const MARK = 'cie' + crypto.randomBytes(3).toString('hex');
-const PASSWORD = 'E2E-' + crypto.randomBytes(12).toString('base64url');
+// E2E_FIXED_MARK / E2E_FIXED_PASSWORD permiten que dos procesos (p. ej. la siembra y la verificación del ensayo de migración) compartan las cuentas que crearon.
+const MARK = process.env.E2E_FIXED_MARK || 'cie' + crypto.randomBytes(3).toString('hex');
+const PASSWORD = process.env.E2E_FIXED_PASSWORD || 'E2E-' + crypto.randomBytes(12).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sql(query, database = DB_NAME) {
@@ -43,13 +44,30 @@ const futureSlot = () => { const d = new Date(Date.now() + (dayCursor += 3) * 86
 async function createUser(admin, role, suffix) {
   const dni = String(100000000000 + Math.floor(Math.random() * 899999999999));
   const name = MARK + suffix;
-  const req = { nombre: 'E2E', apellido: suffix, dni, roles: [role], correos: [{ direccion: name + '@example.test' }], telefonos: [{ numero: '3815551234' }] };
+  const req = { nombre: 'E2E', apellido: suffix, dni, roles: [role], correos: [{ direccion: name + '@example.test' }], telefonos: [{ pais: 'AR', numero: '3815551234' }] };
   if (role === 'COMANDANTE') req.licenciaAeronautica = name.toUpperCase();
   const activation = (await call('/auth/users', { method: 'POST', body: req, token: admin })).data;
   await call('/auth/activar-cuenta', { method: 'POST', body: { dni, codigo: activation.codigo, username: name, password: PASSWORD, confirmacionPassword: PASSWORD }, expect: [204] });
   const token = (await ok('/auth/login', { method: 'POST', body: { username: name, password: PASSWORD } })).accessToken;
   const me = await ok('/auth/me', { token });
   return { name, token, id: me.id };
+}
+
+/**
+ * Deja aprobada la ruta vigente de un vuelo PLANIFICADO, como exige el inicio desde I-4: el comandante la planifica y la presenta
+ * y Operaciones la aprueba. Según el estado actual de la ruta guarda una versión, presenta el borrador o no hace nada.
+ */
+async function approveRoute(flightId, commanderToken, opsToken, recorrido = 'Ruta E2E directa') {
+  const route = await ok(`/flights/${flightId}/route`, { token: commanderToken });
+  if (route.estado === 'APROBADA') return route;
+  if (route.estado === 'BORRADOR') await ok(`/flights/${flightId}/route/submit`, { method: 'POST', token: commanderToken, body: { version: route.versionVigente } });
+  else if (route.estado !== 'PENDIENTE_REVISION') {
+    const body = { version: route.versionVigente || 0, recorrido, presentar: true };
+    if (route.requiereMotivo) body.motivoModificacion = 'Regularización de la ruta para el inicio E2E';
+    await ok(`/flights/${flightId}/route`, { method: 'PUT', token: commanderToken, body });
+  }
+  const pending = await ok(`/flights/${flightId}/route`, { token: opsToken });
+  return ok(`/flights/${flightId}/route/approve`, { method: 'POST', token: opsToken, body: { version: pending.versionVigente } });
 }
 
 const PDF = (() => {
@@ -70,6 +88,43 @@ async function provision(admin, user) {
   await call(`/professional-credentials/${credential.id}/decision/VERIFICADA`, { method: 'POST', token: admin, body: { notes: 'Revisión manual de datos de prueba', confirmsSufficiency: true } });
 }
 
+// ---- Bandeja de pruebas (Mailpit) del stack aislado: un servidor SMTP real que retiene los mensajes y no los entrega a nadie. ----
+const MAILBOX = process.env.E2E_MAILBOX || 'http://127.0.0.1:18025';
+const CODE_PATTERN = /([A-Z2-9]{4}-[A-Z2-9]{4})/;
+async function mailboxMessages(address) {
+  const res = await fetch(MAILBOX + '/api/v1/search?query=' + encodeURIComponent('to:"' + address + '"'));
+  if (!res.ok) throw new Error('La bandeja de pruebas no responde (' + res.status + ')');
+  return (await res.json()).messages || [];
+}
+/** Código del mensaje más reciente enviado a `address`; espera a que el SMTP de pruebas lo haya recibido. */
+async function mailboxCode(address, { after = 0 } = {}) {
+  for (let i = 0; i < 40; i++) {
+    const messages = await mailboxMessages(address);
+    if (messages.length > after) {
+      const detail = await (await fetch(MAILBOX + '/api/v1/message/' + messages[0].ID)).json();
+      const match = CODE_PATTERN.exec(detail.Text || '');
+      if (match) return { code: match[1], count: messages.length, message: detail };
+    }
+    await sleep(250);
+  }
+  throw new Error('No llegó ningún código a ' + address);
+}
+/** Deja un código vigente en la bandeja (solicita uno nuevo, esperando el intervalo mínimo de reenvío del E2E) y lo confirma como titular. */
+async function confirmEmail(user, emailId, address) {
+  const before = (await mailboxMessages(address)).length;
+  for (let i = 0; i < 8; i++) {
+    const r = await call('/auth/me/correos/' + emailId + '/verificacion', { method: 'POST', token: user.token, expect: [200, 429] });
+    if (r.status === 200) break;
+    await sleep(2300);
+  }
+  const { code } = await mailboxCode(address, { after: before });
+  return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
+}
+async function verifyEmail(user, emailId, address) {
+  const { code } = await mailboxCode(address);
+  return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
+}
+
 async function waitHealthy() {
   const health = process.env.E2E_HEALTH_URL || BASE.replace(/\/api\/?$/, '') + '/actuator/health';
   for (let i = 0; i < 120; i++) { try { const r = await fetch(health); if (r.status === 200) return; } catch { /* reintentar */ } await sleep(2000); }
@@ -77,4 +132,4 @@ async function waitHealthy() {
 }
 
 
-module.exports = { PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy };
+module.exports = { confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };
