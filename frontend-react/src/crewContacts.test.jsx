@@ -33,6 +33,8 @@ function backend() {
     return Promise.resolve([]);
   });
 }
+// El panel registra sus efectos de montaje tras el commit que muestra la tripulación: sin vaciarlos, bajo carga el clic llegaba antes y el efecto invalidaba la consulta recién iniciada.
+const ready = async () => { await screen.findByText(/Luis Médico/); await act(async () => {}); };
 const contactCalls = () => calls.filter(([p]) => p === "/flights/7/crew/contacts");
 // Consultas por texto + selector: getByRole con nombre recorre todo el DOM de main.jsx y bajo carga paralela tarda segundos.
 const button = () => screen.getByText("Consultar contactos de la tripulación", { selector: "button" });
@@ -44,7 +46,7 @@ afterEach(cleanup);
 test("Operaciones ve el botón junto a la tripulación y no se piden contactos hasta presionarlo", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   expect(button()).toBeEnabled();
   expect(contactCalls()).toHaveLength(0);
   expect(screen.queryByText("3815550201")).toBeNull();
@@ -53,7 +55,7 @@ test("Operaciones ve el botón junto a la tripulación y no se piden contactos h
 test("quien no gestiona el vuelo (comandante) no ve el botón", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   expect(absent()).toBeNull();
   expect(contactCalls()).toHaveLength(0);
 });
@@ -67,7 +69,7 @@ test("sin tripulantes o con el vuelo terminal el botón no se ofrece", async () 
   for (const state of ["FINALIZADO", "COMPLETADO", "CANCELADO", "RECHAZADO"]) {
     backend();
     const view = render(<FlightCrew flightId={7} state={state} canManage msg={vi.fn()} />);
-    await screen.findByText(/Luis Médico/);
+    await ready();
     expect(absent()).toBeNull();
     view.unmount();
   }
@@ -76,7 +78,7 @@ test("sin tripulantes o con el vuelo terminal el botón no se ofrece", async () 
 test("la consulta explícita muestra a cada tripulante con su función, teléfono y correo por separado y los estados sin contacto", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   const panel = await screen.findByText("Contactos laborales de la tripulación", { selector: "h5" });
   expect(contactCalls()).toHaveLength(1);
@@ -104,7 +106,7 @@ test("una cuenta no activa no muestra contactos", async () => {
   backend();
   contactsResult = () => Promise.resolve({ ...contacts, tripulantes: [{ ...contacts.tripulantes[2], estado: "CUENTA_NO_ACTIVA" }] });
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   expect(await screen.findByText("La cuenta no está activa: no se muestran contactos.")).toBeInTheDocument();
 });
@@ -113,7 +115,7 @@ test("muestra el estado de carga y deshabilita el botón mientras consulta", asy
   backend(); let release;
   contactsResult = () => new Promise((resolve) => { release = () => resolve(JSON.parse(JSON.stringify(contacts))); });
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   const busy = await screen.findByText("Consultando contactos…", { selector: "button" });
   expect(busy).toBeDisabled(); fireEvent.click(busy); expect(contactCalls()).toHaveLength(1);
@@ -124,7 +126,7 @@ test("muestra el estado de carga y deshabilita el botón mientras consulta", asy
 test("un error de permisos o un vuelo cerrado se informa sin dejar datos en pantalla y permite reintentar", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   contactsResult = () => Promise.reject(failure("Acceso denegado", { code: undefined }));
   fireEvent.click(button());
   expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
@@ -142,7 +144,7 @@ test("un error de permisos o un vuelo cerrado se informa sin dejar datos en pant
 test("una respuesta inválida no se muestra como contactos", async () => {
   backend(); contactsResult = () => Promise.resolve({ algo: "inesperado" });
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   expect(await screen.findByRole("alert")).toHaveTextContent("Respuesta de contactos inválida");
 });
@@ -150,7 +152,7 @@ test("una respuesta inválida no se muestra como contactos", async () => {
 test("cerrar el panel descarta los contactos del estado y volver a abrir pide datos nuevos", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   await screen.findByText("3815550201");
   hide();
@@ -166,7 +168,7 @@ test("cerrar el panel descarta los contactos del estado y volver a abrir pide da
 test("si cambia la tripulación se descartan los contactos obtenidos y se avisa; no se consulta solo", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   await screen.findByText("luis@trabajo.test");
   fireEvent.click(screen.getAllByText("Retirar", { selector: "button" })[0]);   // retira a Luis (el comandante no tiene acción)
@@ -202,7 +204,7 @@ test("al terminar el vuelo mientras se muestran, los contactos desaparecen", asy
 test("los contactos no se guardan en el almacenamiento del navegador", async () => {
   backend();
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByText(/Luis Médico/);
+  await ready();
   fireEvent.click(button());
   await screen.findByText("3815550201");
   const dump = JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage });
