@@ -16,7 +16,7 @@ En una instalación nueva, Flyway aplica V1--V31 al iniciar el backend. Antes de
 
 `vuelos` es la entidad operativa común. `vuelos_sanitarios` es una extensión 0..1 con paciente, solicitud, prioridad y datos clínicos; los vuelos operativos no crean esa extensión. Los catálogos `tipos_vuelo`, `estados_vuelo` y `estados_solicitud_sanitaria` mantienen el significado de cada flujo.
 
-El ciclo operativo normal es `SOLICITADO -> APROBADO -> PLANIFICADO -> EN_CURSO -> FINALIZADO -> COMPLETADO`. Los rechazos sanitarios ocurren antes de la operación; las cancelaciones operativas son previas a la ejecución y SQL Server las valida mediante trigger. Operaciones/Centro de Operaciones evalúan, asignan recursos, inician y finalizan; el comandante confirma, planifica lo que le corresponde y registra el informe final. Los bloqueos de informe vencido se verifican en la operación protegida, no en el navegador.
+El ciclo operativo normal es `SOLICITADO -> APROBADO -> PLANIFICADO -> EN_CURSO -> FINALIZADO -> COMPLETADO`. Los rechazos sanitarios ocurren antes de la operación; las cancelaciones operativas son previas a la ejecución y SQL Server las valida mediante trigger. Operaciones/Centro de Operaciones evalúan, asignan recursos, aprueban o devuelven la ruta, inician y finalizan; el comandante confirma, planifica lo que le corresponde y registra el informe final. Los bloqueos de informe vencido se verifican en la operación protegida, no en el navegador.
 
 ## Informes finales
 
@@ -186,3 +186,16 @@ No se deben usar esas pruebas para borrar, reseedear ni modificar una base habit
 **Auditoría.** Ver la matriz: eventos `USER`/`USER_ROLE` sin secretos, con responsable y hora de negocio, confirmados o revertidos con la operación. El historial administrativo de cada cuenta se consulta en su detalle (auditoría V46, sólo administrador).
 
 **Frontend.** `users.jsx`: `UserDirectory` (listado paginado por el servidor con búsqueda, filtro por rol y estado, activos/desactivados), detalle con edición, roles, baja con motivo y confirmación, reactivación, restablecimiento, regeneración de código, impedimentos e historial. `AdminUsers` conserva el alta (con asociación a persona existente) y la reactivación desde un conflicto de DNI. El panel principal sólo tiene los accesos rápidos y los totales (`/api/auth/users/summary`). `Mi cuenta` cierra la sesión tras cambiar la contraseña.
+
+## Ruta de vuelo y revisión operativa (V55, I-4)
+
+La ruta de un vuelo (sanitario u operativo) es una secuencia de versiones en `rutas_vuelo`. El comandante asignado la planifica (`BORRADOR`) y la presenta (`PENDIENTE_REVISION`); Operaciones (`OPERACIONES` o `CENTRO_OPERACIONES`, nunca el administrador ni quien planificó o presentó la versión) la aprueba (`APROBADA`) o la devuelve con observaciones obligatorias (`DEVUELTA`). La decisión pertenece a la versión y al contexto con que se planificó: un cambio material del vuelo (origen, destino, salida, llegada, aeronave o comandante) deja la versión presentada o aprobada en `REQUIERE_REVISION`, conservando revisor y fecha, con auditoría `INVALIDATE`; los cambios administrativos (tripulación adicional, documentos, hangar, clima, bitácora, coordinaciones, contactos) no la afectan. **El inicio del vuelo exige una ruta aprobada, vigente y coherente con el vuelo** (409 `RUTA_NO_DEFINIDA`, `RUTA_NO_PRESENTADA`, `RUTA_PENDIENTE_REVISION`, `RUTA_DEVUELTA` o `RUTA_REQUIERE_REVISION`, con auditoría `START_REJECTED`); la comprobación se agrega después de las existentes y bajo el bloqueo del vuelo. La aprobación es interna y no es una autorización aeronáutica. Endpoints, estados, reglas, tratamiento de datos históricos y pendientes: `REVISION_OPERATIVA_RUTAS_I4_2026-10-25.md`.
+
+| Método y ruta | Roles | Resultado |
+|---|---|---|
+| GET `/api/flights/{id}/route` | DTS (solicitante), OPERACIONES, CENTRO_OPERACIONES, COMANDANTE (asignado), ADMINISTRADOR | Estado efectivo, permisos de la ficha, condición de inicio e historial de versiones |
+| PUT `/api/flights/{id}/route` | COMANDANTE asignado | Nueva versión (`presentar` la presenta); 409 `VERSION_RUTA_DESACTUALIZADA`; 400 `MOTIVO_MODIFICACION_REQUERIDO`, `RUTA_SIN_CAMBIOS` |
+| POST `/api/flights/{id}/route/submit` | COMANDANTE asignado | Presenta la versión vigente en borrador |
+| POST `/api/flights/{id}/route/approve` `{version, comentario?}` | OPERACIONES, CENTRO_OPERACIONES | Aprueba la versión pendiente; 403 `AUTOREVISION_RUTA_NO_PERMITIDA`; 409 `VERSION_RUTA_DESACTUALIZADA`, `TRANSICION_RUTA_NO_PERMITIDA` |
+| POST `/api/flights/{id}/route/return` `{version, motivo}` | OPERACIONES, CENTRO_OPERACIONES | Devuelve con observaciones; 400 `MOTIVO_DEVOLUCION_INVALIDO` |
+| GET `/api/flights/route-statuses` | OPERACIONES, CENTRO_OPERACIONES, ADMINISTRADOR | Estado efectivo de la ruta de cada vuelo (cola de revisión) |

@@ -1,5 +1,7 @@
 # Actualización y recuperación de SQL Server
 
+> **Próxima actualización (V47 → V55, 2026-10-25): preparada y ensayada, NO ejecutada.** La base habitual continúa en V47. El procedimiento concreto, las condiciones que impiden iniciarlo y la recuperación están en `PROCEDIMIENTO_ACTUALIZACION_V47_V55.md`; la evidencia del ensayo en `ESTABILIZACION_RUTAS_Y_ENSAYO_V47_V55_I41_2026-10-25.md`; la verificación final de herramientas, respaldos y precondiciones (I-4.2) en `PREPARACION_FINAL_DESPLIEGUE_V47_V55_I42_2026-10-25.md`. Lo que sigue describe la actualización V32 → V47 ya completada.
+
 ## Estado vigente — actualización completada el 23-10-2026
 
 **Habitual y E2E están en Flyway V47. La actualización habitual y el despliegue

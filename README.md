@@ -40,7 +40,7 @@ El navegador consulta al frontend Nginx. Nginx sirve la SPA y reenvía `/api` al
 
 ## Variables de entorno
 
-Consulte [`.env.example`](.env.example). `MSSQL_SA_PASSWORD`, `DB_PASSWORD` y `JWT_SECRET` son obligatorias. Las contraseñas SQL no pueden incluir comillas simples debido a la sustitución segura del script inicializador. `BOOTSTRAP_ADMIN_*` es opcional y sólo aprovisiona el primer administrador si no existe.
+Consulte [`.env.example`](.env.example). `MSSQL_SA_PASSWORD`, `DB_PASSWORD` y `JWT_SECRET` son obligatorias. Las contraseñas SQL no pueden incluir comillas simples debido a la sustitución segura del script inicializador. `BOOTSTRAP_ADMIN_*` es opcional y sólo aprovisiona el primer administrador si no existe. `MAIL_*` (opcional) configura el servidor SMTP con el que se envían los códigos de verificación de correos (`MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_STARTTLS`, `MAIL_SSL`, `MAIL_FROM`, `APP_PUBLIC_URL`); sin ellas el sistema sigue funcionando pero informa que el servicio de correo no está configurado y ningún correo queda verificado. Nunca guarde credenciales SMTP en el repositorio. Detalles en [docs/INTEGRACION_VERIFICACION_CORREOS_Y_TELEFONOS_I2B_2026-10-24.md](docs/INTEGRACION_VERIFICACION_CORREOS_Y_TELEFONOS_I2B_2026-10-24.md).
 
 ## Migraciones y persistencia
 
