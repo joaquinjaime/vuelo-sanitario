@@ -69,3 +69,9 @@ Se implementó el mantenimiento vertical de `provincias`, `localidades` y `aerop
 Las bajas no eliminan filas ni permiten destruir referencias: no puede desactivarse una provincia con dependencias activas, una localidad con aeropuertos activos ni un aeropuerto con aeronaves activas o vuelos históricos. Los selectores operativos siguen exponiendo solamente catálogos activos, por lo que las altas se consumen en los flujos de vuelo sin exponer registros retirados.
 
 La clasificación de las tres tablas permanece **P** hasta completar la ejecución E2E con la imagen reconstruida y registrar la evidencia SQL de alta, edición, conflicto, denegación por rol, auditoría y conservación de referencias. No se añadió migración: el esquema y sus FKs ya existían desde V15/V28; el incremento usa las columnas y relaciones ya versionadas.
+
+## I-5.3 — tipos de vuelo controlados (incremento en curso)
+
+No se incorporó CRUD libre para `tipos_vuelo`: crear valores que los servicios no procesan sería inseguro. Se agregó `GET /api/catalogs/flight-types?operationalOnly=true`, que devuelve únicamente tipos activos y, para la creación operativa, excluye `SANITARIO`. El formulario de nuevo vuelo operativo ya no mantiene una lista React independiente: consulta ese catálogo autorizado. El backend continúa exigiendo `findByCodigoAndActivoTrue` y rechaza tipos inexistentes/inactivos; el flujo sanitario sigue siendo el único canal para `SANITARIO`.
+
+Su reclasificación queda pendiente de E2E sobre la imagen renovada (consulta, exclusión de sanitario, tipo inactivo e intento de código inexistente), no de una nueva política aeronáutica.
