@@ -25,7 +25,7 @@ Fecha: 2026-10-26. Fuente: migraciones V1--V55, entidades/repositorios/servicios
 | `roles_tripulacion` | Función en vuelo/credencial/clasificación. | No equivale a rol de acceso; validación de asignación. | P — falta mantenimiento/recorrido UI integral de catálogo. |
 | `clasificaciones_tripulacion` | Habilita funcionalmente persona--rol; `CrewQualificationController`. | Sólo administración, retiro bloqueado con asignaciones; auditoría. | P — faltan casos navegador de todas las funciones. |
 | `perfiles_comandante` | Licencia y provincia del comandante. | Requerido para asignar y replanificar; elegibilidad continua. | P — falta E2E de licencia duplicada/disponibilidad completa. |
-| `habilitaciones_profesionales` | Credencial por persona y función; `ProfessionalCredentialService`, UI Administración. | Estados, vencimiento, revocación, documentos, auditoría y reevaluación de vuelos. | P — suficiencia por tipo de operación/autoridad requiere regla de negocio. |
+| `habilitaciones_profesionales` | Credencial por persona y función; `ProfessionalCredentialService`, UI Administración. | Estados, vencimiento, revocación, documentos, auditoría, reevaluación de vuelos y prohibición de autoverificación incluso para un administrador titular. | P — suficiencia por tipo de operación/autoridad requiere regla de negocio. |
 | `documentos_habilitacion` | Evidencia PDF de una habilitación. | Sólo PDF estructural, storage privado, resetea revisión y se audita. | P — falta definición de validación documental externa/antimalware. |
 | `vuelos` | Núcleo operativo sanitario/operativo. | Transiciones, bloqueo, recursos, rutas, auditoría; E2E solicitudes/cierre/rutas/V55. | F |
 | `vuelos_sanitarios` | Extensión de vuelo con paciente y estado de solicitud. | Triggers/servicio separan solicitud de operación; E2E solicitudes/V55. | F |
@@ -55,3 +55,9 @@ Fecha: 2026-10-26. Fuente: migraciones V1--V55, entidades/repositorios/servicios
 Total: **43** (42 aplicación + Flyway); **33 funcionales**, **9 parciales**, **0 sin implementación funcional**, **0 obsoletas confirmadas**. Las nueve parciales son: `provincias`, `localidades`, `aeropuertos`, `tipos_vuelo`, `roles_tripulacion`, `clasificaciones_tripulacion`, `perfiles_comandante`, `habilitaciones_profesionales` y `documentos_habilitacion`.
 
 El primer incremento I-5C cubre la brecha comprobada de comunicaciones de ruta: `ROUTE_PENDING_REVIEW`, `ROUTE_APPROVED`, `ROUTE_RETURNED` y `ROUTE_REVIEW_REQUIRED`. No añade correo ni modifica la migración: reutiliza la bandeja interna con la restricción única de V42, de modo que la funcionalidad permanece disponible sin SMTP.
+
+## I-5.2 — habilitaciones y perfiles
+
+La revisión de I-5.2 confirmó que el ciclo existente ya cubre alta, adjunto, verificación, rechazo, revocación, renovación mediante una nueva credencial o edición que reinicia la revisión, evaluación al asignar y reevaluación antes del inicio para comandante, copiloto, médico y enfermero. También confirma que una revocación o vencimiento posterior a la asignación no autoriza el inicio: deja la asignación visible con su incidencia, notifica a Operaciones y el inicio responde 409 con auditoría de rechazo.
+
+Se corrigió una brecha de separación de funciones: la decisión de una habilitación ahora rechaza `403 AUTO_VERIFICACION_HABILITACION_NO_PERMITIDA` cuando el actor es su titular, aun si posee el rol `ADMINISTRADOR`. Otro administrador conserva la revisión autorizada. No se reclasifica todavía `habilitaciones_profesionales`, `documentos_habilitacion` ni `perfiles_comandante`: no está definida una autoridad externa, equivalencias por aeronave/tipo de operación ni una política de validación documental externa, y no se inventaron esas reglas.

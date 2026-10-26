@@ -6,6 +6,7 @@ import com.vuelossanitarios.backend.domain.catalog.CrewRole;
 import com.vuelossanitarios.backend.domain.person.Person;
 import com.vuelossanitarios.backend.domain.person.ProfessionalCredential;
 import com.vuelossanitarios.backend.domain.user.User;
+import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.repository.*;
 import java.time.*;
 import java.util.List;
@@ -13,6 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ProfessionalCredentialServiceTest {
+ @Test void holderCannotDecideTheirOwnCredentialEvenWithAdministrativeAccess(){
+  var repo=mock(ProfessionalCredentialRepository.class);var service=new ProfessionalCredentialService(repo,mock(CredentialDocumentRepository.class),mock(UserRepository.class),mock(CrewRoleRepository.class),mock(AuditEventRepository.class),mock(AuditService.class),mock(DocumentStorage.class),new ObjectMapper(),"America/Argentina/Tucuman");
+  when(repo.findOwnerUserId(44L)).thenReturn(9L);
+  ApiException error=assertThrows(ApiException.class,()->service.decide(44L,"VERIFICADA",new ProfessionalCredentialService.Decision("Revisión propia indebida",true),9L));
+  assertEquals(403,error.status().value());assertEquals("AUTO_VERIFICACION_HABILITACION_NO_PERMITIDA",error.code());
+  verify(repo,never()).findById(anyLong());
+ }
  @Test void credentialUsesControlledClockAndPlannedDepartureDay(){
   var repo=mock(ProfessionalCredentialRepository.class);var service=new ProfessionalCredentialService(repo,mock(CredentialDocumentRepository.class),mock(UserRepository.class),mock(CrewRoleRepository.class),mock(AuditEventRepository.class),mock(AuditService.class),mock(DocumentStorage.class),new ObjectMapper(),"America/Argentina/Tucuman");
   ZoneId zone=ZoneId.of("America/Argentina/Tucuman");ReflectionTestUtils.setField(service,"clock",Clock.fixed(LocalDate.of(2026,10,25).atStartOfDay(zone).toInstant(),zone));

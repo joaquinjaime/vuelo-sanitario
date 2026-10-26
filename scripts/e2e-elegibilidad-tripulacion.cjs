@@ -19,6 +19,19 @@ async function qualified(admin,user,role,expires=null){
  await waitHealthy();
  const dotenv={};for(const line of fs.readFileSync(path.join(ROOT,'.env'),'utf8').split(/\r?\n/)){const i=line.indexOf('=');if(i>0&&!line.trim().startsWith('#'))dotenv[line.slice(0,i).trim()]=line.slice(i+1).trim().replace(/^["']|["']$/g,'');}
  const admin=(await ok('/auth/login',{method:'POST',body:{username:dotenv.BOOTSTRAP_ADMIN_USERNAME,password:dotenv.BOOTSTRAP_ADMIN_PASSWORD}})).accessToken;
+ // Un usuario con ADMINISTRADOR y COMANDANTE conserva el permiso técnico del endpoint, pero no puede revisar su propia credencial.
+ const selfName=MARK+'i3self',selfDni=String(100000000000+Math.floor(Math.random()*899999999999));
+ const selfCreated=await ok('/auth/users',{method:'POST',token:admin,body:{nombre:'E2E',apellido:'AutoRevision',dni:selfDni,roles:['ADMINISTRADOR','COMANDANTE'],licenciaAeronautica:(MARK+'SELF').toUpperCase(),correos:[{direccion:selfName+'@example.test'}],telefonos:[{pais:'AR',numero:'3815551234'}]}});
+ await call('/auth/activar-cuenta',{method:'POST',body:{dni:selfDni,codigo:selfCreated.codigo,username:selfName,password:PASSWORD,confirmacionPassword:PASSWORD},expect:[204]});
+ const selfToken=(await ok('/auth/login',{method:'POST',body:{username:selfName,password:PASSWORD}})).accessToken;
+ const selfId=(await ok('/auth/me',{token:selfToken})).id;
+ const selfCredential=await ok(`/users/${selfId}/professional-credentials`,{method:'POST',token:selfToken,body:{roleCode:'COMANDANTE',type:'Documento de independencia',number:`I3-SELF-${MARK}`,issuer:'Organismo de prueba',noExpiry:true,notes:'Ensayo de segregación'}});
+ const selfFile=new FormData();selfFile.append('file',new Blob([PDF],{type:'application/pdf'}),'credencial.pdf');
+ assert.equal((await fetch(`${BASE}/professional-credentials/${selfCredential.id}/documents`,{method:'POST',headers:{Authorization:'Bearer '+selfToken},body:selfFile})).status,200);
+ const selfDenied=await call(`/professional-credentials/${selfCredential.id}/decision/VERIFICADA`,{method:'POST',token:selfToken,body:{notes:'Intento de autoverificación E2E',confirmsSufficiency:true},expect:[403]});
+ assert.equal(selfDenied.data.code,'AUTO_VERIFICACION_HABILITACION_NO_PERMITIDA');
+ await call(`/professional-credentials/${selfCredential.id}/decision/VERIFICADA`,{method:'POST',token:admin,body:{notes:'Revisión independiente E2E',confirmsSufficiency:true}});
+ pass('un administrador que es titular no puede autoverificar; otro administrador sí deja la decisión auditada');
  const ops=await createUser(admin,'CENTRO_OPERACIONES','i3ops');
  const commander=await createUser(admin,'COMANDANTE','i3cmd');await provision(admin,commander);
  const first=await createUser(admin,'DTS','i3crew1'),replacement=await createUser(admin,'DTS','i3crew2');
