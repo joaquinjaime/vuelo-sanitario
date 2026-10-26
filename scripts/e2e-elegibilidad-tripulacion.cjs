@@ -1,7 +1,7 @@
 /* I-3: API y SQL Server del stack aislado. Conserva los registros de prueba para auditoría. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');const {spawnSync}=require('node:child_process');
-const {ROOT,BASE,BACKEND,DB_NAME,MARK,PDF,sql,one,count,call,ok,fmt,futureSlot,createUser,provision,waitHealthy,approveRoute}=require('./e2e-cierre-support.cjs');
+const {ROOT,BASE,BACKEND,DB_NAME,MARK,PASSWORD,PDF,sql,one,count,call,ok,fmt,futureSlot,createUser,provision,waitHealthy,approveRoute}=require('./e2e-cierre-support.cjs');
 let passed=0;const pass=m=>{passed++;console.log('PASS: '+m);};
 async function qualified(admin,user,role,expires=null){
  await call(`/crew-qualifications/${user.id}/${role}`,{method:'PUT',token:admin,expect:[204]});

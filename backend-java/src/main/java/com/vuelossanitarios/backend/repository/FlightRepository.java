@@ -27,4 +27,5 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @Query("select f from Flight f join f.sanitario s where s.solicitadoPor.id=:userId") List<Flight> findSanitaryBySolicitadoPorId(@Param("userId") Long userId);
     List<Flight> findByComandanteId(Long userId);
     List<Flight> findByEstadoVueloCodigoIn(Collection<String> codes);
+    boolean existsByOrigenIdOrDestinoId(Long origenId, Long destinoId);
 }
