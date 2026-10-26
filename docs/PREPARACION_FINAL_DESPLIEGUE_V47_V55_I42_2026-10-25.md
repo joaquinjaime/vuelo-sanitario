@@ -2,6 +2,8 @@
 
 **La base habitual no se migró ni se modificó: sigue en Flyway V47** (47 filas de historial, 0 fallidas, 41 tablas de aplicación, 84 FK y 30 CHECK confiables; comprobado de nuevo al terminar). No se hizo commit ni push. No se borró ni sobrescribió ningún respaldo.
 
+**Estado posterior (I-4.3, 2026-10-26):** los dos bloqueos de §8 se cerraron (código consolidado en `release/v55-integracion`, imágenes release V55 y reensayo completo); ver `RELEASE_V55_CONSOLIDACION_Y_ENSAYO_I43_2026-10-26.md`. Lo que sigue describe la conclusión de I-4.2.
+
 **Conclusión: DESPLIEGUE BLOQUEADO** hasta cerrar los dos puntos de §8 (código sin consolidar e imágenes release V55 inexistentes). Las herramientas, los respaldos, la recuperación y las precondiciones de la base están verificados; lo que falta es producir y reensayar el artefacto exacto que se desplegaría. Con esos dos puntos cerrados el estado pasa a *listo para autorización definitiva* (la autorización de la ventana sigue siendo una decisión humana separada).
 
 ## 1. Herramientas de despliegue
