@@ -72,3 +72,23 @@ test('el destino se busca en el catálogo activo y conserva la selección al cam
   fireEvent.change(screen.getByLabelText('Buscar aeropuerto de destino'),{target:{value:'Otra búsqueda'}});
   expect(screen.getByLabelText('Destino')).toHaveValue('73');
 });
+
+test('un tipo que dejó de estar activo se rechaza con el motivo del servidor y el catálogo se actualiza sin él', async () => {
+  let loads = 0;
+  vi.mocked(api).mockImplementation((path, options) => {
+    if (path === '/catalogs/flight-types?operationalOnly=true') return Promise.resolve(++loads === 1 ? [{codigo:'VIEJO', nombre:'Tipo viejo'}, {codigo:'VIGENTE', nombre:'Tipo vigente'}] : [{codigo:'VIGENTE', nombre:'Tipo vigente'}]);
+    if (path === '/flights/operational' && options?.method === 'POST') return Promise.reject(Object.assign(new Error('El tipo de vuelo está inactivo y no puede usarse en vuelos nuevos'), {code:'TIPO_VUELO_INACTIVO'}));
+    return Promise.resolve([]);
+  });
+  const msg = vi.fn(), done = vi.fn();
+  render(<OperationalFlightForm d={{aircraft:[{id:5,matricula:'LV-X',aeropuertoActual:'Base'}], commanders:[{id:6,nombre:'Ana',apellido:'Paz'}], airports:[{id:7,nombre:'Destino activo'}]}} done={done} msg={msg}/>);
+  expect(await screen.findByRole('option', {name:'Tipo viejo'})).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Aeronave'), {target:{value:'5'}}); fireEvent.change(screen.getByLabelText('Comandante'), {target:{value:'6'}}); fireEvent.change(screen.getByLabelText('Destino'), {target:{value:'7'}});
+  fireEvent.change(screen.getByLabelText('Motivo'), {target:{value:'Reposicionar la aeronave'}});
+  fireEvent.change(screen.getByLabelText('Salida'), {target:{value:'2026-12-01T10:00'}}); fireEvent.change(screen.getByLabelText('Llegada'), {target:{value:'2026-12-01T12:00'}});
+  fireEvent.click(screen.getByRole('button', {name:'Crear vuelo operativo'}));
+  await vi.waitFor(() => expect(msg).toHaveBeenCalledWith('El tipo de vuelo está inactivo y no puede usarse en vuelos nuevos', true));
+  expect(done).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(screen.queryByRole('option', {name:'Tipo viejo'})).not.toBeInTheDocument());
+  expect(screen.getByLabelText('Tipo')).toHaveValue('VIGENTE');
+});
