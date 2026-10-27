@@ -2,6 +2,7 @@ package com.vuelossanitarios.backend.api.dto;
 
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import java.util.List;
 
 /** Contratos del catálogo geográfico administrado. Los códigos son identificadores externos estables, no texto libre. */
 public final class GeographicCatalogDtos {
@@ -13,4 +14,5 @@ public final class GeographicCatalogDtos {
  public record ProvinceAdminView(Long id,String codigoOficial,String nombre,boolean activo){}
  public record LocalityAdminView(Long id,String codigoOficial,String nombre,Long provinciaId,String provincia,boolean activo){}
  public record AirportAdminView(Long id,String codigoOficial,String codigoOaci,String codigoIata,String nombre,String ciudad,Long provinciaId,String provincia,Long localidadId,String localidad,String tipo,String pais,BigDecimal latitud,BigDecimal longitud,boolean activo){}
+ public record PageView<T>(List<T> items,int page,int size,long totalElements,int totalPages){}
 }
