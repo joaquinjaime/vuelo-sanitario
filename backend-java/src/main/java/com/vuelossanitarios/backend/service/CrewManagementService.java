@@ -53,7 +53,13 @@ public class CrewManagementService {
  private void mutable(Flight f){if(f.getEstadoVuelo()==null||!FlightStates.MUTABLE_BEFORE_START.contains(f.getEstadoVuelo().getCodigo()))throw bad("El estado del vuelo no permite modificar la tripulación");}
  private void interval(Flight f){if(f.getFechaPlanificadaSalida()==null||f.getFechaPlanificadaLlegada()==null||!f.getFechaPlanificadaLlegada().isAfter(f.getFechaPlanificadaSalida()))throw bad("El vuelo requiere salida y llegada válidas para asignar tripulación");}
  private boolean committed(Flight f){return f.getEstadoVuelo()==null||!FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo());}
- private boolean overlaps(Flight a,Flight b){return b.getFechaPlanificadaSalida()==null||b.getFechaPlanificadaLlegada()==null||!b.getFechaPlanificadaLlegada().isAfter(b.getFechaPlanificadaSalida())||(a.getFechaPlanificadaSalida().isBefore(b.getFechaPlanificadaLlegada())&&b.getFechaPlanificadaSalida().isBefore(a.getFechaPlanificadaLlegada()));}
+ /** Un vuelo sanitario recién aprobado tiene salida pero todavía no llegada: ocupa al menos su instante de salida (misma regla que la disponibilidad de aeronaves). Sin salida no hay base para un conflicto. */
+ private boolean overlaps(Flight a,Flight b){
+  if(b.getFechaPlanificadaSalida()==null||b.getFechaPlanificadaLlegada()==null||!b.getFechaPlanificadaLlegada().isAfter(b.getFechaPlanificadaSalida()))return true;
+  LocalDateTime start=a.getFechaPlanificadaSalida();if(start==null)return false;
+  LocalDateTime end=a.getFechaPlanificadaLlegada()!=null&&a.getFechaPlanificadaLlegada().isAfter(start)?a.getFechaPlanificadaLlegada():start.plusMinutes(1);
+  return start.isBefore(b.getFechaPlanificadaLlegada())&&b.getFechaPlanificadaSalida().isBefore(end);
+ }
  /** Primer vuelo comprometido de la persona que se superpone con f (o no tiene horario completo); vacío si está disponible. */
  private Optional<Flight> conflictingFlight(Flight f,User u){
   for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(u.getId())){Flight other=c.getFlight();if(!Objects.equals(other.getId(),f.getId())&&committed(other)&&overlaps(f,other))return Optional.of(other);}

@@ -160,6 +160,15 @@ class CrewManagementServiceTest {
   service.replace(1L,101L,new Crew(1L,"MEDICO"),3L);
   org.mockito.InOrder order=inOrder(users);order.verify(users).lockById(1L);order.verify(users).lockById(2L);
  }
+ @Test void aFlightWithoutPlannedArrivalIsEvaluatedAtItsDepartureInsteadOfFailing(){
+  flight.setFechaPlanificadaLlegada(null); // solicitud sanitaria aprobada: ya tiene salida y todavía no la planificación del comandante
+  User busy=user(5L,"ocupado"),free=user(6L,"libre");
+  Flight covering=flightWithState(8L,"PLANIFICADO",LocalDateTime.of(2030,1,1,22,0),LocalDateTime.of(2030,1,2,2,0)),later=flightWithState(9L,"PLANIFICADO",LocalDateTime.of(2030,1,2,6,0),LocalDateTime.of(2030,1,2,8,0));
+  when(qualifications.findByRoleCodigo("MEDICO")).thenReturn(List.of(classified(busy),classified(free)));when(qualifications.existsByUserIdAndRoleCodigo(5L,"MEDICO")).thenReturn(true);when(qualifications.existsByUserIdAndRoleCodigo(6L,"MEDICO")).thenReturn(true);
+  when(crews.findByUserIdAndFechaBajaIsNull(5L)).thenReturn(List.of(row(61L,covering,busy,medico)));when(crews.findByUserIdAndFechaBajaIsNull(6L)).thenReturn(List.of(row(62L,later,free,medico)));
+  assertFalse(assertDoesNotThrow(()->service.evaluate(flight,busy,"MEDICO",true)).eligible(),"su compromiso cubre el instante de salida");
+  assertTrue(assertDoesNotThrow(()->service.evaluate(flight,free,"MEDICO",true)).eligible(),"un compromiso posterior a la salida no lo bloquea");
+ }
  @Test void candidatesExposeTheConflictInsteadOfHidingTheReason(){
   User busy=user(5L,"ocupado");busy.getPerson().setNombre("Ocupado");
   Flight other=flightWithState(8L,"PLANIFICADO",LocalDateTime.of(2030,1,2,0,30),LocalDateTime.of(2030,1,2,2,0));
