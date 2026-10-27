@@ -37,8 +37,10 @@ const pass = message => console.log(`PASS: ${message}`);
   assert.equal(localityDenied.data.code, 'GEOGRAPHIC_HAS_ACTIVE_DEPENDENCIES');
   pass('búsqueda paginada, edición y restricción de integridad de localidad se aplican en servidor');
 
+  const activeQuery = `/catalogs/airports?provinceId=${province.id}&q=${encodeURIComponent(updated.nombre)}`;
+  assert.equal((await ok(activeQuery, { token: ops.token })).some(x => x.id === airport.id), true, 'el catálogo encuentra el aeropuerto antes de la baja');
   await ok(`/admin/geography/airports/${airport.id}/active`, { method: 'POST', token: admin, body: { activo: false, motivo: 'Baja lógica E2E I-5.3' } });
-  const activeCatalog = await ok(`/catalogs/airports?provinceId=${province.id}&q=${encodeURIComponent(airportCode)}`, { token: ops.token });
+  const activeCatalog = await ok(activeQuery, { token: ops.token });
   assert.equal(activeCatalog.some(x => x.id === airport.id), false);
   assert.equal(count(`SELECT COUNT(*) FROM aeropuertos WHERE id_aeropuertos=${airport.id} AND esta_activo=0`), 1);
   assert.equal(count(`SELECT COUNT(*) FROM eventos_auditoria WHERE tipo_entidad=N'GEOGRAPHIC_AIRPORT' AND entidad_id=${airport.id} AND operacion IN (N'CREATE',N'UPDATE',N'SET_ACTIVE')`), 3);
