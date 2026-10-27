@@ -1,8 +1,9 @@
+import React from 'react';
 import { expect, test, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { api } from './api';
-import { OperationalApp, OperationalFlightForm } from './main';
+import { OperationalApp, OperationalAirportSelector, OperationalFlightForm } from './main';
 
 vi.mock('./api', () => ({ api: vi.fn(), uploadFile: vi.fn(), downloadFile: vi.fn(), credentialFile: vi.fn() }));
 
@@ -59,4 +60,15 @@ test('una respuesta antigua no reemplaza los catálogos de una actualización po
   await act(async () => resolveOld([{id:91,matricula:'LV-VIE',aeropuertoActual:'Base'}]));
   expect(screen.queryByRole('option',{name:'LV-VIE — Base'})).not.toBeInTheDocument();
   localStorage.clear();
+});
+
+test('el destino se busca en el catálogo activo y conserva la selección al cambiar la búsqueda', async () => {
+  vi.mocked(api).mockImplementation(path => Promise.resolve(path.includes('Destino%20lejano') ? [{id:73,nombre:'Destino lejano'}] : []));
+  function Harness(){const [value,setValue]=React.useState('');return <OperationalAirportSelector value={value} onChange={setValue}/>;}
+  render(<Harness/>);
+  fireEvent.change(screen.getByLabelText('Buscar aeropuerto de destino'),{target:{value:'Destino lejano'}});
+  expect(await screen.findByRole('option',{name:'Destino lejano'})).toHaveValue('73');
+  fireEvent.change(screen.getByLabelText('Destino'),{target:{value:'73'}});
+  fireEvent.change(screen.getByLabelText('Buscar aeropuerto de destino'),{target:{value:'Otra búsqueda'}});
+  expect(screen.getByLabelText('Destino')).toHaveValue('73');
 });

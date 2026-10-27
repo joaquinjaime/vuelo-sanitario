@@ -37,6 +37,7 @@ const { spawnSync } = require('node:child_process');
     try { await form.getByLabel('Aeronave').selectOption(String(plane.id),{timeout:10000}); }
     catch(e) { console.error('Opciones de aeronave:',await form.getByLabel('Aeronave').locator('option').allTextContents()); console.error('Mensajes de la pantalla:',await o.locator('.error').allTextContents()); throw e; }
     await form.locator('label').filter({hasText:/^Comandante/}).locator('select').selectOption(String(commander.id),{timeout:90000});
+    await form.getByLabel('Buscar aeropuerto de destino').fill(airports[1].nombre);
     await form.locator('label').filter({hasText:/^Destino/}).locator('select').selectOption(String(airports[1].id));
     await form.getByLabel('Salida').fill(fmt(depart).slice(0,16)); await form.getByLabel('Llegada').fill(fmt(arrive).slice(0,16));
     await form.getByLabel('Motivo').fill(motive); await form.getByRole('button',{name:'Crear vuelo operativo'}).click();
