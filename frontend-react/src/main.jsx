@@ -516,7 +516,7 @@ export function Cmd({ d, done, msg }) {
  useEffect(()=>{if(!f?.datosSanitarios){setAirports([]);return;}Promise.all([api(`/catalogs/airports?provinceId=${f.origen.provinciaId}`),api(`/catalogs/airports?provinceId=${f.destino.provinciaId}`)]).then(([o,de])=>setAirports([{kind:"o",items:o},{kind:"d",items:de}])).catch(e=>msg(e.message,true));},[f?.id]); const originOptions=airports.find(x=>x.kind==="o")?.items||[],destinationOptions=airports.find(x=>x.kind==="d")?.items||[];
  const save=async()=>{try{await api(`/flights/${id}/operational-planning`,{method:"POST",body:JSON.stringify({origenId:origin,destinoId:destination,llegada:arrival})});msg("Planificación operativa guardada");await done();setDetail(adaptDetail(await api(`/flights/${id}`)));setRouteRevision(x=>x+1);}catch(e){msg(e.message,true);}};
  const saveWeather=async()=>{try{await api(`/flights/${id}/weather`,{method:"POST",body:JSON.stringify(weather)});msg("Condiciones meteorológicas registradas");setWeather({condiciones:"",favorable:true,observaciones:""});setWeatherRevision(x=>x+1);}catch(e){msg(e.message,true);}};
- return <section className="card"><h2>Planificación operativa</h2><p className="hint">La salida definitiva proviene del flujo que corresponda y no es editable por el comandante.</p><div className="grid-form"><label>Vuelo<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar vuelo</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>Salida fijada</h4><p>{dt(f.salida)}</p></div><div><h4>Aeronave</h4><p>{detail.recursos?.aircraftMatricula||"Sin asignar"}</p>{detail.recursos?.aircraftMatricula&&<small>{[detail.recursos.aircraftModelo,detail.recursos.aircraftTipo].filter(Boolean).join(" · ")}{detail.recursos.aircraftUbicacion?` · Ubicación: ${detail.recursos.aircraftUbicacion}`:""}</small>}</div></div><Urgency flight={f} detail/><CancellationNote flight={f}/><FlightClosure flight={f} cierre={detail.cierre}/><CommanderAssignment flight={f} done={done} msg={msg} reload={async()=>setDetail(adaptDetail(await api(`/flights/${id}`)))}/>{f.estado==="PLANIFICADO"&&<>{f.datosSanitarios&&<><label>Aeropuerto de origen<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="">Seleccionar ({f.origen.provincia})</option>{originOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Aeropuerto de destino<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Seleccionar ({f.destino.provincia})</option>{destinationOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Llegada planificada<input type="datetime-local" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><button disabled={!origin||!destination||!arrival} onClick={save}>Guardar planificación</button></>}<fieldset className="wide"><legend>Condiciones meteorológicas</legend><label>Condiciones<textarea required value={weather.condiciones} onChange={e=>setWeather({...weather,condiciones:e.target.value})}/></label><label>¿Condiciones favorables?<select value={String(weather.favorable)} onChange={e=>setWeather({...weather,favorable:e.target.value==="true"})}><option value="true">Sí</option><option value="false">No</option></select></label><label>Observaciones<textarea value={weather.observaciones} onChange={e=>setWeather({...weather,observaciones:e.target.value})}/></label><button type="button" disabled={!weather.condiciones.trim()} onClick={saveWeather}>Registrar clima</button></fieldset></>}<HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${routeRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={documentsEditable(f.estado)} canViewRetired msg={msg}/><FlightLog key={`log-${id}`} flightId={id} msg={msg}/><AuditTimeline key={`audit-${id}-${routeRevision}`} flightId={id}/><FlightRoute key={`route-${id}-${routeRevision}`} flightId={id} canEdit msg={msg}/><FlightCrew key={id} flightId={id} state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id} revision={weatherRevision}/><Negotiation events={detail.negociacion}/></>}</div></section>;
+ return <section className="card"><h2>Planificación operativa</h2><p className="hint">La salida definitiva proviene del flujo que corresponda y no es editable por el comandante.</p><div className="grid-form"><label>Vuelo<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar vuelo</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>Salida fijada</h4><p>{dt(f.salida)}</p></div><div><h4>Aeronave</h4><p>{detail.recursos?.aircraftMatricula||"Sin asignar"}</p>{detail.recursos?.aircraftMatricula&&<small>{[detail.recursos.aircraftModelo,detail.recursos.aircraftTipo].filter(Boolean).join(" · ")}{detail.recursos.aircraftUbicacion?` · Ubicación: ${detail.recursos.aircraftUbicacion}`:""}</small>}</div></div><Urgency flight={f} detail/><CancellationNote flight={f}/><FlightClosure flight={f} cierre={detail.cierre}/><CommanderAssignment flight={f} done={done} msg={msg} reload={async()=>setDetail(adaptDetail(await api(`/flights/${id}`)))}/>{f.estado==="PLANIFICADO"&&<>{f.datosSanitarios&&<><label>Aeropuerto de origen<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="">Seleccionar ({f.origen.provincia})</option>{originOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Aeropuerto de destino<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Seleccionar ({f.destino.provincia})</option>{destinationOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Llegada planificada<input type="datetime-local" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><button disabled={!origin||!destination||!arrival} onClick={save}>Guardar planificación</button></>}<fieldset className="wide"><legend>Condiciones meteorológicas</legend><label>Condiciones<textarea required value={weather.condiciones} onChange={e=>setWeather({...weather,condiciones:e.target.value})}/></label><label>¿Condiciones favorables?<select value={String(weather.favorable)} onChange={e=>setWeather({...weather,favorable:e.target.value==="true"})}><option value="true">Sí</option><option value="false">No</option></select></label><label>Observaciones<textarea value={weather.observaciones} onChange={e=>setWeather({...weather,observaciones:e.target.value})}/></label><button type="button" disabled={!weather.condiciones.trim()} onClick={saveWeather}>Registrar clima</button></fieldset></>}<HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${routeRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={documentsEditable(f.estado)} canViewRetired msg={msg}/><FlightLog key={`log-${id}`} flightId={id} msg={msg}/><AuditTimeline key={`audit-${id}-${routeRevision}`} flightId={id}/><FlightRoute key={`route-${id}-${routeRevision}-${f.estado}`} flightId={id} canEdit msg={msg}/><FlightCrew key={id} flightId={id} state={f.estado} msg={msg}/><WeatherHistory key={id} flightId={id} revision={weatherRevision}/><Negotiation events={detail.negociacion}/></>}</div></section>;
 }
 export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{} }) {
   const [session, setSession] = useState(() => {
@@ -539,33 +539,26 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
     [dark, setDark] = useState(false),
     [view, setView] = useState(() => (location.hash === "#/mi-cuenta" ? "account" : "panel"));
   const go = (target) => { setView(target); history.replaceState(null, "", target === "account" ? "#/mi-cuenta" : location.pathname + location.search); };
+  const loadGeneration = useRef(0);
   let has = (x) => session?.roles.includes(x);
   let load = async () => {
-    try {
-      let calls = [
-        api("/flights"),
-        api("/catalogs/priorities"),
-        api("/catalogs/aircraft"),
-        api("/catalogs/airports"),
-        api("/notifications"),
-      ];
-      if (has("OPERACIONES") || has("CENTRO_OPERACIONES") || has("ADMINISTRADOR")) calls.push(api("/auth/users/commanders"));
-      let [a, c, e, f, n, u = []] = await Promise.all(calls);
-      setD({
-        flights: a.map(adaptFlight),
-        priorities: c,
-        aircraft: e,
-        airports: f,
-        notifications: n.items || n.content || [],
-        unread: n.unread ?? (n.items || n.content || []).filter((x) => !x.leido).length,
-        commanders: u,
-      });
-    } catch (x) {
-      setNote(x.message);
-    }
+    const generation=++loadGeneration.current;
+    const sources = [
+      ["vuelos", "/flights", rows => ({flights: rows.map(adaptFlight)})],
+      ["prioridades", "/catalogs/priorities", rows => ({priorities: rows})],
+      ["aeronaves", "/catalogs/aircraft", rows => ({aircraft: rows})],
+      ["aeropuertos", "/catalogs/airports", rows => ({airports: rows})],
+      ["notificaciones", "/notifications", n => { const rows=n.items || n.content || []; return {notifications:rows, unread:n.unread ?? rows.filter(x=>!x.leido).length}; }],
+    ];
+    if (has("OPERACIONES") || has("CENTRO_OPERACIONES") || has("ADMINISTRADOR")) sources.push(["comandantes", "/auth/users/commanders", rows => ({commanders:rows})]);
+    await Promise.all(sources.map(async ([label, path, map]) => {
+      try { const values=map(await api(path)); if(generation===loadGeneration.current)setD(previous=>({...previous,...values})); }
+      catch (error) { if(generation===loadGeneration.current)setNote(`No se pudo cargar ${label}: ${error.message}`); }
+    }));
   };
   useEffect(() => {
     if (session) load();
+    return () => { loadGeneration.current++; };
   }, [session]);
   useEffect(() => {
     document.body.dataset.theme = dark ? "dark" : "light";

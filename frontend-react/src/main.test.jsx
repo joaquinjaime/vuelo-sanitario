@@ -329,6 +329,22 @@ test("reactivating a deactivated user opens the review form and calls the reacti
  expect(reload).toHaveBeenCalled();
 });
 
+test("aceptar la asignación vuelve a cargar la ruta para habilitar su planificación", async () => {
+ const { Cmd } = await import("./main.jsx");
+ let accepted=false;
+ const flight=()=>({id:"1",codigo:"OP-1",estadoVuelo:accepted?"PLANIFICADO":"PENDIENTE_CONFIRMACION_COMANDANTE",tipo:{codigo:"OTRO",nombre:"Otro"}});
+ vi.mocked(api).mockImplementation((path,options)=>{
+   if(path==="/flights/1/commander-assignment/response"&&options?.method==="POST"){accepted=true;return Promise.resolve({});}
+   if(path==="/flights/1")return Promise.resolve({vuelo:flight(),recursos:{},negociacion:[]});
+   if(path==="/flights/1/route")return Promise.resolve({estado:"SIN_PLANIFICAR",versiones:[],editable:accepted,causas:[]});
+   return Promise.resolve([]);
+ });
+ render(<Cmd d={{flights:[flight()]}} done={vi.fn(()=>Promise.resolve())} msg={vi.fn()}/>);
+ fireEvent.change(screen.getByLabelText("Vuelo"),{target:{value:"1"}});
+ fireEvent.click(await screen.findByRole("button",{name:"Aceptar asignación"}));
+ expect(await screen.findByLabelText("Recorrido y puntos intermedios en orden")).toBeInTheDocument();
+});
+
 test("weather history reloads after a commander records conditions", async () => {
  const { Cmd } = await import("./main.jsx");
  const flight={id:"1",codigo:"OP-1",estadoVuelo:"PLANIFICADO",tipo:{codigo:"OTRO",nombre:"Otro"}};
