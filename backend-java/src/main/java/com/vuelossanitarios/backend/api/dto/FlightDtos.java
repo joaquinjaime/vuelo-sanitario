@@ -38,7 +38,8 @@ public final class FlightDtos { private FlightDtos(){}
  public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante,boolean vigente,LocalDateTime asignadoEn,String asignadoPor,LocalDateTime fechaBaja,String bajaPor,String motivoBaja,String elegibilidadCodigo,String elegibilidadMotivo,java.time.LocalDate habilitacionVence){}
  public record CrewCandidateView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean disponible,String motivoNoDisponible){}
  public record AvailableCrewView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName){}
- public record QualificationView(Long userId,String crewRoleCode,String crewRoleName){}
+ /** Clasificación administrativa de una persona para una función: vigente o retirada (historial), con su elegibilidad actual cuando está vigente. */
+ public record QualificationView(Long userId,String crewRoleCode,String crewRoleName,boolean vigente,String clasificadoPor,LocalDateTime fechaClasificacion,String retiradoPor,LocalDateTime fechaBaja,String motivoBaja,Boolean elegible,String elegibilidadCodigo,String elegibilidadMotivo,java.time.LocalDate habilitacionVence){}
  public record FinalReport(@DecimalMin("0.0") BigDecimal horasVuelo,@DecimalMin("0.0") BigDecimal combustibleConsumidoLitros,@Size(max=10000) String incidentes,@Size(max=10000) String resumen){}
  public record LocalityView(Long id,String nombre,String provincia,Long provinciaId){}
  public record FlightTypeView(String codigo,String nombre){}

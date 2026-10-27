@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.*;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.api.dto.FlightDtos.Crew;
 import com.vuelossanitarios.backend.api.dto.FlightDtos.CrewCandidateView;
+import com.vuelossanitarios.backend.api.dto.FlightDtos.QualificationView;
 import com.vuelossanitarios.backend.domain.catalog.Aircraft;
 import com.vuelossanitarios.backend.domain.catalog.CrewRole;
 import com.vuelossanitarios.backend.domain.catalog.FlightStatus;
@@ -159,6 +160,47 @@ class CrewManagementServiceTest {
   when(qualifications.existsByUserIdAndRoleCodigo(1L,"MEDICO")).thenReturn(true);when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(1L)).thenReturn(List.of(row(100L,flight,commander,commanderRole),existing));
   service.replace(1L,101L,new Crew(1L,"MEDICO"),3L);
   org.mockito.InOrder order=inOrder(users);order.verify(users).lockById(1L);order.verify(users).lockById(2L);
+ }
+ private CrewQualification vigente(long id,User u,CrewRole r){CrewQualification q=new CrewQualification();q.setId(id);q.setUser(u);q.setRole(r);q.setClassifier(actor);return q;}
+ @Test void retiringAClassificationKeepsTheRowWithWhoWhenAndWhyAndAuditsIt(){
+  CrewQualification q=vigente(70L,member,medico);when(qualifications.findByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(Optional.of(q));when(crews.findByUserIdAndFechaBajaIsNull(2L)).thenReturn(List.of());
+  service.unclassify(2L,"MEDICO","Cambio de función",3L);
+  assertFalse(q.isVigente());assertEquals("Cambio de función",q.getRetireReason());assertSame(actor,q.getRetiredBy());assertNotNull(q.getRetiredAt());
+  verify(qualifications).saveAndFlush(q);verify(qualifications,never()).delete(any());
+  verify(audit).record(isNull(),eq(actor),eq("CREW_QUALIFICATION"),eq(70L),eq("RETIRE"),contains("MEDICO"),contains("Cambio de función"));
+  CrewQualification other=vigente(71L,member,medico);when(qualifications.findByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(Optional.of(other));service.unclassify(2L,"MEDICO",null,3L);assertEquals(CrewQualification.RETIRO_ADMINISTRATIVO,other.getRetireReason(),"sin motivo queda el retiro administrativo");
+ }
+ @Test void aClassificationInUseByACommittedFlightCannotBeRetiredAndNothingChanges(){
+  CrewQualification q=vigente(72L,member,medico);when(qualifications.findByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(Optional.of(q));
+  when(crews.findByUserIdAndFechaBajaIsNull(2L)).thenReturn(List.of(row(101L,flight,member,medico)));
+  ApiException e=assertThrows(ApiException.class,()->service.unclassify(2L,"MEDICO","x",3L));
+  assertEquals(409,e.status().value());assertEquals("CLASIFICACION_EN_USO",e.code());assertTrue(q.isVigente());verify(qualifications,never()).saveAndFlush(any());
+  Flight done=flightWithState(5L,"FINALIZADO",LocalDateTime.of(2029,1,1,0,0),LocalDateTime.of(2029,1,1,2,0));
+  when(crews.findByUserIdAndFechaBajaIsNull(2L)).thenReturn(List.of(row(102L,done,member,medico)));
+  service.unclassify(2L,"MEDICO","El vuelo ya terminó",3L);assertFalse(q.isVigente(),"un vuelo terminado es historia y no impide el retiro");
+ }
+ @Test void retiringACommanderClassificationAlsoProtectsAFlightThatOnlyReferencesTheCommanderField(){
+  when(roles.findByCodigo("COMANDANTE")).thenReturn(Optional.of(commanderRole));CrewQualification q=vigente(73L,commander,commanderRole);when(qualifications.findByUserIdAndRoleCodigo(9L,"COMANDANTE")).thenReturn(Optional.of(q));when(crews.findByUserIdAndFechaBajaIsNull(9L)).thenReturn(List.of());
+  when(flights.findByComandanteId(9L)).thenReturn(List.of(flight));
+  assertEquals("CLASIFICACION_EN_USO",assertThrows(ApiException.class,()->service.unclassify(9L,"COMANDANTE","x",3L)).code());
+ }
+ @Test void unknownRolesAndMissingClassificationsAreRejectedWithCodes(){
+  assertEquals(400,assertThrows(ApiException.class,()->service.classify(2L,"PILOTO_INEXISTENTE",3L)).status().value());
+  assertEquals(400,assertThrows(ApiException.class,()->service.unclassify(2L,"PILOTO_INEXISTENTE",null,3L)).status().value());
+  when(qualifications.findByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(Optional.empty());
+  ApiException e=assertThrows(ApiException.class,()->service.unclassify(2L,"MEDICO",null,3L));assertEquals(409,e.status().value());assertEquals("CLASIFICACION_NO_VIGENTE",e.code());
+ }
+ @Test void classifyingAnAlreadyClassifiedPersonDoesNotDuplicateOrRewriteTheClassification(){
+  when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(true);service.classify(2L,"MEDICO",3L);
+  verify(qualifications,never()).saveAndFlush(any());verify(audit,never()).record(any(),any(),eq("CREW_QUALIFICATION"),any(),any(),any(),any());
+ }
+ @Test void theQualificationViewShowsEligibilityForCurrentOnesAndKeepsRetiredOnesAsHistory(){
+  CrewQualification current=vigente(80L,member,medico),retired=vigente(79L,member,medico);retired.retire(LocalDateTime.of(2029,12,1,0,0),actor,"Cambio de función");
+  when(users.findById(2L)).thenReturn(Optional.of(member));when(qualifications.findAllByUserId(2L)).thenReturn(List.of(current,retired));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(true);
+  List<QualificationView> now=service.qualifications(2L,false),all=service.qualifications(2L,true);
+  assertEquals(1,now.size());assertTrue(now.get(0).vigente());assertTrue(now.get(0).elegible());assertEquals("ELEGIBLE",now.get(0).elegibilidadCodigo());
+  assertEquals(2,all.size());QualificationView old=all.get(1);assertFalse(old.vigente());assertEquals("Cambio de función",old.motivoBaja());assertEquals("ops3".equals(old.retiradoPor())||old.retiradoPor()!=null,true);assertNull(old.elegible());
+  assertEquals(List.of("COMANDANTE","COPILOTO","MEDICO","ENFERMERO"),List.copyOf(CrewManagementService.RULES.keySet()));assertEquals("RECURSOS",CrewManagementService.RULES.get("COMANDANTE").asignacion());assertTrue(CrewManagementService.RULES.values().stream().allMatch(CrewManagementService.RoleRule::requiereHabilitacionVerificada));
  }
  @Test void aFlightWithoutPlannedArrivalIsEvaluatedAtItsDepartureInsteadOfFailing(){
   flight.setFechaPlanificadaLlegada(null); // solicitud sanitaria aprobada: ya tiene salida y todavía no la planificación del comandante

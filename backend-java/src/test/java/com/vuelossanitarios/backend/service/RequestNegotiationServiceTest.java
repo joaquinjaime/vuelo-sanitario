@@ -29,6 +29,7 @@ class RequestNegotiationServiceTest {
 
  @BeforeEach void setUp(){
   service=new FlightService(flights,sanitaryFlights,types,sanitaryStatuses,patients,users,statuses,priorities,aircraft,mock(AirportRepository.class),localities,mock(CrewRoleRepository.class),mock(FlightCrewRepository.class),medical,mock(FlightFinalReportRepository.class),negotiations,reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,new FlightUrgencyPolicy(clock,ZoneId.of("America/Argentina/Tucuman")),mock(FinalReportWorkflowService.class),commanderAccess,crew,log,mock(FlightRouteService.class),mock(AirportLocks.class),clock);
+  when(crew.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
   for(String c:List.of("PLANIFICADO","EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO","PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION")){FlightStatus s=new FlightStatus();s.setCodigo(c);flightStates.put(c,s);when(statuses.findByCodigo(c)).thenReturn(Optional.of(s));}
   for(String c:List.of("SOLICITADO","APROBADO","RECHAZADO","PENDIENTE_RESPUESTA_DTS","CANCELADO")){SanitaryRequestStatus s=new SanitaryRequestStatus();s.setCodigo(c);requestStates.put(c,s);when(sanitaryStatuses.findByCodigo(c)).thenReturn(Optional.of(s));}
   dts=user(20L,"dts","DTS");otherDts=user(21L,"dts2","DTS");ops=user(10L,"ops","CENTRO_OPERACIONES");commander=user(11L,"cmd","COMANDANTE");
@@ -191,6 +192,13 @@ class RequestNegotiationServiceTest {
 
  // ---------- vuelos operativos ----------
  private void operational(String state){request=null;flight.setSanitario(null);flight.setEstadoVuelo(flightStates.get(state));flight.setComandante(commander);flight.setCreadoPor(ops);flight.setFechaPlanificadaSalida(LocalDateTime.of(2026,10,23,9,0));flight.setFechaPlanificadaLlegada(LocalDateTime.of(2026,10,23,11,0));}
+ @Test void aCommanderWhoStoppedBeingEligibleCannotAcceptAndTheAssignmentStaysPending(){
+  operational("PENDIENTE_CONFIRMACION_COMANDANTE");
+  when(crew.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CLASIFICACION_INCOMPATIBLE","Falta la clasificación administrativa para esta función",null));
+  ApiException e=assertThrows(ApiException.class,()->service.respondToOperationalAssignment(7L,new CommanderResponse(true,null,null,null),11L));
+  assertEquals(409,e.status().value());assertEquals("CLASIFICACION_INCOMPATIBLE",e.code());assertEquals("PENDIENTE_CONFIRMACION_COMANDANTE",flight.getEstadoVuelo().getCodigo(),"la asignación no se confirma ni cambia en silencio");
+  FlightView rejected=service.respondToOperationalAssignment(7L,new CommanderResponse(false,"No estoy habilitado para este vuelo",null,null),11L);assertEquals("PENDIENTE_REPLANIFICACION",rejected.estadoVuelo(),"rechazar sigue siendo posible");
+ }
  @Test void theCommanderConfirmsRejectsOrProposesAndRejectionIsNotCancellation(){
   operational("PENDIENTE_CONFIRMACION_COMANDANTE");
   FlightView accepted=service.respondToOperationalAssignment(7L,new CommanderResponse(true,null,null,null),11L); assertEquals("PLANIFICADO",accepted.estadoVuelo()); assertEquals("COMANDANTE_ACEPTA_ASIGNACION",events.get(events.size()-1).getTipo());

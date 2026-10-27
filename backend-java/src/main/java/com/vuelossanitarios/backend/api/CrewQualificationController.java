@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 public class CrewQualificationController {
  private final CrewManagementService service;
  public CrewQualificationController(CrewManagementService service){this.service=service;}
- @GetMapping("/{userId}") public List<QualificationView> list(@PathVariable Long userId){return service.qualifications(userId);}
+ @GetMapping("/{userId}") public List<QualificationView> list(@PathVariable Long userId,@RequestParam(defaultValue="false") boolean history){return service.qualifications(userId,history);}
  @PutMapping("/{userId}/{code}") @ResponseStatus(HttpStatus.NO_CONTENT) public void classify(@PathVariable Long userId,@PathVariable String code,@AuthenticationPrincipal CurrentUser user){service.classify(userId,code,user.id());}
- @DeleteMapping("/{userId}/{code}") @ResponseStatus(HttpStatus.NO_CONTENT) public void unclassify(@PathVariable Long userId,@PathVariable String code,@AuthenticationPrincipal CurrentUser user){service.unclassify(userId,code,user.id());}
+ @DeleteMapping("/{userId}/{code}") @ResponseStatus(HttpStatus.NO_CONTENT) public void unclassify(@PathVariable Long userId,@PathVariable String code,@RequestParam(required=false) String motivo,@AuthenticationPrincipal CurrentUser user){service.unclassify(userId,code,motivo,user.id());}
 }

@@ -23,6 +23,12 @@ public class CrewManagementService {
  private final FlightRepository flights; private final FlightCrewRepository crews; private final UserRepository users;
  private final CrewRoleRepository roles; private final CrewQualificationRepository qualifications; private final AuditService audit; private final ProfessionalCredentialService credentials; private final NotificationService notifications; private final Clock clock;
  @org.springframework.beans.factory.annotation.Autowired(required=false) private CommanderReportAccessService commanderAccess;
+ /** Función de tripulación y lo que la elegibilidad exige para cumplirla (única fuente de esos requisitos: la usa evaluateOn y el catálogo que ve la interfaz). */
+ public record RoleRule(String codigo,String asignacion,boolean requiereClasificacion,boolean requiereHabilitacionVerificada,boolean requiereLicencia,boolean requiereRolAcceso){}
+ public static final Map<String,RoleRule> RULES;
+ static{Map<String,RoleRule> m=new LinkedHashMap<>();
+  m.put("COMANDANTE",new RoleRule("COMANDANTE","RECURSOS",true,true,true,true));m.put("COPILOTO",new RoleRule("COPILOTO","TRIPULACION",true,true,false,false));
+  m.put("MEDICO",new RoleRule("MEDICO","TRIPULACION",true,true,false,false));m.put("ENFERMERO",new RoleRule("ENFERMERO","TRIPULACION",true,true,false,false));RULES=Collections.unmodifiableMap(m);}
  public record Eligibility(boolean eligible,String code,String message,java.time.LocalDate expires) {
   public ApiException conflict(Long userId,String role){return new ApiException(HttpStatus.CONFLICT,code,message,Map.of("userId",userId,"crewRoleCode",role));}
  }
@@ -49,7 +55,7 @@ public class CrewManagementService {
  private ApiException conflict(String s){return new ApiException(HttpStatus.CONFLICT,s);}
  private User lockUser(Long id){return users.lockById(id).orElseThrow(()->bad("Usuario inexistente"));}
  private Flight lockFlight(Long id){return flights.lockById(id).orElseThrow(()->bad("Vuelo inexistente"));}
- private CrewRole role(String code){if(!Set.of("COMANDANTE","COPILOTO","MEDICO","ENFERMERO").contains(code))throw bad("La función indicada no admite clasificación administrativa");return roles.findByCodigo(code).orElseThrow(()->bad("Función inexistente"));}
+ private CrewRole role(String code){if(code==null||!RULES.containsKey(code))throw bad("La función indicada no admite clasificación administrativa");return roles.findByCodigo(code).orElseThrow(()->bad("Función inexistente"));}
  private void mutable(Flight f){if(f.getEstadoVuelo()==null||!FlightStates.MUTABLE_BEFORE_START.contains(f.getEstadoVuelo().getCodigo()))throw bad("El estado del vuelo no permite modificar la tripulación");}
  private void interval(Flight f){if(f.getFechaPlanificadaSalida()==null||f.getFechaPlanificadaLlegada()==null||!f.getFechaPlanificadaLlegada().isAfter(f.getFechaPlanificadaSalida()))throw bad("El vuelo requiere salida y llegada válidas para asignar tripulación");}
  private boolean committed(Flight f){return f.getEstadoVuelo()==null||!FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo());}
@@ -136,7 +142,30 @@ public class CrewManagementService {
   if(f.getAircraft()!=null&&f.getAircraft().getCapacidadTripulacion()!=null&&crewSize(f,existing)+1>f.getAircraft().getCapacidadTripulacion())throw conflict("La aeronave "+f.getAircraft().getMatricula()+" admite como máximo "+f.getAircraft().getCapacidadTripulacion()+" tripulantes");
   Optional<Flight> clash=conflictingFlight(f,member);if(clash.isPresent())throw conflict("El tripulante tiene otro compromiso incompatible ("+clash.get().getCodigo()+")");
  }
- @Transactional(readOnly=true) public List<QualificationView> qualifications(Long userId){return qualifications.findByUserId(userId).stream().map(q->new QualificationView(userId,q.getRole().getCodigo(),q.getRole().getNombre())).toList();}
+ /** Clasificaciones vigentes de la persona con su elegibilidad de hoy; con {@code history} también las retiradas (quién y cuándo clasificó, quién retiró y por qué). */
+ @Transactional(readOnly=true) public List<QualificationView> qualifications(Long userId,boolean history){
+  User u=users.findById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  return qualifications.findAllByUserId(userId).stream().filter(q->history||q.isVigente()).map(q->{
+   String code=q.getRole().getCodigo();Eligibility e=q.isVigente()?evaluateOn(null,u,code,null,false):null;
+   return new QualificationView(userId,code,q.getRole().getNombre(),q.isVigente(),q.getClassifier()==null?null:q.getClassifier().getUsername(),q.getClassifiedAt(),q.getRetiredBy()==null?null:q.getRetiredBy().getUsername(),q.getRetiredAt(),q.getRetireReason(),e==null?null:e.eligible(),e==null?null:e.code(),e==null?null:e.message(),e==null?null:e.expires());
+  }).toList();
+ }
+ /** Idempotente: si la función ya está vigente no hace nada (no duplica ni reescribe quién y cuándo clasificó). Toma el bloqueo de la persona, el mismo que asignar y retirar. */
  @Transactional public void classify(Long userId,String code,Long actor){User u=lockUser(userId);CrewRole r=role(code);if(qualifications.existsByUserIdAndRoleCodigo(userId,code))return;CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(r);q.setClassifier(users.findById(actor).orElseThrow());qualifications.saveAndFlush(q);audit.record(null,q.getClassifier(),"CREW_QUALIFICATION",q.getId(),"CREATE",null,"{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\"}");}
- @Transactional public void unclassify(Long userId,String code,Long actor){lockUser(userId);CrewQualification q=qualifications.findByUserIdAndRoleCodigo(userId,code).orElseThrow(()->bad("Clasificación inexistente"));if(crews.findByUserIdAndFechaBajaIsNull(userId).stream().anyMatch(c->code.equals(c.getCrewRole().getCodigo())&&committed(c.getFlight())))throw conflict("Retire primero las asignaciones activas de esta función");audit.record(null,users.findById(actor).orElseThrow(),"CREW_QUALIFICATION",q.getId(),"DELETE","{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\"}",null);qualifications.delete(q);}
+ /**
+  * Retira la clasificación sin borrarla (V58): conserva quién la otorgó y cuándo, y registra quién la retiró, cuándo y por qué. Se rechaza (409) mientras la persona
+  * tenga una asignación vigente en esa función en un vuelo no terminal —planificado o en curso incluido—, de modo que ningún vuelo queda sosteniéndose en una
+  * clasificación inexistente. Bloquea a la persona antes de contar las asignaciones, igual que asignar (que bloquea vuelo → persona y relee la clasificación).
+  */
+ @Transactional public void unclassify(Long userId,String code,String reason,Long actor){
+  lockUser(userId);role(code);CrewQualification q=qualifications.findByUserIdAndRoleCodigo(userId,code).orElseThrow(()->new ApiException(HttpStatus.CONFLICT,"CLASIFICACION_NO_VIGENTE","La persona no tiene esa clasificación vigente; actualice la pantalla",Map.of("userId",userId,"crewRoleCode",code)));
+  List<String> inUse=new ArrayList<>();
+  for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(userId))if(code.equals(c.getCrewRole().getCodigo())&&committed(c.getFlight()))inUse.add(c.getFlight().getCodigo());
+  if("COMANDANTE".equals(code))for(Flight f:flights.findByComandanteId(userId))if(committed(f)&&!inUse.contains(f.getCodigo()))inUse.add(f.getCodigo());
+  if(!inUse.isEmpty())throw new ApiException(HttpStatus.CONFLICT,"CLASIFICACION_EN_USO","Retire primero las asignaciones activas de esta función ("+String.join(", ",inUse)+")",Map.of("userId",userId,"crewRoleCode",code,"vuelos",inUse));
+  User by=users.findById(actor).orElseThrow();String why=reason==null||reason.isBlank()?CrewQualification.RETIRO_ADMINISTRATIVO:reason.trim();
+  if(why.length()>200)throw bad("El motivo del retiro admite hasta 200 caracteres");
+  String before="{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\"}";q.retire(LocalDateTime.now(clock),by,why);qualifications.saveAndFlush(q);
+  audit.record(null,by,"CREW_QUALIFICATION",q.getId(),"RETIRE",before,"{\"userId\":"+userId+",\"crewRoleCode\":\""+code+"\",\"motivoBaja\":\""+why.replace("\\","\\\\").replace("\"","\\\"")+"\"}");
+ }
 }
