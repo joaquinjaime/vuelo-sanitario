@@ -21,6 +21,7 @@ public interface LocalityRepository extends JpaRepository<Locality, Long> {
     boolean existsByProvincia_IdAndNombreIgnoreCase(Long provinciaId,String nombre);
     boolean existsByProvincia_IdAndNombreIgnoreCaseAndIdNot(Long provinciaId,String nombre,Long id);
     long countByProvincia_IdAndActivoTrue(Long provinceId);
-    @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select l from Locality l join fetch l.provincia where l.id=:id") Optional<Locality> lockById(@Param("id") Long id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select l from Locality l where l.id=:id") Optional<Locality> lockById(@Param("id") Long id);
+    @Query("select l.provincia.id from Locality l where l.id=:id") Optional<Long> provinceIdOf(@Param("id") Long id);
     @EntityGraph(attributePaths = "provincia") @Query("select l from Locality l where lower(l.nombre) like lower(concat('%',:q,'%')) or lower(l.codigoOficial) like lower(concat('%',:q,'%'))") Page<Locality> search(@Param("q") String q,Pageable pageable);
 }

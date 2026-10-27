@@ -17,7 +17,7 @@ class Aa2000CoordinationServiceTest {
     FlightRepository flights=mock(FlightRepository.class); Aa2000CoordinationRepository records=mock(Aa2000CoordinationRepository.class);
     AirportRepository airports=mock(AirportRepository.class); UserRepository users=mock(UserRepository.class); AuditService audit=mock(AuditService.class);
     Clock clock=Clock.fixed(Instant.parse("2026-01-10T12:00:00Z"),ZoneOffset.UTC);
-    Aa2000CoordinationService service=new Aa2000CoordinationService(flights,records,airports,users,audit,new ObjectMapper().findAndRegisterModules(),clock);
+    Aa2000CoordinationService service=new Aa2000CoordinationService(flights,records,airports,mock(AirportLocks.class),users,audit,new ObjectMapper().findAndRegisterModules(),clock);
     Flight f;Airport airport;User ops,cmd,other;UUID group=UUID.randomUUID();
     User actor(long id,String name,String code){User u=new User();u.setId(id);u.setUsername(name);Role role=new Role();role.setCodigo(code);u.setUserRoles(Set.of(new UserRole(u,role)));when(users.findById(id)).thenReturn(Optional.of(u));when(users.findWithRolesByUsername(name)).thenReturn(Optional.of(u));return u;}
     @BeforeEach void setup(){ops=actor(1,"ops","OPERACIONES");cmd=actor(2,"cmd","COMANDANTE");other=actor(3,"other","COMANDANTE");f=new Flight();f.setId(9L);f.setComandante(cmd);FlightStatus status=new FlightStatus();status.setCodigo("PLANIFICADO");f.setEstadoVuelo(status);airport=new Airport();airport.setId(10L);airport.setActivo(true);when(airports.findById(10L)).thenReturn(Optional.of(airport));when(flights.findById(9L)).thenReturn(Optional.of(f));when(flights.lockById(9L)).thenReturn(Optional.of(f));when(flights.readLockedById(9L)).thenReturn(Optional.of(f));}

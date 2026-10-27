@@ -12,6 +12,7 @@ final class AuditCatalog {
  static {
   Map<String,String> t=ENTITY_TYPES;
   t.put("FLIGHT","Vuelo");t.put("SANITARY_REQUEST","Solicitud sanitaria");t.put("FLIGHT_CREW","Tripulación del vuelo");t.put("AIRCRAFT","Aeronave");
+  t.put("GEOGRAPHIC_PROVINCE","Provincia");t.put("GEOGRAPHIC_LOCALITY","Localidad");t.put("GEOGRAPHIC_AIRPORT","Aeropuerto");
   t.put("FLIGHT_ROUTE","Ruta del vuelo");t.put("DOCUMENT","Documento del vuelo");t.put("DOCUMENT_LOCK","Bloqueo de documento");t.put("HANGAR_INFO","Preparación en hangar");
   t.put("AA2000_COORDINATION","Coordinación aeroportuaria");t.put("FLIGHT_LOG","Bitácora operativa");t.put("WEATHER","Condiciones meteorológicas");
   t.put("FINAL_REPORT","Informe final");t.put("FINAL_REPORT_OBLIGATION","Obligación de informe final");t.put("USER","Usuario");t.put("COMMANDER_PROFILE","Perfil de comandante");
@@ -43,7 +44,7 @@ final class AuditCatalog {
   f.put("estadoInforme","Estado del informe");f.put("formato","Formato");f.put("version","Versión");f.put("vencimiento","Vencimiento");f.put("comandanteBloqueado","Comandante bloqueado");
   f.put("adjuntoBytes","Tamaño del adjunto (bytes)");f.put("adjuntoSha256","Huella SHA-256 del adjunto");f.put("status","Estado");f.put("dueAt","Vencimiento");
   f.put("modelo","Modelo");f.put("capacidadPacientes","Capacidad de pacientes");f.put("capacidadTripulacion","Capacidad de tripulación");
-  f.put("equipamientoMedico","Equipamiento médico");f.put("activo","Activo");f.put("aeropuertoActual","Ubicación");f.put("aeropuertoActualId","Ubicación");f.put("fecha","Fecha");
+  f.put("referenciasHistoricasConservadas","Referencias históricas conservadas");f.put("equipamientoMedico","Equipamiento médico");f.put("activo","Activo");f.put("aeropuertoActual","Ubicación");f.put("aeropuertoActualId","Ubicación");f.put("fecha","Fecha");
   f.put("provinciaActualId","Provincia actual");f.put("profileCreated","Perfil creado");f.put("licenseChanged","Licencia modificada");f.put("temporaryPasswordIssued","Contraseña temporal emitida");
   f.put("reason","Razón");f.put("descripcion","Descripción");f.put("importancia","Importancia");f.put("origen","Origen del registro");f.put("responsable","Responsable");
   f.put("registrado","Registrado");f.put("ocurrido","Ocurrido");f.put("correccionDe","Corrige la entrada");f.put("motivoCorreccion","Motivo de la corrección");

@@ -24,7 +24,7 @@ class OperationalFlightServiceTest {
 
  @BeforeEach void setUp(){
   when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
-  service=new FlightService(flights,sanitary,types,sanitaryStatuses,patients,users,statuses,priorities,aircraft,airports,localities,crewRoles,crews,medical,reports,negotiations,cancellationReasons,weather,audit,access,notifications,urgency,reportWorkflow,commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),java.time.Clock.systemDefaultZone());
+  service=new FlightService(flights,sanitary,types,sanitaryStatuses,patients,users,statuses,priorities,aircraft,airports,localities,crewRoles,crews,medical,reports,negotiations,cancellationReasons,weather,audit,access,notifications,urgency,reportWorkflow,commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),mock(AirportLocks.class),java.time.Clock.systemDefaultZone());
   Province province=new Province();province.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); province.setNombre("Tucumán");
   origin=airport("TUC",province); destination=airport("AEP",province);
   plane=new Aircraft();plane.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));plane.setActivo(true);plane.setAeropuertoActual(origin);

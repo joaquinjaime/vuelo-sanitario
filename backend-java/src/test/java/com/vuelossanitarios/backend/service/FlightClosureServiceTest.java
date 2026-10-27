@@ -26,7 +26,7 @@ class FlightClosureServiceTest {
  private final Map<String,FlightStatus> catalog=new HashMap<>();
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,routeReview,clock);
+  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,routeReview,mock(AirportLocks.class),clock);
   Province province=new Province();province.setId(1L);province.setNombre("Tucumán");
   origin=airport(1L,"TUC",province);destination=airport(2L,"AEP",province);
   ops=user(10L,"ops","CENTRO_OPERACIONES");commander=user(11L,"cmd","COMANDANTE");commander.getPerson().getCommanderProfile().setProvinciaActual(province);

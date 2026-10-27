@@ -61,8 +61,8 @@ public class FlightRouteService {
  private static final Set<String> UNDECIDED=Set.of(FlightRoute.BORRADOR,FlightRoute.PENDIENTE_REVISION);
  private static final String[] CONTEXT_LABELS={"el aeropuerto de origen","el aeropuerto de destino","el horario de salida","el horario de llegada","la aeronave","el comandante asignado"};
 
- private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final NotificationService notifications; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess; private final Clock clock;
- public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,NotificationService n,ObjectMapper j,CommanderReportAccessService ca,Clock c){commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;notifications=n;json=j;clock=c;}
+ private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final NotificationService notifications; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess; private final AirportLocks airportLocks; private final Clock clock;
+ public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,NotificationService n,ObjectMapper j,CommanderReportAccessService ca,AirportLocks al,Clock c){airportLocks=al;commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;notifications=n;json=j;clock=c;}
 
  @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->missing("Vuelo"));access.mayRead(f,actor);return view(f,actor);}
  @Transactional(readOnly=true) public List<Status> statuses(){
@@ -77,7 +77,7 @@ public class FlightRouteService {
   if(!ready(f))throw new ApiException(HttpStatus.BAD_REQUEST,"Complete primero los aeropuertos y horarios del vuelo");
   FlightRoute old=current(id);int version=old==null?0:old.getVersion();
   if(input.version()!=version)throw stale("La ruta cambió; vuelva a cargarla antes de guardar");
-  Airport alternate=null;if(input.alternativoId()!=null){alternate=airports.findById(input.alternativoId()).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Aeropuerto alternativo inexistente o inactivo"));if(alternate.getId().equals(f.getDestino().getId()))throw new ApiException(HttpStatus.BAD_REQUEST,"El alternativo debe ser distinto del destino");}
+  Airport alternate=null;if(input.alternativoId()!=null){airportLocks.lockAll(input.alternativoId());alternate=airports.findById(input.alternativoId()).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Aeropuerto alternativo inexistente o inactivo"));if(alternate.getId().equals(f.getDestino().getId()))throw new ApiException(HttpStatus.BAD_REQUEST,"El alternativo debe ser distinto del destino");}
   String route=input.recorrido().trim(),notes=clean(input.observaciones()),state=old==null?null:old.getEstadoRevision();
   boolean unchanged=old!=null&&sameContent(old,route,alternate,input,notes)&&Objects.equals(old.getContexto(),context(f));
   if(unchanged&&Set.of(FlightRoute.BORRADOR,FlightRoute.PENDIENTE_REVISION,FlightRoute.APROBADA).contains(state))throw new ApiException(HttpStatus.BAD_REQUEST,"RUTA_SIN_CAMBIOS","La ruta no tiene cambios respecto de la versión vigente",Map.of());
@@ -109,7 +109,7 @@ public class FlightRouteService {
   if(!FlightRoute.PENDIENTE_REVISION.equals(r.getEstadoRevision()))throw transition(r,"aprobar");
   requireNoSelfReview(r,reviewer);
   Assessment a=assess(f,r);if(!FlightRoute.PENDIENTE_REVISION.equals(a.estado()))throw new ApiException(HttpStatus.CONFLICT,"RUTA_REQUIERE_REVISION","La ruta ya no es consistente con el vuelo ("+String.join("; ",a.causas())+"); el comandante debe presentarla nuevamente",details(r,a.estado()));
-  Airport alternate=r.getAlternativo();if(alternate!=null&&!Boolean.TRUE.equals(airports.findById(alternate.getId()).map(Airport::getActivo).orElse(false)))throw new ApiException(HttpStatus.CONFLICT,"RUTA_REQUIERE_REVISION","El aeropuerto alternativo ya no está activo; el comandante debe corregir la ruta",details(r,FlightRoute.REQUIERE_REVISION));
+  Airport alternate=r.getAlternativo();if(alternate!=null)airportLocks.lockAll(alternate.getId());if(alternate!=null&&!Boolean.TRUE.equals(airports.findById(alternate.getId()).map(Airport::getActivo).orElse(false)))throw new ApiException(HttpStatus.CONFLICT,"RUTA_REQUIERE_REVISION","El aeropuerto alternativo ya no está activo; el comandante debe corregir la ruta",details(r,FlightRoute.REQUIERE_REVISION));
   decide(f,r,reviewer,FlightRoute.APROBADA,clean(input.comentario()),"APPROVE");return view(f,actor);
  }
 
@@ -176,6 +176,7 @@ public class FlightRouteService {
   if(!ready(f))out.add("faltan aeropuertos u horarios válidos en el vuelo");
   else if(f.getOrigen().getId().equals(f.getDestino().getId()))out.add("el origen y el destino del vuelo coinciden");
   if(r.getAlternativo()!=null&&f.getDestino()!=null&&r.getAlternativo().getId().equals(f.getDestino().getId()))out.add("el aeropuerto alternativo coincide con el destino");
+  if(r.getAlternativo()!=null&&!Boolean.TRUE.equals(r.getAlternativo().getActivo()))out.add("el aeropuerto alternativo ya no está activo");
   String stored=r.getContexto(),now=context(f);
   if(stored==null)out.add("la ruta no registró las condiciones del vuelo con que se planificó");
   else if(!stored.equals(now)){

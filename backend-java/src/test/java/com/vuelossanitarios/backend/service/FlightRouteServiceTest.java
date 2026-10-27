@@ -17,7 +17,7 @@ import org.springframework.http.HttpStatus;
 class FlightRouteServiceTest {
  FlightRepository flights=mock(FlightRepository.class); FlightRouteRepository routes=mock(FlightRouteRepository.class); AirportRepository airports=mock(AirportRepository.class); UserRepository users=mock(UserRepository.class); FlightAuthorizationService access=mock(FlightAuthorizationService.class); AuditService audit=mock(AuditService.class); NotificationService notifications=mock(NotificationService.class); CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class);
  Clock clock=Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"),ZoneId.of("UTC"));
- FlightRouteService service=new FlightRouteService(flights,routes,airports,users,access,audit,notifications,new ObjectMapper().findAndRegisterModules(),commanderAccess,clock);
+ FlightRouteService service=new FlightRouteService(flights,routes,airports,users,access,audit,notifications,new ObjectMapper().findAndRegisterModules(),commanderAccess,mock(AirportLocks.class),clock);
  Flight f; User commander,ops,otherOps; Airport origin,destination,alternate; final List<FlightRoute> store=new ArrayList<>();
  FlightRouteService.Input input(int version,Long alternate){return new FlightRouteService.Input(version,"Punto A, punto B",alternate,null,null,null,"Observación",null,null);}
  FlightRouteService.Input input(int version,String route,String reason,Boolean present){return new FlightRouteService.Input(version,route,null,null,null,null,null,reason,present);}
