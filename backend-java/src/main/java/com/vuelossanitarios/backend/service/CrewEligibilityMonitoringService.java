@@ -26,9 +26,9 @@ public class CrewEligibilityMonitoringService {
  private static final Logger log=LoggerFactory.getLogger(CrewEligibilityMonitoringService.class);
  private final FlightRepository flights; private final FlightCrewRepository crews; private final UserRepository users;
  private final CrewManagementService eligibility; private final NotificationService notifications; private final AuditService audit;
- private final TransactionTemplate tx; private final AtomicBoolean policyReviewQueued=new AtomicBoolean();
+ private final boolean policyReviewEnabled; private final TransactionTemplate tx; private final AtomicBoolean policyReviewQueued=new AtomicBoolean();
  private final ExecutorService policyReviewer=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"crew-eligibility-policy-review");t.setDaemon(true);return t;});
- public CrewEligibilityMonitoringService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewManagementService e,NotificationService n,AuditService a,PlatformTransactionManager manager){flights=f;crews=c;users=u;eligibility=e;notifications=n;audit=a;tx=new TransactionTemplate(manager);}
+ public CrewEligibilityMonitoringService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewManagementService e,NotificationService n,AuditService a,PlatformTransactionManager manager,@org.springframework.beans.factory.annotation.Value("${app.crew-eligibility.policy-review-enabled:true}") boolean policyReviewEnabled){this.policyReviewEnabled=policyReviewEnabled;flights=f;crews=c;users=u;eligibility=e;notifications=n;audit=a;tx=new TransactionTemplate(manager);}
  @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
  @Transactional(propagation=Propagation.REQUIRES_NEW)
  public void credentialChanged(ProfessionalCredentialService.CredentialChanged event){
@@ -44,7 +44,7 @@ public class CrewEligibilityMonitoringService {
   */
  @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
  public void policyChanged(CredentialPolicyService.PolicyChanged event){
-  if(!policyReviewQueued.compareAndSet(false,true))return;
+  if(!policyReviewEnabled||!policyReviewQueued.compareAndSet(false,true))return;
   policyReviewer.execute(()->{policyReviewQueued.set(false);try{tx.executeWithoutResult(s->reviewOpenFlights());}catch(RuntimeException e){log.warn("La revisión de tripulaciones tras el cambio de política falló: {}",e.getClass().getSimpleName());}});
  }
  @Scheduled(fixedDelayString="${app.crew-eligibility.sweep-ms:3600000}",initialDelayString="${app.crew-eligibility.sweep-initial-ms:60000}")

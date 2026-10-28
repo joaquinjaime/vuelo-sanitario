@@ -57,6 +57,9 @@ app:
     retry-initial-ms: ${APP_ANTIMALWARE_RETRY_INITIAL_MS:120000}
     retry-after-seconds: ${APP_ANTIMALWARE_RETRY_AFTER_SECONDS:60}
   # Avisos preventivos de vencimiento de habilitaciones.
+  # Revisión de los vuelos abiertos tras crear o dar de baja una política de suficiencia (asíncrona y coalescida).
+  crew-eligibility:
+    policy-review-enabled: ${APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED:true}
   credential-expiry:
     enabled: ${APP_CREDENTIAL_EXPIRY_ENABLED:true}
     notice-days: ${APP_CREDENTIAL_EXPIRY_NOTICE_DAYS:60,30,7,0}

@@ -47,20 +47,23 @@ async function until(fn, what, ms = 45000) { const end = Date.now() + ms; let la
   const browser = await chromium.launch({ headless: true, executablePath: process.env.E2E_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe' }); const shots = process.env.E2E_SHOT_DIR;
   const snap = async (p, n) => { try { if (shots) await p.screenshot({ path: path.join(shots, n + '.png'), fullPage: false }); } catch { /* opcional */ } };
   const login = async (name) => { const ctx = await browser.newContext(); const p = await ctx.newPage(); p.on('dialog', (d) => d.accept()); p.setDefaultTimeout(60000); await p.goto(UI); await p.getByLabel('Usuario', { exact: true }).fill(name); await p.getByLabel('Contraseña', { exact: true }).fill(PASSWORD); const r = p.waitForResponse((x) => x.url().endsWith('/api/auth/login'), { timeout: 20000 }); await p.getByRole('button', { name: 'Iniciar sesión' }).click(); const res = await r; if (!res.ok()) throw new Error('UI login HTTP ' + res.status()); return p; };
-  const crewPanel = (page) => page.locator('div.wide', { has: page.getByRole('heading', { name: 'Tripulación', exact: true }) }).first();
+  /** La pantalla muestra «nombre apellido» (E2E <sufijo>), no el usuario. */
+  const shown = (u) => new RegExp('E2E ' + u.name.slice(MARK.length) + '(?![a-z0-9])');
+  const crewPanel = (page) => page.locator('div.wide', { has: page.getByRole('heading', { name: 'Tripulación', exact: true }) });
   const select = async (page, id) => { await page.locator('section', { has: page.getByRole('heading', { name: 'Planificación operativa' }) }).locator('label', { hasText: /^Vuelo/ }).locator('select').selectOption(String(id), { timeout: 60000 }); };
   try {
     const page = await login(cmd.name);
     await select(page, flight.id);
     let crew = crewPanel(page);
-    await crew.getByText(new RegExp(m1.name.replace(/\d/g, '\\d'))).first().waitFor();
+    await crew.first().waitFor(); await crew.getByText(shown(m1)).first().waitFor();
+    assert.equal(await crew.count(), 1, 'un único panel de tripulación (claves hermanas distintas)');
     await snap(page, 'tc01-antes-de-aceptar');
     // ---- 1) aceptar la asignación ----
     const crewRequestsBefore = []; page.on('request', (r) => { if (/\/api\/flights\/\d+\/crew$/.test(r.url())) crewRequestsBefore.push(Date.now()); });
     await page.getByRole('button', { name: 'Aceptar asignación' }).click();
     await until(() => stateOf(flight.id) === 'PLANIFICADO', 'estado PLANIFICADO');
     await page.getByRole('button', { name: 'Aceptar asignación' }).waitFor({ state: 'detached' });
-    await until(async () => (await page.getByText(new RegExp(m1.name)).count()) >= 1, 'la tripulación sigue visible tras aceptar');
+    await until(async () => (await page.getByText(shown(m1)).count()) >= 1, 'la tripulación sigue visible tras aceptar');
     assert.ok(crewRequestsBefore.length >= 1, 'la pantalla volvió a consultar la tripulación tras el cambio de estado sin recargar la página');
     assert.equal((await crewApi(flight)).filter((r) => r.vigente !== false).length, 2, 'comandante + médico en el servidor');
     await crew.getByText(/Comandante/).first().waitFor();
@@ -70,31 +73,31 @@ async function until(fn, what, ms = 45000) { const end = Date.now() + ms; let la
     // ---- 2) cambios hechos por Operaciones mientras el comandante mira la pantalla ----
     const current = (await crewApi(flight)).find((r) => r.userId === m1.id && r.vigente !== false);
     await call(`/flights/${flight.id}/crew/${current.id}`, { method: 'PUT', token: ops.token, body: { userId: m2.id, crewRoleCode: 'MEDICO' }, expect: [204] });
-    await crew.getByText(new RegExp(m2.name)).first().waitFor({ timeout: 40000 });
-    await until(async () => (await crew.getByText(new RegExp(m1.name)).count()) === 0, 'el médico reemplazado desaparece de la lista vigente', 40000);
+    await crew.getByText(shown(m2)).first().waitFor({ timeout: 40000 });
+    await until(async () => (await crew.getByText(shown(m1)).count()) === 0, 'el médico reemplazado desaparece de la lista vigente', 40000);
     pass('TC-2 un reemplazo hecho por Operaciones aparece solo en la pantalla abierta del comandante (≤ 40 s, sin recargar)');
     const replaced = (await crewApi(flight)).find((r) => r.userId === m2.id && r.vigente !== false);
     await call(`/flights/${flight.id}/crew/${replaced.id}`, { method: 'DELETE', token: ops.token, expect: [204] });
-    await until(async () => (await crew.getByText(new RegExp(m2.name)).count()) === 0, 'el médico retirado desaparece', 40000);
+    await until(async () => (await crew.getByText(shown(m2)).count()) === 0, 'el médico retirado desaparece', 40000);
     pass('TC-3 un retiro hecho por Operaciones también se refleja solo');
 
     // ---- 3) rechazo y replanificación ----
     const second = await newFlight(); await addCrew(second, m3);
     await page.reload(); await select(page, second.id);
-    crew = crewPanel(page); await crew.getByText(new RegExp(m3.name)).first().waitFor();
+    crew = crewPanel(page); await crew.getByText(shown(m3)).first().waitFor();
     await page.getByLabel(/Motivo \(obligatorio/).fill('No puedo operar en esa fecha');
     await page.getByRole('button', { name: 'Rechazar y devolver a Operaciones' }).click();
     await until(() => stateOf(second.id) === 'PENDIENTE_REPLANIFICACION', 'estado PENDIENTE_REPLANIFICACION');
     await page.getByRole('button', { name: 'Aceptar asignación' }).waitFor({ state: 'detached' });
-    await page.getByText(/PENDIENTE_REPLANIFICACION/).first().waitFor();
-    await crew.getByText(new RegExp(m3.name)).first().waitFor();
+    await page.locator('tr', { hasText: second.codigo }).getByText(/PENDIENTE_REPLANIFICACION/).waitFor();
+    await crew.getByText(shown(m3)).first().waitFor();
     pass('TC-4 tras rechazar la asignación la pantalla muestra el nuevo estado y conserva la tripulación vigente, sin recargar');
     const plane2 = await newPlane(), when = futureSlot();
     await ok(`/flights/${second.id}/operational-replanning`, { method: 'POST', token: ops.token, body: { aircraftId: plane2.id, comandanteId: cmd.id, destinoId: airports[1].id, salida: fmt(when), llegada: fmt(new Date(when.getTime() + 7200000)) } });
     await until(() => stateOf(second.id) === 'PENDIENTE_CONFIRMACION_COMANDANTE', 'replanificado');
     await page.getByRole('button', { name: 'Aceptar asignación' }).waitFor({ timeout: 60000 }).catch(() => {});
     await call(`/flights/${second.id}/crew/${(await crewApi(second)).find((r) => r.userId === m3.id && r.vigente !== false).id}`, { method: 'DELETE', token: ops.token, expect: [204] });
-    await until(async () => (await crew.getByText(new RegExp(m3.name)).count()) === 0, 'el retiro posterior a la replanificación se refleja', 40000);
+    await until(async () => (await crew.getByText(shown(m3)).count()) === 0, 'el retiro posterior a la replanificación se refleja', 40000);
     pass('TC-5 la replanificación y los cambios de tripulación posteriores se reflejan en la pantalla abierta');
     console.log(`\n${passed} comprobaciones de navegador aprobadas (e2e-tripulacion-actualizacion-ui)`);
   } finally { await browser.close(); }

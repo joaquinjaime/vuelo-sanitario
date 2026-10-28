@@ -96,18 +96,22 @@ public class ProfessionalCredentialService {
    if("REVOCADA".equals(latest.status))return new Assessment(false,"HABILITACION_REVOCADA","La verificación de la habilitación fue revocada",latest.expires);
    if("RECHAZADA".equals(latest.status))return new Assessment(false,"HABILITACION_RECHAZADA","La verificación de la habilitación fue rechazada",latest.expires);
    if("CORRECCION_SOLICITADA".equals(latest.status))return new Assessment(false,"HABILITACION_CORRECCION_PENDIENTE","La habilitación tiene una corrección solicitada pendiente",latest.expires);
-   if("VERIFICADA".equals(latest.status)&&latest.expires!=null&&(latest.expires.isBefore(today())||latest.expires.isBefore(date)))return new Assessment(false,"HABILITACION_VENCIDA","La habilitación vence antes de la salida o ya venció",latest.expires);
+   // Una habilitación verificada que vence antes de la fecha evaluada explica mejor la negativa que una renovación todavía pendiente.
+   var expired=all.stream().filter(c->"VERIFICADA".equals(c.status)&&c.expires!=null&&(c.expires.isBefore(today())||c.expires.isBefore(date))).findFirst();
+   if(expired.isPresent()){boolean renewing=all.stream().anyMatch(c->"PENDIENTE".equals(c.status)||"CORRECCION_SOLICITADA".equals(c.status));return new Assessment(false,"HABILITACION_VENCIDA","La habilitación vence antes de la salida o ya venció"+(renewing?"; hay una renovación pendiente de revisión":""),expired.get().expires);}
    return new Assessment(false,"HABILITACION_NO_VERIFICADA","La habilitación requiere verificación vigente",null);
   }
   return new Assessment(false,"HABILITACION_AUSENTE","No tiene habilitación profesional para esta función",null);
  }
  static DocumentView documentView(CredentialDocument d){return new DocumentView(d.getId(),d.name,d.uploader.getUsername(),d.uploadedAt,d.purpose,d.version,d.sha256,d.sizeBytes,d.scanStatus,d.scanDetail,d.scannedAt,d.retiredAt!=null,d.retiredAt,d.retireReason,Boolean.TRUE.equals(d.retentionHold),d.holdReason,d.replacesId);}
+ /** Estado documental de la habilitación: lo pendiente o fallido bloquea; un documento rechazado no oculta que exista documentación limpia (el rechazado sigue visible en la lista). */
  private String documentStatus(List<CredentialDocument> active){
   if(active.isEmpty())return "SIN_DOCUMENTOS";
-  if(active.stream().anyMatch(d->CredentialDocument.REJECTED.equals(d.scanStatus)))return "RECHAZADO";
   if(active.stream().anyMatch(d->CredentialDocument.SCAN_ERROR.equals(d.scanStatus)))return "ERROR_ANALISIS";
   if(active.stream().anyMatch(d->CredentialDocument.QUARANTINE.equals(d.scanStatus)))return "EN_ANALISIS";
-  return active.stream().anyMatch(d->CredentialDocument.CLEAN.equals(d.scanStatus))?"LIMPIO":"LEGADO_SIN_ANALISIS";
+  if(active.stream().anyMatch(d->CredentialDocument.CLEAN.equals(d.scanStatus)))return "LIMPIO";
+  if(active.stream().anyMatch(d->CredentialDocument.REJECTED.equals(d.scanStatus)))return "RECHAZADO";
+  return "LEGADO_SIN_ANALISIS";
  }
  private String lifecycle(ProfessionalCredential c){
   if(!"VERIFICADA".equals(c.status))return c.status;

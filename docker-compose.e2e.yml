@@ -34,6 +34,8 @@ services:
       FINAL_REPORT_SWEEP_INITIAL_MS: 3600000
       APP_CREW_ELIGIBILITY_SWEEP_MS: 3600000
       APP_CREW_ELIGIBILITY_SWEEP_INITIAL_MS: 3600000
+      # La base E2E acumula miles de vuelos abiertos de corridas anteriores: la revisión global tras cada cambio de política tardaría minutos. Las pruebas piden la revisión de cada vuelo con /api/e2e/crew-eligibility/sweep/{id}.
+      APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED: "false"
       # Bandeja de pruebas (Mailpit): un servidor SMTP real que no entrega a nadie, sólo retiene los mensajes. Es un transporte controlado:
       # permite comprobar el envío y el consumo del código, no la entrega a un proveedor externo.
       MAIL_ENABLED: "true"
@@ -47,7 +49,7 @@ services:
       EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
       APP_ANTIMALWARE_ENABLED: ${E2E_ANTIMALWARE_ENABLED:-false}
       APP_ANTIMALWARE_HOST: clamav
-      APP_ANTIMALWARE_TIMEOUT_MS: 60000
+      APP_ANTIMALWARE_TIMEOUT_MS: 15000
       APP_ANTIMALWARE_RETRY_MS: 3600000
       APP_ANTIMALWARE_RETRY_INITIAL_MS: 3600000
       APP_ANTIMALWARE_RETRY_AFTER_SECONDS: 1

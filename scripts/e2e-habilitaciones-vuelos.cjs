@@ -17,6 +17,7 @@ const race = (offset, first, second) => Promise.all([offset >= 0 ? first() : del
 const OFFSETS = [0, 15, -15, 40, -40, 90, -90, 0];
 const DAY = 86400000;
 const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+async function until(fn, what, ms = 180000) { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 1000)); } throw new Error('Tiempo agotado esperando: ' + what); }
 const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN estados_vuelo e ON e.id_estados_vuelo=v.id_estados_vuelo WHERE v.id_vuelos=${id}`);
 
 (async () => {
@@ -53,7 +54,8 @@ const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN est
   const crewOf = (flight) => ok(`/flights/${flight.id}/crew`, { token: ops.token });
   const crewRows = (flightId) => count(`SELECT COUNT(*) FROM vuelos_tripulantes WHERE id_vuelos=${flightId} AND fecha_baja IS NULL`);
   const alerts = (flightId) => count(`SELECT COUNT(*) FROM notificaciones WHERE id_vuelos=${flightId} AND tipo_notificacion=N'CREW_ELIGIBILITY_REVIEW'`);
-  const sweep = () => call('/e2e/crew-eligibility/sweep', { method: 'POST', token: admin });
+  // El barrido global tardaría minutos en la base E2E (miles de vuelos abiertos acumulados): se revisa el vuelo que importa.
+  const reviewFlight = (id) => call(`/e2e/crew-eligibility/sweep/${id}`, { method: 'POST', token: admin });
   const start = async (flight, expect = [200]) => { await approveRoute(flight.id, flight.commander.token, ops.token); return call(`/flights/${flight.id}/start`, { method: 'POST', token: ops.token, expect }); };
 
   // ================= A: el contexto operativo entra en la evaluación =================
@@ -80,8 +82,8 @@ const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN est
   await dropPolicy(medPolicy.id);
   const view = (await crewOf(flightA)).find((r) => r.userId === medA.id);
   assert.match(view.elegibilidadCodigo, NOT_COVERED); assert.equal(stateOf(flightA.id), before.state); assert.equal(crewRows(flightA.id), before.rows, 'la asignación histórica no se elimina');
-  const opsAlerts = alerts(flightA.id); assert.ok(opsAlerts >= 1, 'Operaciones recibe una alerta');
-  await sweep(); await sweep(); assert.equal(alerts(flightA.id), opsAlerts, 'las alertas no se duplican al repetir la revisión');
+  await reviewFlight(flightA.id); const opsAlerts = alerts(flightA.id); assert.ok(opsAlerts >= 1, 'Operaciones recibe una alerta');
+  await reviewFlight(flightA.id); await reviewFlight(flightA.id); assert.equal(alerts(flightA.id), opsAlerts, 'las alertas no se duplican al repetir la revisión');
   const blocked = await start(flightA, [409]); assert.match(blocked.data.code, NOT_COVERED); assert.equal(stateOf(flightA.id), 'PLANIFICADO');
   const again = await policy({ roleCode: 'MEDICO', credentialType: MED_TYPE, notes: 'Restablecida' }); assert.ok(again.id !== medPolicy.id);
   await start(flightA); assert.equal(stateOf(flightA.id), 'EN_CURSO'); pass('B la baja de la política vuelve no elegible al tripulante sin tocar la asignación, alerta una vez a Operaciones, bloquea el inicio y al restablecerla el inicio procede');
@@ -99,12 +101,12 @@ const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN est
     const person = await medic('hvr1m' + round, type), flight = await planned(await commander('hvr1c' + round, CMD_TYPE, { category: 'CAT-A' }), await newPlane('CAT-A'));
     const [assigned, dropped] = await race(OFFSETS[round], () => addCrew(flight, person, 'MEDICO', [204, 409]), () => dropPolicy(p.id));
     assert.equal(dropped.status, 200); const rows = count(`SELECT COUNT(*) FROM vuelos_tripulantes WHERE id_vuelos=${flight.id} AND id_usuarios=${person.id} AND fecha_baja IS NULL`);
-    if (assigned.status === 204) { assert.equal(rows, 1); await sweep(); assert.ok(alerts(flight.id) >= 1, 'asignado y sin política: debe haber alerta'); outcomes.politica.push('asignado'); }
+    if (assigned.status === 204) { assert.equal(rows, 1); await reviewFlight(flight.id); assert.ok(alerts(flight.id) >= 1, 'asignado y sin política: debe haber alerta'); outcomes.politica.push('asignado'); }
     else { assert.match(assigned.data.code, NOT_COVERED); assert.equal(rows, 0); outcomes.politica.push('rechazado'); }
   }
   for (let round = 0; round < 6; round++) { // verificación de la renovación contra asignación
     const type = `RRen ${MARK} ${round}`; await policy({ roleCode: 'MEDICO', credentialType: type });
-    const person = await medic('hvr2m' + round, type, { expires: isoDay(Date.now() + 10 * DAY) }), flight = await planned(await commander('hvr2c' + round, CMD_TYPE, { category: 'CAT-A' }), await newPlane('CAT-A'));
+    const person = await medic('hvr2m' + round, type, { expires: isoDay(Date.now() + 10 * DAY) }), flight = await planned(await commander('hvr2c' + round, CMD_TYPE, { category: 'CAT-A' }), await newPlane('CAT-A'), { when: new Date(Date.now() + (60 + round) * DAY) }); // salida posterior al vencimiento de la vigente y anterior al de la renovación
     const renewal = await ok(`/professional-credentials/${person.credential}/renew`, { method: 'POST', token: admin, body: { roleCode: 'MEDICO', type, number: `HV-${MARK}-${person.id}-R`, issuer: 'Organismo de prueba', expires: isoDay(Date.now() + 900 * DAY), noExpiry: false } });
     const form = new FormData(); form.append('file', new Blob([PDF], { type: 'application/pdf' }), 'renovacion.pdf'); assert.equal((await fetch(`${BASE}/professional-credentials/${renewal.id}/documents?purpose=RENOVACION`, { method: 'POST', headers: { Authorization: 'Bearer ' + admin }, body: form })).status, 200);
     assert.equal((await addCrew(flight, person, 'MEDICO', [409])).data.code, 'HABILITACION_VENCIDA', 'la vigente vence antes de la salida');
@@ -119,7 +121,7 @@ const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN est
     await approveRoute(flight.id, cmd.token, ops.token);
     const [started, revoked] = await race(OFFSETS[round], () => call(`/flights/${flight.id}/start`, { method: 'POST', token: ops.token, expect: [200, 409] }), () => call(`/professional-credentials/${cmd.credential}/decision/REVOCADA`, { method: 'POST', token: admin, body: { notes: 'Carrera de inicio ' + round } }));
     assert.equal(revoked.status, 200);
-    if (started.status === 200) { assert.equal(stateOf(flight.id), 'EN_CURSO'); await sweep(); assert.ok(alerts(flight.id) >= 1, 'iniciado y revocado: debe haber alerta'); outcomes.inicio.push('iniciado'); }
+    if (started.status === 200) { assert.equal(stateOf(flight.id), 'EN_CURSO'); await reviewFlight(flight.id); assert.ok(alerts(flight.id) >= 1, 'iniciado y revocado: debe haber alerta'); outcomes.inicio.push('iniciado'); }
     else { assert.equal(started.data.code, 'HABILITACION_REVOCADA'); assert.equal(stateOf(flight.id), 'PLANIFICADO', 'un inicio rechazado no cambia el vuelo'); outcomes.inicio.push('rechazado'); }
   }
   pass('D carreras reales sin estados incoherentes: ' + JSON.stringify(outcomes));

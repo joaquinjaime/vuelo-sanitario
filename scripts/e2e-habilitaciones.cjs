@@ -258,26 +258,28 @@ const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$
   const e1 = await newCredential(expiryOwner, { expires: isoDay(Date.now() + 70 * DAY) });
   await uploadRaw(e1.id, makePdf('vence-' + MARK)); await decide(e1.id, 'VERIFICADA', { notes: 'para avisos', confirmsSufficiency: true });
   const notices = (userId) => count(`SELECT COUNT(*) FROM notificaciones WHERE id_usuarios=${userId} AND clave_evento LIKE N'CRED_EXPIRY:${e1.id}:%'`);
-  const runJob = async () => (await call('/e2e/credential-expiry/run', { method: 'POST', token: admin })).data;
-  const advance = (days) => ok('/e2e/clock', { method: 'PUT', token: admin, body: { advanceSeconds: days * 86400 } });
+  // El reloj de negocio también rige la vigencia de los tokens: tras cada salto se inicia sesión de nuevo.
+  let adminNow = admin; const relogin = async () => { adminNow = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken; };
+  const runJob = async () => (await call('/e2e/credential-expiry/run', { method: 'POST', token: adminNow })).data;
+  const advance = async (days) => { await ok('/e2e/clock', { method: 'PUT', token: adminNow, body: { advanceSeconds: days * 86400 } }); await relogin(); };
   try {
-    assert.equal((await runJob()).avisos, 0, 'a 70 días no corresponde ningún umbral'); assert.equal(notices(expiryOwner.id), 0);
+    await runJob(); assert.equal(notices(expiryOwner.id), 0, 'a 70 días no corresponde ningún umbral a esta habilitación (la base compartida puede avisar otras)');
     await advance(11);                                    // faltan 59 días
     const first = await runJob(); assert.ok(first.avisos >= 2, 'titular y administradores'); assert.equal(notices(expiryOwner.id), 1);
     assert.equal((await runJob()).avisos, 0); assert.equal(notices(expiryOwner.id), 1); pass('aviso de 60 días emitido una vez; la reejecución no duplica');
     const mensaje = one(`SELECT TOP 1 mensaje FROM notificaciones WHERE id_usuarios=${expiryOwner.id} AND clave_evento LIKE N'CRED_EXPIRY:${e1.id}:%'`);
     assert.ok(!mensaje.includes(e1.number) && !/MP-/.test(mensaje), 'el aviso al titular no revela el número de matrícula'); assert.match(mensaje, /vence en 59 días/);
-    assert.ok(count(`SELECT COUNT(*) FROM notificaciones n JOIN usuarios u ON u.id_usuarios=n.id_usuarios WHERE n.clave_evento LIKE N'CRED_EXPIRY:${e1.id}:%' AND n.id_usuarios=${admin2.id}`) >= 1);
+    assert.ok(count(`SELECT COUNT(*) FROM notificaciones n WHERE n.clave_evento LIKE N'CRED_EXPIRY:${e1.id}:%' AND n.id_usuarios=${admin2.id}`) >= 1);
     await advance(25); await runJob(); assert.equal(notices(expiryOwner.id), 1, 'a 34 días sigue vigente el umbral de 60: nada nuevo');
     await advance(5); await runJob(); assert.equal(notices(expiryOwner.id), 2);   // 29 días: umbral de 30
     await advance(22); await runJob(); assert.equal(notices(expiryOwner.id), 3);  // 7 días
     await advance(7); await runJob(); assert.equal(notices(expiryOwner.id), 4);   // el día del vencimiento
     await advance(1); await runJob(); assert.equal(notices(expiryOwner.id), 4);   // vencida: el aviso de vencimiento ya se emitió
-    const lifecycle = await ok(`/professional-credentials/${e1.id}`, { token: admin });
+    const lifecycle = await ok(`/professional-credentials/${e1.id}`, { token: adminNow });
     assert.equal(lifecycle.lifecycle, 'VENCIDA'); assert.equal(lifecycle.eligibility.eligible, false);
     assert.equal(auditCount('PROFESSIONAL_CREDENTIAL', e1.id, 'EXPIRY_NOTICE'), 4);
     pass('umbrales sucesivos sin duplicados');
-  } finally { await ok('/e2e/clock', { method: 'PUT', token: admin, body: { reset: true } }); }
+  } finally { await ok('/e2e/clock', { method: 'PUT', token: adminNow, body: { reset: true } }); }
 
   // ================= G: persistencia y restricciones reales =================
   assert.throws(() => sql(`UPDATE habilitaciones_profesionales SET estado_verificacion='INVENTADO' WHERE id_habilitaciones_profesionales=${c1.id}`), /CHECK|ck_habilitacion_estado/i);

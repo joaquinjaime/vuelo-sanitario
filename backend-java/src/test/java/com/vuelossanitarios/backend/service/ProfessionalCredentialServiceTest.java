@@ -100,6 +100,13 @@ class ProfessionalCredentialServiceTest {
   k.result="COINCIDE";assertTrue(service.assess(user,"MEDICO",LocalDate.of(2026,10,26)).eligible());
   k.numberChecked="MP-OTRO";assertEquals("CONSULTA_EXTERNA_REQUERIDA",service.assess(user,"MEDICO",LocalDate.of(2026,10,26)).code());
  }
+ @Test void anExpiredVerifiedCredentialIsReportedAsExpiredEvenWhileItsRenewalIsPending(){
+  givenPolicies(policy("Médico"));ProfessionalCredential renewal=credential("PENDIENTE",LocalDate.of(2028,1,1));renewal.setId(9L);ProfessionalCredential old=credential("VERIFICADA",LocalDate.of(2026,11,5));old.setId(8L);
+  givenCredentials(renewal,old);
+  var result=service.assess(user,"MEDICO",LocalDate.of(2026,12,1));
+  assertEquals("HABILITACION_VENCIDA",result.code());assertTrue(result.message().contains("renovación pendiente"));assertEquals(LocalDate.of(2026,11,5),result.expires());
+  assertTrue(service.assess(user,"MEDICO",LocalDate.of(2026,10,30)).eligible(),"antes del vencimiento la vigente sigue valiendo");
+ }
  @Test void personWithoutCredentialsIsAbsentRegardlessOfPolicy(){
   givenPolicies(policy("Médico"));givenCredentials();
   assertEquals("HABILITACION_AUSENTE",service.assess(user,"MEDICO",LocalDate.of(2026,10,26)).code());

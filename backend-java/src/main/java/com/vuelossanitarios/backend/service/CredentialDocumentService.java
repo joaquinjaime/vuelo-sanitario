@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -33,12 +34,12 @@ public class CredentialDocumentService {
  public static final Set<String> PURPOSES=Set.of("EVIDENCIA","RENOVACION","CORRECCION","CONSULTA_EXTERNA");
  private final ProfessionalCredentialService credentials; private final ProfessionalCredentialRepository credentialRepository; private final CredentialDocumentRepository documents; private final UserRepository users;
  private final DocumentStorage storage; private final PdfInspector inspector; private final MalwareScanner scanner; private final AuditService audit; private final Clock clock; private final ZoneId zone;
- private final TransactionTemplate tx; private final boolean scannerEnabled; private final long retrySeconds; private final boolean purgeEnabled;
+ private final TransactionTemplate tx,independentTx; private final boolean scannerEnabled; private final long retrySeconds; private final boolean purgeEnabled;
  public CredentialDocumentService(ProfessionalCredentialService credentials,ProfessionalCredentialRepository credentialRepository,CredentialDocumentRepository documents,UserRepository users,DocumentStorage storage,PdfInspector inspector,
    MalwareScanner scanner,AuditService audit,Clock clock,PlatformTransactionManager manager,@Value("${app.business-time-zone:America/Argentina/Tucuman}") String zone,
    @Value("${app.antimalware.enabled:false}") boolean scannerEnabled,@Value("${app.antimalware.retry-after-seconds:60}") long retrySeconds,@Value("${app.retention.credential-documents.purge-enabled:false}") boolean purgeEnabled){
   this.credentials=credentials;this.credentialRepository=credentialRepository;this.documents=documents;this.users=users;this.storage=storage;this.inspector=inspector;this.scanner=scanner;this.audit=audit;this.clock=clock;this.zone=ZoneId.of(zone);
-  tx=new TransactionTemplate(manager);this.scannerEnabled=scannerEnabled;this.retrySeconds=retrySeconds;this.purgeEnabled=purgeEnabled;
+  tx=new TransactionTemplate(manager);independentTx=new TransactionTemplate(manager);independentTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);this.scannerEnabled=scannerEnabled;this.retrySeconds=retrySeconds;this.purgeEnabled=purgeEnabled;
  }
  public record Retention(boolean purgeEnabled,boolean policyApproved,long activeDocuments,long retiredDocuments,long heldDocuments,long unscannedDocuments,String statement){}
  private ApiException bad(String code,String m){return new ApiException(HttpStatus.BAD_REQUEST,code,m,Map.of());}
@@ -114,7 +115,7 @@ public class CredentialDocumentService {
   CredentialDocument d=document(documentId);
   if(!CredentialDocument.CLEAN.equals(d.scanStatus)&&!CredentialDocument.LEGACY.equals(d.scanStatus))throw conflict("DOCUMENTO_NO_DISPONIBLE","El documento no superó el análisis antimalware y no puede descargarse");
   byte[] data=storage.read(d.key).bytes();
-  if(d.sha256!=null&&!d.sha256.equals(sha256(data))){audit.record(null,users.findById(actor).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"INTEGRITY_FAILURE",null,json("sha256",d.sha256));throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,"INTEGRIDAD_DOCUMENTO","El documento almacenado no coincide con su huella registrada",Map.of());}
+  if(d.sha256!=null&&!d.sha256.equals(sha256(data))){independentTx.executeWithoutResult(st->audit.record(null,users.findById(actor).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"INTEGRITY_FAILURE",null,json("sha256",d.sha256)));throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,"INTEGRIDAD_DOCUMENTO","El documento almacenado no coincide con su huella registrada",Map.of());}
   audit.record(null,users.findById(actor).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"DOWNLOAD",null,json("credentialId",String.valueOf(d.credential.getId())));
   return new Download(data,d.name);
  }
