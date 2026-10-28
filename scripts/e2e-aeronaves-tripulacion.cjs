@@ -7,7 +7,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const HOUR = 3600000, DAY = 86400000, TZ = -3 * HOUR;
 const civilDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
@@ -45,6 +45,7 @@ async function provisionRole(admin, user, roleCode) {
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   await waitHealthy();
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
+  await ensureCredentialPolicies(admin);
   const adminName = dotenv.BOOTSTRAP_ADMIN_USERNAME;
 
   // ---------- Fixtures ----------

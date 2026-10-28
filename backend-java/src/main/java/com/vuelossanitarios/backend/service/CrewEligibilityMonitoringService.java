@@ -6,6 +6,13 @@ import com.vuelossanitarios.backend.repository.FlightCrewRepository;
 import com.vuelossanitarios.backend.repository.FlightRepository;
 import com.vuelossanitarios.backend.repository.UserRepository;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -16,9 +23,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /** Reevalúa los vuelos abiertos tras cambios de credenciales y con el paso del tiempo. Las consultas no escriben eventos. */
 @Service
 public class CrewEligibilityMonitoringService {
+ private static final Logger log=LoggerFactory.getLogger(CrewEligibilityMonitoringService.class);
  private final FlightRepository flights; private final FlightCrewRepository crews; private final UserRepository users;
  private final CrewManagementService eligibility; private final NotificationService notifications; private final AuditService audit;
- public CrewEligibilityMonitoringService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewManagementService e,NotificationService n,AuditService a){flights=f;crews=c;users=u;eligibility=e;notifications=n;audit=a;}
+ private final TransactionTemplate tx; private final AtomicBoolean policyReviewQueued=new AtomicBoolean();
+ private final ExecutorService policyReviewer=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"crew-eligibility-policy-review");t.setDaemon(true);return t;});
+ public CrewEligibilityMonitoringService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewManagementService e,NotificationService n,AuditService a,PlatformTransactionManager manager){flights=f;crews=c;users=u;eligibility=e;notifications=n;audit=a;tx=new TransactionTemplate(manager);}
  @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
  @Transactional(propagation=Propagation.REQUIRES_NEW)
  public void credentialChanged(ProfessionalCredentialService.CredentialChanged event){
@@ -27,13 +37,20 @@ public class CrewEligibilityMonitoringService {
   for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(event.userId()))ids.add(c.getFlight().getId());
   for(Long id:ids)flights.findById(id).ifPresent(f->review(f,event.userId()));
  }
- /** Una política creada o dada de baja puede cambiar la suficiencia de cualquier persona: se revisan todos los vuelos abiertos. */
+ /**
+  * Una política creada o dada de baja puede cambiar la suficiencia de cualquier persona: se revisan todos los vuelos abiertos. La revisión es costosa y no
+  * debe demorar al administrador, por lo que corre en un hilo aparte y se coalesce: varios cambios seguidos provocan una sola revisión pendiente.
+  * La eligibilidad ya es inmediata (se calcula en cada consulta); esto sólo emite las alertas.
+  */
  @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
- @Transactional(propagation=Propagation.REQUIRES_NEW)
- public void policyChanged(CredentialPolicyService.PolicyChanged event){sweep();}
+ public void policyChanged(CredentialPolicyService.PolicyChanged event){
+  if(!policyReviewQueued.compareAndSet(false,true))return;
+  policyReviewer.execute(()->{policyReviewQueued.set(false);try{tx.executeWithoutResult(s->reviewOpenFlights());}catch(RuntimeException e){log.warn("La revisión de tripulaciones tras el cambio de política falló: {}",e.getClass().getSimpleName());}});
+ }
  @Scheduled(fixedDelayString="${app.crew-eligibility.sweep-ms:3600000}",initialDelayString="${app.crew-eligibility.sweep-initial-ms:60000}")
  @Transactional
- public void sweep(){for(Flight f:flights.findByEstadoVueloCodigoIn(List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION","PLANIFICADO","EN_CURSO")))review(f,null);}
+ public void sweep(){reviewOpenFlights();}
+ private void reviewOpenFlights(){for(Flight f:flights.findByEstadoVueloCodigoIn(List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION","PLANIFICADO","EN_CURSO")))review(f,null);}
  @Transactional public void reviewFlight(Long id){flights.findById(id).ifPresent(f->review(f,null));}
  private void review(Flight f,Long onlyUser){
   if(f.getEstadoVuelo()==null||FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo()))return;

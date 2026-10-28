@@ -1,7 +1,7 @@
 /* I-3: API y SQL Server del stack aislado. Conserva los registros de prueba para auditoría. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');const {spawnSync}=require('node:child_process');
-const {ROOT,BASE,BACKEND,DB_NAME,MARK,PASSWORD,PDF,sql,one,count,call,ok,fmt,futureSlot,createUser,provision,waitHealthy,approveRoute}=require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT,BASE,BACKEND,DB_NAME,MARK,PASSWORD,PDF,sql,one,count,call,ok,fmt,futureSlot,createUser,provision,waitHealthy,approveRoute}=require('./e2e-cierre-support.cjs');
 let passed=0;const pass=m=>{passed++;console.log('PASS: '+m);};
 async function qualified(admin,user,role,expires=null){
  await call(`/crew-qualifications/${user.id}/${role}`,{method:'PUT',token:admin,expect:[204]});
@@ -19,6 +19,7 @@ async function qualified(admin,user,role,expires=null){
  await waitHealthy();
  const dotenv={};for(const line of fs.readFileSync(path.join(ROOT,'.env'),'utf8').split(/\r?\n/)){const i=line.indexOf('=');if(i>0&&!line.trim().startsWith('#'))dotenv[line.slice(0,i).trim()]=line.slice(i+1).trim().replace(/^["']|["']$/g,'');}
  const admin=(await ok('/auth/login',{method:'POST',body:{username:dotenv.BOOTSTRAP_ADMIN_USERNAME,password:dotenv.BOOTSTRAP_ADMIN_PASSWORD}})).accessToken;
+  await ensureCredentialPolicies(admin);
  // Un usuario con ADMINISTRADOR y COMANDANTE conserva el permiso técnico del endpoint, pero no puede revisar su propia credencial.
  const selfName=MARK+'i3self',selfDni=String(100000000000+Math.floor(Math.random()*899999999999));
  const selfCreated=await ok('/auth/users',{method:'POST',token:admin,body:{nombre:'E2E',apellido:'AutoRevision',dni:selfDni,roles:['ADMINISTRADOR','COMANDANTE'],licenciaAeronautica:(MARK+'SELF').toUpperCase(),correos:[{direccion:selfName+'@example.test'}],telefonos:[{pais:'AR',numero:'3815551234'}]}});

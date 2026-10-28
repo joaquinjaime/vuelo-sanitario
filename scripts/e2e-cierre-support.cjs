@@ -70,16 +70,20 @@ async function approveRoute(flightId, commanderToken, opsToken, recorrido = 'Rut
   return ok(`/flights/${flightId}/route/approve`, { method: 'POST', token: opsToken, body: { version: pending.versionVigente } });
 }
 
-const PDF = (() => {
-  const NL = String.fromCharCode(10);
-  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>", ["<< /Length 0 >>", "stream", "", "endstream"].join(NL)];
-  let out = "%PDF-1.4" + NL; const offsets = [];
-  objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out)); out += [(i + 1) + " 0 obj", o, "endobj", ""].join(NL); });
+/** PDF mínimo y estructuralmente válido (lo acepta el análisis de PDFBox del servidor); `label` lo vuelve único. */
+function makePdf(label = 'E2E', { catalogExtra = '', comment = '' } = {}) {
+  const NL = '\n', content = `BT /F1 12 Tf 20 50 Td (${label}) Tj ET`;
+  const objects = [`<< /Type /Catalog /Pages 2 0 R ${catalogExtra}>>`, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>', `<< /Length ${content.length} >>${NL}stream${NL}${content}${NL}endstream`];
+  let out = '%PDF-1.4' + NL + (comment ? '% ' + comment + NL : ''); const offsets = [];
+  objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out)); out += `${i + 1} 0 obj${NL}${o}${NL}endobj${NL}`; });
   const xref = Buffer.byteLength(out);
-  out += ["xref", "0 5", "0000000000 65535 f "].join(NL) + NL + offsets.map((o) => String(o).padStart(10, "0") + " 00000 n " + NL).join("");
-  return Buffer.from(out + ["trailer", "<< /Size 5 /Root 1 0 R >>", "startxref", String(xref), "%%EOF", ""].join(NL));
-})();
+  out += `xref${NL}0 5${NL}0000000000 65535 f ${NL}` + offsets.map((o) => String(o).padStart(10, '0') + ' 00000 n ' + NL).join('') + `trailer${NL}<< /Size 5 /Root 1 0 R >>${NL}startxref${NL}${xref}${NL}%%EOF${NL}`;
+  return Buffer.from(out, 'latin1');
+}
+const PDF = makePdf('E2E');
+const ensuredFor = new Set();
 async function provision(admin, user) {
+  if (!ensuredFor.has(admin)) { await ensureCredentialPolicies(admin); ensuredFor.add(admin); }
   await call(`/crew-qualifications/${user.id}/COMANDANTE`, { method: 'PUT', token: admin, expect: [204] });
   const credential = await ok(`/users/${user.id}/professional-credentials`, { method: 'POST', token: admin, body: { roleCode: 'COMANDANTE', type: 'Documento de prueba', number: 'E2E-' + user.id, issuer: 'Organismo de prueba', expires: null, noExpiry: true, notes: 'Pruebas aisladas' } });
   const form = new FormData(); form.append('file', new Blob([PDF], { type: 'application/pdf' }), 'credencial.pdf');
@@ -132,4 +136,24 @@ async function waitHealthy() {
 }
 
 
-module.exports = { confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };
+/** I-5.6: sin política de suficiencia nadie es elegible. Los E2E que necesitan tripulación habilitada cargan, por la API pública, la política mínima
+ *  para sus tipos de documento de prueba (configuración interna de la prueba, no un requisito regulatorio). Idempotente (409 POLITICA_DUPLICADA se tolera). */
+const E2E_CREDENTIAL_TYPES = ['Documento de prueba', 'Documento E2E', 'Documento E2E UI', 'Documento de independencia'];
+async function ensureCredentialPolicies(admin, types = E2E_CREDENTIAL_TYPES) {
+  for (const roleCode of ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO']) for (const credentialType of types) {
+    await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }, expect: [200, 409] });
+  }
+}
+
+/** Ejecuta `fn` sin ninguna política activa para `roleCode` (para comprobar POLITICA_HABILITACION_NO_CONFIGURADA con exactitud) y las restablece al terminar, aun si falla.
+ *  Las pruebas de la suite corren de a una; las políticas restablecidas son nuevas filas con los mismos datos (las dadas de baja se conservan como historial). */
+async function withoutPolicies(admin, roleCode, fn) {
+  const active = (await ok('/credential-policies', { token: admin })).filter((p) => p.active && p.roleCode === roleCode);
+  for (const p of active) await call(`/credential-policies/${p.id}/deactivate`, { method: 'POST', token: admin, body: { reason: 'E2E: se comprueba la ausencia de política' } });
+  try { return await fn(); }
+  finally {
+    for (const p of active) await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode: p.roleCode, flightTypeCode: p.flightTypeCode, aircraftCategory: p.aircraftCategory, credentialType: p.credentialType, requiresJurisdiction: p.requiresJurisdiction, requiresExternalCheck: p.requiresExternalCheck, origin: p.origin, sourceReference: p.sourceReference, notes: p.notes }, expect: [200, 409] });
+  }
+}
+
+module.exports = { withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };

@@ -2,6 +2,9 @@ package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.*;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.*;
@@ -21,7 +24,22 @@ public class PdfInspector {
  static final Set<String> ACTIVE_ACTIONS=Set.of("JavaScript","Launch","SubmitForm","ImportData","GoToE","Movie","Sound","Rendition","RichMedia","FileAttachment","Screen","3D");
  static final int MAX_PAGES=500,MAX_DEPTH=64;
  public record Report(int pages){}
+ private static final Pattern TAIL=Pattern.compile("startxref\\s+(\\d+)\\s+%%EOF\\s*$");
+ private static final Pattern OBJECT_AT=Pattern.compile("^\\d+\\s+\\d+\\s+obj.*",Pattern.DOTALL);
+ /**
+  * PDFBox reconstruye en silencio un archivo truncado o con la tabla de referencias dañada. Aquí no: el cierre del archivo debe ser íntegro —último
+  * {@code startxref} seguido de {@code %%EOF} y apuntando a una tabla {@code xref} o a un objeto— antes de analizar el contenido.
+  */
+ static void requireIntactTrailer(byte[] bytes){
+  int from=Math.max(0,bytes.length-2048);Matcher tail=TAIL.matcher(new String(bytes,from,bytes.length-from,StandardCharsets.ISO_8859_1));
+  if(!tail.find())throw new ApiException(HttpStatus.BAD_REQUEST,"PDF_INVALIDO","El PDF está incompleto o dañado: no tiene un cierre estructural válido",Map.of());
+  long offset;try{offset=Long.parseLong(tail.group(1));}catch(NumberFormatException e){offset=-1;}
+  if(offset<0||offset>=bytes.length)throw new ApiException(HttpStatus.BAD_REQUEST,"PDF_INVALIDO","El PDF contiene una referencia estructural inválida",Map.of());
+  String at=new String(bytes,(int)offset,(int)Math.min(48,bytes.length-offset),StandardCharsets.ISO_8859_1);
+  if(!at.startsWith("xref")&&!OBJECT_AT.matcher(at).matches())throw new ApiException(HttpStatus.BAD_REQUEST,"PDF_INVALIDO","El PDF contiene una referencia estructural inválida",Map.of());
+ }
  public Report inspect(byte[] bytes){
+  requireIntactTrailer(bytes);
   try(PDDocument doc=Loader.loadPDF(bytes)){
    if(doc.isEncrypted())throw reject("PDF_CIFRADO","El PDF está cifrado; cárguelo sin contraseña");
    int pages=doc.getNumberOfPages();if(pages<1)throw reject("PDF_INVALIDO","El PDF no contiene páginas");if(pages>MAX_PAGES)throw reject("PDF_INVALIDO","El PDF excede la cantidad de páginas admitida");

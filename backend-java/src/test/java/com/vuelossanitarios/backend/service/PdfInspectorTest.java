@@ -24,6 +24,18 @@ class PdfInspectorTest {
   assertEquals("PDF_INVALIDO",codeOf("%PDF-1.4\nesto no es un pdf completo".getBytes(StandardCharsets.ISO_8859_1)));
   assertEquals("PDF_INVALIDO",codeOf(new byte[]{'%','P','D','F','-'}));
  }
+ @Test void rejectsATruncatedPdfEvenThoughPdfBoxCouldRebuildIt() throws Exception {
+  byte[] valid=pdf(d->{});
+  assertEquals("PDF_INVALIDO",codeOf(java.util.Arrays.copyOf(valid,valid.length/2)));
+  assertEquals("PDF_INVALIDO",codeOf(java.util.Arrays.copyOf(valid,valid.length-12)));
+ }
+ @Test void rejectsAnInconsistentStartxrefOffset() throws Exception {
+  byte[] valid=pdf(d->{});String text=new String(valid,StandardCharsets.ISO_8859_1);
+  int at=text.lastIndexOf("startxref");String broken=text.substring(0,at)+"startxref\n3\n%%EOF\n";
+  assertEquals("PDF_INVALIDO",codeOf(broken.getBytes(StandardCharsets.ISO_8859_1)));
+  String beyond=text.substring(0,at)+"startxref\n99999999\n%%EOF\n";
+  assertEquals("PDF_INVALIDO",codeOf(beyond.getBytes(StandardCharsets.ISO_8859_1)));
+ }
  @Test void rejectsDocumentLevelJavaScriptOpenAction() throws Exception {
   byte[] bytes=pdf(d->d.getDocumentCatalog().setOpenAction(new PDActionJavaScript("app.alert('x');")));
   assertEquals("PDF_CONTENIDO_ACTIVO",codeOf(bytes));

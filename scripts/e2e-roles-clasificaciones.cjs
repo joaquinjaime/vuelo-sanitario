@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
 
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const delayed = (ms, fn) => new Promise((r) => setTimeout(r, ms)).then(fn);
@@ -29,6 +29,7 @@ const DAY = 86400000, TZ = -3 * 3600000, civilDay = (ms) => new Date(ms + TZ).to
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   await waitHealthy();
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
+  await ensureCredentialPolicies(admin);
   const ops = await createUser(admin, 'CENTRO_OPERACIONES', 'rcops'), ops2 = await createUser(admin, 'OPERACIONES', 'rcops2'), dts = await createUser(admin, 'DTS', 'rcdts');
   let province, airports, localities;
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { const a = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }), l = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (a.length >= 2 && l.length >= 2) { province = p; airports = a; localities = l; break; } }
