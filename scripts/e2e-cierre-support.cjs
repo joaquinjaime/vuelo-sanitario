@@ -141,7 +141,8 @@ async function waitHealthy() {
 const E2E_CREDENTIAL_TYPES = ['Documento de prueba', 'Documento E2E', 'Documento E2E UI', 'Documento de independencia'];
 async function ensureCredentialPolicies(admin, types = E2E_CREDENTIAL_TYPES) {
   for (const roleCode of ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO']) for (const credentialType of types) {
-    await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }, expect: [200, 409] });
+    const r = await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }, expect: [200, 404, 409] });
+    if (r.status === 404) return; // backend anterior a V59 (siembra del ensayo de migración con el contrato V47): no existen políticas
   }
 }
 
