@@ -22,10 +22,13 @@ cp_in=""; for j in "${jars[@]}"; do cp_in="$cp_in:/m2/$j"; done
 # (Windows) a veces deja una vista vacía u obsoleta y Flyway informa "No migration with a target version ... could be found" sin haber tocado la base.
 # Ese único error se reintenta (hasta 4 veces); cualquier otro error se informa de inmediato.
 rm -rf "$work/classes"; cp -r backend-java/target/classes "$work/classes"
+# I-5.8: ENSAYO_MIGRATION_ACCOUNT=migrator aplica las migraciones con la cuenta de migraciones (db_owner), igual que el procedimiento de producción; por omisión sigue usando sa.
+if [ "${ENSAYO_MIGRATION_ACCOUNT:-sa}" = "migrator" ]; then mig_user="${MIGRATION_DB_USERNAME:?falta MIGRATION_DB_USERNAME en .env.e2e}"; export MIGRATION_JDBC_PASSWORD="${MIGRATION_DB_PASSWORD:?falta MIGRATION_DB_PASSWORD en .env.e2e}"
+else mig_user=sa; export MIGRATION_JDBC_PASSWORD="$E2E_MSSQL_SA_PASSWORD"; fi
 run_flyway() {
 MSYS_NO_PATHCONV=1 docker run --rm --name "vuelos-sanitarios-ensayo-flyway-$$-$RANDOM" --network vuelos-sanitarios-e2e_internal --memory 320m \
   -e MIGRATION_JDBC_URL='jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_ensayo_v47;encrypt=true;trustServerCertificate=true' \
-  -e MIGRATION_SQL_USERNAME=sa -e MIGRATION_JDBC_PASSWORD="$E2E_MSSQL_SA_PASSWORD" -e MIGRATION_LOCATION='classpath:db/migration' \
+  -e MIGRATION_SQL_USERNAME="$mig_user" -e MIGRATION_JDBC_PASSWORD -e MIGRATION_LOCATION='classpath:db/migration' \
   -v "$(cygpath -w "$m2")":/m2:ro -v "$(cygpath -w "$work")":/runner:ro \
   --entrypoint java vuelos-sanitarios-e2e-backend:latest -Xmx200m -cp "/runner:/runner/classes${cp_in}" FlywayMigrationRunner "$target" $mode
 }

@@ -9,6 +9,9 @@ cd "$(dirname "$0")/.."
 W="${ENSAYO_WORK:?defina ENSAYO_WORK}"; mkdir -p "$W/runner" "$W/logs"
 set -a; . ./.env.e2e; set +a
 SQLC=vuelos-sanitarios-e2e-sqlserver-1; BK=vuelos-sanitarios-ensayo-backend; DB=vuelos_sanitarios_ensayo_v47
+# I-5.8: permisos de base como en producción (cuenta de migraciones = db_owner; cuenta de la aplicación = sólo datos). Reutiliza docker/sqlserver/apply-db-permissions.sql.
+APP_USER=$(docker inspect vuelos-sanitarios-e2e-backend-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^DB_USERNAME=//p')
+apply_perms() { MSYS_NO_PATHCONV=1 docker exec -i -e SQLCMDPASSWORD="$E2E_MSSQL_SA_PASSWORD" -e APP_LOGIN="$APP_USER" -e MIGRATION_LOGIN="$MIGRATION_DB_USERNAME" "$SQLC" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -b -I -d "$DB" -i /dev/stdin < docker/sqlserver/apply-db-permissions.sql; }
 sqlsa() { MSYS_NO_PATHCONV=1 docker exec -i -e SQLCMDPASSWORD="$E2E_MSSQL_SA_PASSWORD" "$SQLC" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -b -W -s "|" "$@"; }
 wait_started() { for _ in $(seq 1 70); do docker logs --since 3m "$BK" 2>&1 | grep -qE "Started BackendApplication" && return 0; docker logs --since 3m "$BK" 2>&1 | grep -qE "APPLICATION FAILED|Application run failed" && { echo "el backend no arrancó"; return 1; }; sleep 4; done; return 1; }
 echo "== 1. Restauración limpia del respaldo V47 en $DB"
@@ -27,6 +30,8 @@ SELECT 'restaurada en Flyway', MAX(TRY_CONVERT(int,version)) FROM flyway_schema_
 GO
 EOF
 sqlsa < "$W/restore.sql" | tail -2
+echo "== 1b. Permisos previos a la migración: la cuenta de la aplicación (db_owner en la base habitual V47) pasa a sólo datos y se crea la cuenta de migraciones"
+apply_perms | tail -1
 echo "== 2. Backend V47 (imagen release) contra la restauración; siembra con el contrato V47"
 docker inspect vuelos-sanitarios-e2e-backend-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E "^(APP_|BOOTSTRAP_|CORS_|DB_|DOCUMENT|EMAIL_|FINAL_|JWT_|MAIL_|MAX_PDF|SPRING_)" > "$W/ensayo.env"
 sed -i "s#^DB_URL=.*#DB_URL=jdbc:sqlserver://sqlserver:1433;databaseName=$DB;encrypt=true;trustServerCertificate=true#; s#^APP_PUBLIC_URL=.*#APP_PUBLIC_URL=http://127.0.0.1:18090#; s#^MAIL_ENABLED=.*#MAIL_ENABLED=false#" "$W/ensayo.env"
@@ -44,7 +49,7 @@ echo "== 3b. Diagnóstico previo (el mismo T-SQL de scripts/prevalidate-migratio
 node -e "const t=require('fs').readFileSync('scripts/prevalidate-migrations.ps1','utf8').replace(/\r\n/g,'\n');const i=t.indexOf(\"@'\n\")+3,j=t.indexOf(\"\n'@\",i);require('fs').writeFileSync(process.argv[1],t.slice(i,j)+'\nGO\n')" "$W/prevalidate.sql"
 { echo "USE [$DB];"; echo "GO"; cat "$W/prevalidate.sql"; } | sqlsa | tee "$W/logs/prevalidacion.log"
 echo "== 4. Validación de checksums y migración V48..V60, una por una"
-export ENSAYO_WORK="$W/runner"
+export ENSAYO_WORK="$W/runner" ENSAYO_MIGRATION_ACCOUNT=migrator
 vout=$(scripts/ensayo-flyway.sh 60 validate 2>&1) || { echo "$vout" | grep -vE "^[[:space:]]+at " | tail -15; echo "LA VALIDACIÓN DE CHECKSUMS FALLÓ"; exit 1; }
 echo "$vout" | grep -E "Successfully validated|Flyway target" | cut -c1-200
 : > "$W/logs/migrate.log"
@@ -53,10 +58,14 @@ for v in 48 49 50 51 52 53 54 55 56 57 58 59 60; do
   echo "V$v rc=$rc ($((t1-t0)) s, incluye arranque de la JVM): $(echo "$out" | grep -E 'Successfully applied|ERROR|Msg ' | head -2 | cut -c1-200)" | tee -a "$W/logs/migrate.log"
   [ "$rc" -eq 0 ] || { echo "$out" | tail -20; echo "MIGRACIÓN FALLIDA EN V$v: ensayo detenido"; exit 1; }
 done
+echo "== 4b. Permisos posteriores a la migración (flyway_schema_history ya incluye V60: se deniega su escritura a la cuenta de la aplicación)"
+apply_perms | tail -1
 echo "== 5. Fotografía posterior y comparación"
 node scripts/ensayo-snapshot.cjs "$W/snap-post.json" "$W/snap-pre.json" | tee "$W/logs/snap-post.log"
 echo "== 6. Backend V60 (build actual, con ClamAV real) sobre la restauración migrada"
 sed -i "s#^MAIL_ENABLED=.*#MAIL_ENABLED=true#" "$W/ensayo.env"
+# Como en producción: el backend NO migra al arrancar (SPRING_FLYWAY_ENABLED=false) y opera con la cuenta restringida, sin credenciales de migración.
+echo "SPRING_FLYWAY_ENABLED=false" >> "$W/ensayo.env"
 sed -i "/^APP_ANTIMALWARE_/d" "$W/ensayo.env"; printf 'APP_ANTIMALWARE_ENABLED=true
 APP_ANTIMALWARE_HOST=clamav
 APP_ANTIMALWARE_TIMEOUT_MS=15000

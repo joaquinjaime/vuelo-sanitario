@@ -1,0 +1,2274 @@
+{
+ "summary": {
+  "database": "vuelos_sanitarios_e2e",
+  "totalPhysical": 46,
+  "business": 45,
+  "infrastructure": 1,
+  "integrated": 45,
+  "toReview": []
+ },
+ "tables": [
+  {
+   "table": "activaciones_cuenta",
+   "infra": false,
+   "rows": 6582,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: AccountActivation",
+   "writers": [
+    "AuthService"
+   ],
+   "readers": [
+    "AuthService"
+   ],
+   "junit": [
+    "AccountActivationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "AuthServiceTest",
+    "UserAdministrationServiceTest"
+   ],
+   "e2e": [
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "aeronaves",
+   "infra": false,
+   "rows": 4168,
+   "fkOut": 1,
+   "fkIn": 2,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Aircraft",
+   "writers": [
+    "AircraftAdminService",
+    "CredentialPolicyActivationService",
+    "FlightService",
+    "HangarInfoService"
+   ],
+   "readers": [
+    "AircraftAdminService",
+    "CredentialPolicyActivationService",
+    "CrewManagementService",
+    "FlightService",
+    "GeographicDependencyService",
+    "HangarInfoService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AircraftAdministrationIntegrationTest",
+    "AircraftCatalogIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewManagementServiceTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria-ui.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-suite-completa.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "aeropuertos",
+   "infra": false,
+   "rows": 1104,
+   "fkOut": 2,
+   "fkIn": 6,
+   "checks": 0,
+   "uniqueIndexes": 0,
+   "triggers": 0,
+   "mapping": "entidad: Airport",
+   "writers": [
+    "CatalogController",
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "FlightRouteService",
+    "FlightService",
+    "GeographicCatalogService"
+   ],
+   "readers": [
+    "CatalogController",
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "AirportLocks",
+    "FlightRouteService",
+    "FlightService",
+    "GeographicCatalogService",
+    "GeographicDependencyService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AircraftAdministrationIntegrationTest",
+    "AircraftCatalogIntegrationTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre.cjs",
+    "e2e-documentos.cjs",
+    "e2e-geografia-catalogos.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "bitacora_vuelos",
+   "infra": false,
+   "rows": 1853,
+   "fkOut": 3,
+   "fkIn": 1,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 1,
+   "mapping": "entidad: FlightAuditLog",
+   "writers": [
+    "FlightLogService"
+   ],
+   "readers": [
+    "FlightLogService"
+   ],
+   "junit": [
+    "FlightLogServiceTest"
+   ],
+   "e2e": [
+    "e2e-auditoria.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "bloqueos_documento_vuelo",
+   "infra": false,
+   "rows": 11,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: DocumentLock",
+   "writers": [
+    "DocumentService"
+   ],
+   "readers": [
+    "DocumentService",
+    "UserResponsibilityService"
+   ],
+   "junit": [
+    "DocumentServiceTest"
+   ],
+   "e2e": [
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "clasificaciones_tripulacion",
+   "infra": false,
+   "rows": 3319,
+   "fkOut": 4,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: CrewQualification",
+   "writers": [
+    "CredentialPolicyActivationService",
+    "CrewManagementService"
+   ],
+   "readers": [
+    "CredentialPolicyActivationService",
+    "CrewManagementService"
+   ],
+   "junit": [
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "consultas_externas_habilitacion",
+   "infra": false,
+   "rows": 10,
+   "fkOut": 3,
+   "fkIn": 0,
+   "checks": 2,
+   "uniqueIndexes": 0,
+   "triggers": 1,
+   "mapping": "entidad: ExternalCredentialCheck",
+   "writers": [
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-politicas-documentos-v60.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "contactos_coordinacion_traslado",
+   "infra": false,
+   "rows": 269,
+   "fkOut": 3,
+   "fkIn": 0,
+   "checks": 5,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: TransferContact",
+   "writers": [
+    "TransferContactService"
+   ],
+   "readers": [
+    "TransferContactService"
+   ],
+   "junit": [
+    "TransferContactIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "coordinaciones_aa2000",
+   "infra": false,
+   "rows": 47,
+   "fkOut": 3,
+   "fkIn": 0,
+   "checks": 2,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: Aa2000Coordination",
+   "writers": [
+    "Aa2000CoordinationService"
+   ],
+   "readers": [
+    "Aa2000CoordinationService",
+    "GeographicDependencyService"
+   ],
+   "junit": [
+    "Aa2000CoordinationServiceTest"
+   ],
+   "e2e": [
+    "e2e-coordinaciones-ui.cjs (vía API)"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "correos_electronicos",
+   "infra": false,
+   "rows": 7042,
+   "fkOut": 2,
+   "fkIn": 1,
+   "checks": 2,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: EmailContact",
+   "writers": [
+    "AuthService",
+    "EmailVerificationService",
+    "PersonContactService"
+   ],
+   "readers": [
+    "AuthService",
+    "CrewContactService",
+    "EmailVerificationService",
+    "PersonContactService"
+   ],
+   "junit": [
+    "CrewContactIntegrationTest",
+    "EmailVerificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "AuthServiceTest",
+    "UserAdministrationServiceTest"
+   ],
+   "e2e": [
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-contactos-ui.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "decisiones_habilitacion",
+   "infra": false,
+   "rows": 3762,
+   "fkOut": 3,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 0,
+   "triggers": 1,
+   "mapping": "entidad: CredentialDecision",
+   "writers": [
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "CredentialLifecycleIntegrationTest",
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-privilegios-bd.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "documentos_habilitacion",
+   "infra": false,
+   "rows": 3420,
+   "fkOut": 5,
+   "fkIn": 3,
+   "checks": 8,
+   "uniqueIndexes": 0,
+   "triggers": 1,
+   "mapping": "entidad: CredentialDocument",
+   "writers": [
+    "CredentialDocumentService",
+    "LegacyDocumentService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "CredentialDocumentService",
+    "LegacyDocumentService",
+    "ProfessionalCredentialService",
+    "ReadinessService"
+   ],
+   "junit": [
+    "CredentialLifecycleIntegrationTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "documentos_vuelo",
+   "infra": false,
+   "rows": 938,
+   "fkOut": 3,
+   "fkIn": 2,
+   "checks": 1,
+   "uniqueIndexes": 0,
+   "triggers": 0,
+   "mapping": "entidad: FlightDocumentItem",
+   "writers": [
+    "DocumentService"
+   ],
+   "readers": [
+    "DocumentService"
+   ],
+   "junit": [
+    "DocumentServiceTest"
+   ],
+   "e2e": [
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "estados_solicitud_sanitaria",
+   "infra": false,
+   "rows": 5,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: SanitaryRequestStatus",
+   "writers": [
+    "FlightService"
+   ],
+   "readers": [
+    "FlightService"
+   ],
+   "junit": [
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "DocumentServiceTest",
+    "FlightClosureServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "estados_vuelo",
+   "infra": false,
+   "rows": 8,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightStatus",
+   "writers": [
+    "FinalReportWorkflowService",
+    "FlightService"
+   ],
+   "readers": [
+    "FinalReportWorkflowService",
+    "FlightService"
+   ],
+   "junit": [
+    "AircraftAdministrationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "ClosureTimelineTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewManagementServiceTest",
+    "DocumentServiceTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "FlightLogServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre-ui.cjs",
+    "e2e-cierre.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-elegibilidad-tripulacion-ui.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision-ui.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-tripulacion-actualizacion-ui.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "eventos_auditoria",
+   "infra": false,
+   "rows": 69415,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 0,
+   "triggers": 1,
+   "mapping": "entidad: AuditEvent",
+   "writers": [
+    "AircraftAdminService",
+    "AuditService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "AircraftAdminService",
+    "AuditService",
+    "FlightService",
+    "PatientDirectoryService",
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "EmailVerificationIntegrationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "PatientDniRectificationServiceTest",
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-audit-actor-search.cjs",
+    "e2e-auditoria-ui.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-geografia-catalogos.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "flyway_schema_history",
+   "infra": true,
+   "rows": 60,
+   "fkOut": 0,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 0,
+   "triggers": 0,
+   "mapping": null,
+   "writers": [],
+   "readers": [],
+   "junit": [],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria-ui.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-elegibilidad-tripulacion-ui.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-paciente-solicitud-ui.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory-ui.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-perfiles-comandante.cjs",
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-tripulacion-actualizacion-ui.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-contactos-ui.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "verdict": "INFRAESTRUCTURA"
+  },
+  {
+   "table": "habilitaciones_profesionales",
+   "infra": false,
+   "rows": 3403,
+   "fkOut": 5,
+   "fkIn": 4,
+   "checks": 2,
+   "uniqueIndexes": 0,
+   "triggers": 0,
+   "mapping": "entidad: ProfessionalCredential",
+   "writers": [
+    "CredentialDocumentService",
+    "CredentialPolicyActivationService",
+    "LegacyDocumentService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "CredentialDocumentService",
+    "CredentialExpiryNoticeService",
+    "CredentialPolicyActivationService",
+    "CredentialSufficiency",
+    "LegacyDocumentService",
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "CredentialLifecycleIntegrationTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-habilitaciones.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "informacion_hangar",
+   "infra": false,
+   "rows": 123,
+   "fkOut": 5,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: HangarInfo",
+   "writers": [
+    "HangarInfoService"
+   ],
+   "readers": [
+    "GeographicDependencyService",
+    "HangarInfoService"
+   ],
+   "junit": [
+    "HangarInfoServiceTest"
+   ],
+   "e2e": [
+    "e2e-hangar-ui.cjs (vía API)"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "informacion_medica_vuelo",
+   "infra": false,
+   "rows": 1799,
+   "fkOut": 1,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightMedicalInfo",
+   "writers": [
+    "AircraftAdminService",
+    "FlightService"
+   ],
+   "readers": [
+    "AircraftAdminService",
+    "FlightService"
+   ],
+   "junit": [
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-patient-directory.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "informes_finales_vuelo",
+   "infra": false,
+   "rows": 498,
+   "fkOut": 3,
+   "fkIn": 1,
+   "checks": 4,
+   "uniqueIndexes": 3,
+   "triggers": 0,
+   "mapping": "entidad: FlightFinalReport",
+   "writers": [
+    "FinalReportWorkflowService",
+    "FlightService"
+   ],
+   "readers": [
+    "FinalReportWorkflowService",
+    "FlightService"
+   ],
+   "junit": [
+    "AircraftAssignmentFlightServiceTest",
+    "ClosureTimelineTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-cierre-ui.cjs",
+    "e2e-cierre.cjs",
+    "e2e-migracion-historica.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "instantaneas_clima",
+   "infra": false,
+   "rows": 110,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 0,
+   "triggers": 0,
+   "mapping": "entidad: WeatherSnapshot",
+   "writers": [
+    "FlightService"
+   ],
+   "readers": [
+    "FlightService"
+   ],
+   "junit": [
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-cierre-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "localidades",
+   "infra": false,
+   "rows": 4065,
+   "fkOut": 1,
+   "fkIn": 3,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Locality",
+   "writers": [
+    "CatalogController",
+    "FlightService",
+    "GeographicCatalogService"
+   ],
+   "readers": [
+    "CatalogController",
+    "FlightService",
+    "GeographicCatalogService",
+    "GeographicDependencyService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "TransferContactIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest",
+    "GeographicCatalogDatasetTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre.cjs",
+    "e2e-documentos.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "motivos_cancelacion",
+   "infra": false,
+   "rows": 23,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: CancellationReason",
+   "writers": [
+    "CatalogController",
+    "FlightService"
+   ],
+   "readers": [
+    "CatalogController",
+    "FlightService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "negociaciones_horario_vuelo",
+   "infra": false,
+   "rows": 5568,
+   "fkOut": 3,
+   "fkIn": 1,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightScheduleNegotiation",
+   "writers": [
+    "FlightService"
+   ],
+   "readers": [
+    "FlightService"
+   ],
+   "junit": [
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "notificaciones",
+   "infra": false,
+   "rows": 1829050,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Notification",
+   "writers": [
+    "NotificationService"
+   ],
+   "readers": [
+    "NotificationService"
+   ],
+   "junit": [
+    "ClosureTimelineTest",
+    "CredentialLifecycleIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-cierre-ui.cjs",
+    "e2e-cierre.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "obligaciones_informe_final",
+   "infra": false,
+   "rows": 517,
+   "fkOut": 6,
+   "fkIn": 0,
+   "checks": 3,
+   "uniqueIndexes": 2,
+   "triggers": 1,
+   "mapping": "entidad: FinalReportObligation",
+   "writers": [
+    "FinalReportWorkflowService"
+   ],
+   "readers": [
+    "CommanderReportAccessService",
+    "FinalReportDeadlineService",
+    "FinalReportWorkflowService",
+    "UserResponsibilityService"
+   ],
+   "junit": [
+    "ClosureTimelineTest",
+    "CommanderReportAccessServiceTest",
+    "FinalReportDeadlineServiceTest",
+    "FinalReportWorkflowServiceTest"
+   ],
+   "e2e": [
+    "e2e-cierre-ui.cjs",
+    "e2e-cierre.cjs",
+    "e2e-documentos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-rutas-estabilizacion.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "pacientes",
+   "infra": false,
+   "rows": 1673,
+   "fkOut": 1,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Patient",
+   "writers": [
+    "AuthService",
+    "FlightService",
+    "PatientService"
+   ],
+   "readers": [
+    "AuthService",
+    "FlightService",
+    "PatientDirectoryService",
+    "PatientService",
+    "PersonIdentityService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "PatientDniRectificationServiceTest",
+    "PatientServiceIdentityTest",
+    "PersonIdentityServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-paciente-solicitud-ui.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory-ui.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "perfiles_comandante",
+   "infra": false,
+   "rows": 2677,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: CommanderProfile",
+   "writers": [
+    "CatalogController",
+    "AuthService"
+   ],
+   "readers": [
+    "CatalogController",
+    "AuthService",
+    "FlightService",
+    "GeographicDependencyService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "AuthServiceTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest",
+    "UserAdministrationServiceTest"
+   ],
+   "e2e": [
+    "e2e-perfiles-comandante.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "personas",
+   "infra": false,
+   "rows": 8020,
+   "fkOut": 0,
+   "fkIn": 6,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Person",
+   "writers": [
+    "AuthService",
+    "EmailVerificationService",
+    "PatientService",
+    "PersonContactService"
+   ],
+   "readers": [
+    "AuthService",
+    "EmailVerificationService",
+    "PatientDirectoryService",
+    "PatientService",
+    "PersonContactService",
+    "PersonIdentityService"
+   ],
+   "junit": [
+    "AircraftAdministrationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "EmailVerificationIntegrationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "JwtAuthenticationFilterTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "AuthServiceTest",
+    "ClosureTimelineTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "FinalReportDeadlineServiceTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "PatientDniRectificationServiceTest",
+    "PatientServiceIdentityTest",
+    "PersonIdentityServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest",
+    "RequestNegotiationServiceTest",
+    "UserAdministrationServiceTest"
+   ],
+   "e2e": [
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-paciente-solicitud-ui.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory-ui.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-perfiles-comandante.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-tripulacion-actualizacion-ui.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "politicas_habilitacion",
+   "infra": false,
+   "rows": 300,
+   "fkOut": 4,
+   "fkIn": 0,
+   "checks": 3,
+   "uniqueIndexes": 1,
+   "triggers": 1,
+   "mapping": "entidad: CredentialPolicy",
+   "writers": [
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "CredentialSufficiency",
+    "ProfessionalCredentialService",
+    "ReadinessService"
+   ],
+   "junit": [
+    "CredentialLifecycleIntegrationTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest"
+   ],
+   "e2e": [
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-habilitaciones.cjs",
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "prioridades_vuelo",
+   "infra": false,
+   "rows": 4,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightPriority",
+   "writers": [
+    "CatalogController",
+    "FlightService"
+   ],
+   "readers": [
+    "CatalogController",
+    "FlightService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "TransferContactIntegrationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "FlightClosureServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-solicitudes.cjs (vía API)"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "provincias",
+   "infra": false,
+   "rows": 52,
+   "fkOut": 0,
+   "fkIn": 4,
+   "checks": 0,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: Province",
+   "writers": [
+    "CatalogController",
+    "GeographicCatalogService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "CatalogController",
+    "GeographicCatalogService",
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "AccountActivationIntegrationTest",
+    "AdministratorAuthorizationTest",
+    "TransferContactIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "ProfessionalCredentialServiceTest",
+    "RequestNegotiationServiceTest",
+    "GeographicCatalogDatasetTest"
+   ],
+   "e2e": [
+    "e2e-perfiles-comandante.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "roles",
+   "infra": false,
+   "rows": 5,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: Role",
+   "writers": [
+    "AuthService"
+   ],
+   "readers": [
+    "AuthService"
+   ],
+   "junit": [
+    "AccountActivationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "EmailVerificationIntegrationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "AuthServiceTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "FlightLogServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest",
+    "UserAdministrationServiceTest",
+    "AdministratorAuthorizationTest",
+    "AircraftAdministrationIntegrationTest",
+    "AircraftCatalogIntegrationTest",
+    "CrewManagementServiceTest"
+   ],
+   "e2e": [
+    "e2e-auditoria.cjs",
+    "e2e-cierre-support.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-perfiles-comandante.cjs",
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-suite-completa.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "roles_tripulacion",
+   "infra": false,
+   "rows": 4,
+   "fkOut": 0,
+   "fkIn": 4,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: CrewRole",
+   "writers": [
+    "CatalogController",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "CrewManagementService",
+    "FlightService",
+    "ProfessionalCredentialService"
+   ],
+   "readers": [
+    "CatalogController",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "CrewContactService",
+    "CrewManagementService",
+    "FlightService",
+    "ProfessionalCredentialService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "CrewContactIntegrationTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-politicas-documentos-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "rutas_vuelo",
+   "infra": false,
+   "rows": 1244,
+   "fkOut": 5,
+   "fkIn": 0,
+   "checks": 7,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: FlightRoute",
+   "writers": [
+    "FlightRouteService"
+   ],
+   "readers": [
+    "FlightRouteService",
+    "GeographicDependencyService"
+   ],
+   "junit": [
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-geografia-integridad.cjs",
+    "e2e-i53-operativo-ui.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision-ui.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "telefonos",
+   "infra": false,
+   "rows": 7125,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 3,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: PhoneContact",
+   "writers": [
+    "AuthService",
+    "PersonContactService"
+   ],
+   "readers": [
+    "AuthService",
+    "CrewContactService",
+    "PersonContactService"
+   ],
+   "junit": [
+    "CrewContactIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "AuthServiceTest",
+    "UserAdministrationServiceTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-cierre-support.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-perfiles-comandante.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-suite-completa.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-contactos-ui.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "tipos_documento",
+   "infra": false,
+   "rows": 4,
+   "fkOut": 0,
+   "fkIn": 1,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: DocumentType",
+   "writers": [
+    "CatalogController",
+    "DocumentService"
+   ],
+   "readers": [
+    "CatalogController",
+    "DocumentService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "DocumentServiceTest"
+   ],
+   "e2e": [
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "tipos_vuelo",
+   "infra": false,
+   "rows": 6,
+   "fkOut": 0,
+   "fkIn": 2,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightType",
+   "writers": [
+    "CatalogController",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "FlightService"
+   ],
+   "readers": [
+    "CatalogController",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "FlightService"
+   ],
+   "junit": [
+    "AdministratorAuthorizationTest",
+    "AircraftAdministrationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "ClosureTimelineTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "OperationalFlightServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-geografia-integridad.cjs",
+    "e2e-i53-operativo-ui.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "usuarios",
+   "infra": false,
+   "rows": 6569,
+   "fkOut": 2,
+   "fkIn": 48,
+   "checks": 2,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: User",
+   "writers": [
+    "CatalogController",
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "AuthService",
+    "CredentialDocumentService",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "CrewManagementService",
+    "DocumentService",
+    "EmailVerificationService",
+    "FinalReportWorkflowService",
+    "FlightLogService",
+    "FlightRouteService",
+    "FlightService",
+    "GeographicCatalogService",
+    "HangarInfoService",
+    "LegacyDocumentService",
+    "NotificationService",
+    "PersonContactService",
+    "ProfessionalCredentialService",
+    "TransferContactService"
+   ],
+   "readers": [
+    "CatalogController",
+    "JwtAuthenticationFilter",
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "AuditQueryService",
+    "AuditService",
+    "AuthService",
+    "CredentialDocumentService",
+    "CredentialExpiryNoticeService",
+    "CredentialPolicyActivationService",
+    "CredentialPolicyService",
+    "CrewContactService",
+    "CrewEligibilityMonitoringService",
+    "CrewManagementService",
+    "DocumentService",
+    "EmailVerificationService",
+    "FinalReportWorkflowService",
+    "FlightAuthorizationService",
+    "FlightLogService",
+    "FlightRouteService",
+    "FlightService",
+    "GeographicCatalogService",
+    "HangarInfoService",
+    "LegacyDocumentService",
+    "NotificationService",
+    "PatientDirectoryService",
+    "PersonContactService",
+    "PersonIdentityService",
+    "ProfessionalCredentialService",
+    "SanitaryRequestRegistrationService",
+    "TransferContactService"
+   ],
+   "junit": [
+    "AccountActivationIntegrationTest",
+    "AdministratorAuthorizationTest",
+    "AircraftAdministrationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewAndAircraftAssignmentAuthorizationTest",
+    "CrewContactIntegrationTest",
+    "DocumentAuthorizationTest",
+    "EmailVerificationIntegrationTest",
+    "FlightRouteAuthorizationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "JwtAuthenticationFilterTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "AuthServiceTest",
+    "ClosureTimelineTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "DocumentServiceTest",
+    "FinalReportDeadlineServiceTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "FlightLogServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "PatientDniRectificationServiceTest",
+    "PersonIdentityServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "ProfessionalCredentialServiceTest",
+    "RequestNegotiationServiceTest",
+    "UserAdministrationServiceTest",
+    "AircraftCatalogIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos-ui.cjs",
+    "e2e-contactos.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-habilitaciones-ui.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-perfiles-comandante.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-suite-completa.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-usuarios-aislado.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-contactos-ui.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "usuarios_roles",
+   "infra": false,
+   "rows": 6619,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 0,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: UserRole",
+   "writers": [
+    "AuthService"
+   ],
+   "readers": [
+    "AuthService"
+   ],
+   "junit": [
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "EmailVerificationIntegrationTest",
+    "PatientDniRectificationIntegrationTest",
+    "PersonContactIntegrationTest",
+    "PhoneInternationalIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "UserDniRectificationIntegrationTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "AuthServiceTest",
+    "CredentialLifecycleIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "FlightClosureServiceTest",
+    "FlightLogServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "PolicyActivationAndLegacyIntegrationTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest",
+    "UserAdministrationServiceTest"
+   ],
+   "e2e": [
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "verificaciones_correo",
+   "infra": false,
+   "rows": 583,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 3,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: EmailVerification",
+   "writers": [
+    "EmailVerificationService"
+   ],
+   "readers": [
+    "EmailVerificationService",
+    "PersonContactService"
+   ],
+   "junit": [
+    "EmailVerificationIntegrationTest"
+   ],
+   "e2e": [
+    "e2e-verificacion-contactos-ui.cjs",
+    "e2e-verificacion-correo.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "versiones_documento_vuelo",
+   "infra": false,
+   "rows": 1237,
+   "fkOut": 2,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 2,
+   "triggers": 0,
+   "mapping": "entidad: FlightDocument",
+   "writers": [
+    "DocumentService"
+   ],
+   "readers": [
+    "DocumentService"
+   ],
+   "junit": [
+    "DocumentServiceTest"
+   ],
+   "e2e": [
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "vuelos",
+   "infra": false,
+   "rows": 4542,
+   "fkOut": 9,
+   "fkIn": 14,
+   "checks": 3,
+   "uniqueIndexes": 1,
+   "triggers": 3,
+   "mapping": "entidad: Flight",
+   "writers": [
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "CredentialPolicyActivationService",
+    "CrewManagementService",
+    "DocumentService",
+    "FlightLogService",
+    "FlightRouteService",
+    "FlightService",
+    "HangarInfoService",
+    "LegacyDocumentService",
+    "TransferContactService"
+   ],
+   "readers": [
+    "Aa2000CoordinationService",
+    "AircraftAdminService",
+    "AuditQueryService",
+    "AuditService",
+    "CredentialExpiryNoticeService",
+    "CredentialPolicyActivationService",
+    "CrewContactService",
+    "CrewEligibilityMonitoringService",
+    "CrewManagementService",
+    "DocumentService",
+    "FinalReportDeadlineService",
+    "FinalReportWorkflowService",
+    "FlightAuthorizationService",
+    "FlightLogService",
+    "FlightRouteService",
+    "FlightService",
+    "GeographicDependencyService",
+    "HangarInfoService",
+    "LegacyDocumentService",
+    "NotificationService",
+    "SanitaryRequestRegistrationService",
+    "TransferContactService",
+    "UserResponsibilityService"
+   ],
+   "junit": [
+    "AircraftAdministrationIntegrationTest",
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "Aa2000CoordinationServiceTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "ClosureTimelineTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "DocumentServiceTest",
+    "FinalReportDeadlineServiceTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "FlightLogServiceTest",
+    "FlightRouteReviewIntegrationTest",
+    "FlightRouteServiceTest",
+    "GeographicIntegrityIntegrationTest",
+    "HangarInfoServiceTest",
+    "OperationalFlightServiceTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest",
+    "EmailVerificationIntegrationTest",
+    "MigrationAccountConfigTest",
+    "ContactNormalizerTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-auditoria-ui.cjs",
+    "e2e-auditoria.cjs",
+    "e2e-cierre-support.cjs",
+    "e2e-cierre-ui.cjs",
+    "e2e-cierre.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-contactos.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-elegibilidad-tripulacion-ui.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-geografia-integridad.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-i53-operativo-ui.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-historica.cjs",
+    "e2e-paciente-solicitud-ui.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory-ui.cjs",
+    "e2e-politicas-documentos-v60.cjs",
+    "e2e-privilegios-bd.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-rutas-estabilizacion.cjs",
+    "e2e-rutas-revision-ui.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-suite-completa.cjs",
+    "e2e-telefonos-internacionales.cjs",
+    "e2e-tripulacion-actualizacion-ui.cjs",
+    "e2e-usuarios-aislado.cjs",
+    "e2e-usuarios-ui.cjs",
+    "e2e-usuarios.cjs",
+    "e2e-verificacion-correo.cjs",
+    "measure-e2e-audit.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "vuelos_sanitarios",
+   "infra": false,
+   "rows": 1799,
+   "fkOut": 8,
+   "fkIn": 1,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 1,
+   "mapping": "entidad: SanitaryFlight",
+   "writers": [
+    "FinalReportWorkflowService",
+    "FlightService",
+    "TransferContactService"
+   ],
+   "readers": [
+    "AircraftAdminService",
+    "FinalReportWorkflowService",
+    "FlightService",
+    "GeographicDependencyService",
+    "TransferContactService",
+    "UserResponsibilityService"
+   ],
+   "junit": [
+    "AuditQueryIntegrationTest",
+    "CrewContactIntegrationTest",
+    "TransferContactIntegrationTest",
+    "UserAdministrationIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "ClosureTimelineTest",
+    "DocumentServiceTest",
+    "FinalReportWorkflowServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-cierre.cjs",
+    "e2e-contactos-solicitud-ui.cjs",
+    "e2e-contactos-solicitud.cjs",
+    "e2e-documentos-integracion-ui.cjs",
+    "e2e-documentos.cjs",
+    "e2e-identidad-compartida-ui.cjs",
+    "e2e-identidad-compartida.cjs",
+    "e2e-identidad-dni-ui.cjs",
+    "e2e-identidad-dni-usuarios-ui.cjs",
+    "e2e-identidad-dni-usuarios.cjs",
+    "e2e-identidad-dni.cjs",
+    "e2e-migracion-contactos.cjs",
+    "e2e-paciente-solicitud-ui.cjs",
+    "e2e-paciente-solicitud.cjs",
+    "e2e-patient-directory-ui.cjs",
+    "e2e-patient-directory.cjs",
+    "e2e-rutas-revision.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs",
+    "e2e-solicitudes-ui.cjs",
+    "e2e-solicitudes.cjs",
+    "e2e-usuarios.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  },
+  {
+   "table": "vuelos_tripulantes",
+   "infra": false,
+   "rows": 4324,
+   "fkOut": 5,
+   "fkIn": 0,
+   "checks": 1,
+   "uniqueIndexes": 1,
+   "triggers": 0,
+   "mapping": "entidad: FlightCrew",
+   "writers": [
+    "AircraftAdminService",
+    "CredentialPolicyActivationService",
+    "CrewManagementService",
+    "FlightService",
+    "LegacyDocumentService"
+   ],
+   "readers": [
+    "AircraftAdminService",
+    "CredentialExpiryNoticeService",
+    "CredentialPolicyActivationService",
+    "CrewContactService",
+    "CrewEligibilityMonitoringService",
+    "CrewManagementService",
+    "FlightService",
+    "LegacyDocumentService",
+    "UserResponsibilityService"
+   ],
+   "junit": [
+    "CrewContactIntegrationTest",
+    "AircraftAdminServiceTest",
+    "AircraftAssignmentFlightServiceTest",
+    "AircraftCrewConcurrencyIntegrationTest",
+    "CrewClassificationConcurrencyIntegrationTest",
+    "CrewEligibilityTest",
+    "CrewManagementServiceTest",
+    "FlightClosureServiceTest",
+    "OperationalFlightServiceTest",
+    "PolicyChangeReviewIntegrationTest",
+    "RequestNegotiationServiceTest"
+   ],
+   "e2e": [
+    "e2e-aeronaves-tripulacion-ui.cjs",
+    "e2e-aeronaves-tripulacion.cjs",
+    "e2e-contactos-tripulacion-ui.cjs",
+    "e2e-contactos-tripulacion.cjs",
+    "e2e-elegibilidad-tripulacion-ui.cjs",
+    "e2e-elegibilidad-tripulacion.cjs",
+    "e2e-habilitaciones-vuelos.cjs",
+    "e2e-roles-clasificaciones-ui.cjs",
+    "e2e-roles-clasificaciones.cjs",
+    "e2e-sanitario-replanificacion-ui.cjs"
+   ],
+   "ui": [],
+   "notes": [],
+   "problems": [],
+   "verdict": "INTEGRADA"
+  }
+ ]
+}

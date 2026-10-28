@@ -30,6 +30,7 @@ const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
   assert.equal(count('SELECT COUNT(*) FROM politicas_habilitacion'), 0, 'la migración no siembra ninguna política');
   assert.equal((await ok('/credential-policies', { token: admin })).length, 0);
   const readyBefore = await ok('/admin/readiness', { token: admin });
+  const privilegeItem = readyBefore.items.find((i) => i.key === 'PRIVILEGIOS_BD'); assert.ok(privilegeItem && privilegeItem.status === 'OK', 'la cuenta de la aplicación del ensayo opera sin privilegios DDL (' + JSON.stringify(privilegeItem) + ')');
   assert.equal(readyBefore.readyForOperation, false); assert.deepEqual(readyBefore.pendingMandatory.filter((k) => k.startsWith('POLITICA_')).sort(), ['POLITICA_COMANDANTE', 'POLITICA_COPILOTO', 'POLITICA_ENFERMERO', 'POLITICA_MEDICO']);
   const proposal = { name: 'Política de ensayo (tipos ficticios del E2E)', roles: ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO'], pendingDecisions: [],
     policies: ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO'].flatMap((roleCode) => E2E_CREDENTIAL_TYPES.map((credentialType) => ({ roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }))) };

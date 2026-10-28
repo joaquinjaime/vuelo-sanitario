@@ -39,6 +39,8 @@ const SUITE = [
   'e2e-habilitaciones', 'e2e-habilitaciones-vuelos', 'e2e-habilitaciones-ui', 'e2e-tripulacion-actualizacion-ui',
   // I-5.7: V60, procedimiento de políticas, documentos heredados, lista de preparación y antivirus con la exigencia de producción (este último recrea el backend E2E y lo restablece).
   'e2e-politicas-documentos-v60', 'e2e-politicas-documentos-ui', 'e2e-antimalware-produccion',
+  // I-5.8: separación de cuentas SQL Server (mínimo privilegio, instalación desde cero con escenario descartable) y barrido de seguridad de la API.
+  'e2e-privilegios-bd', 'e2e-seguridad-i58',
 ];
 /** Tiempo máximo en minutos de los scripts que históricamente tardan más (el resto usa --timeout-min, 25 por defecto). */
 const LONG = { 'e2e-usuarios-aislado': 30, 'e2e-geografia-integridad': 40, 'e2e-i53-operativo-ui': 40, 'e2e-roles-clasificaciones': 35, 'e2e-roles-clasificaciones-ui': 35, 'e2e-habilitaciones': 35, 'e2e-habilitaciones-ui': 35, 'e2e-habilitaciones-vuelos': 45, 'e2e-politicas-documentos-v60': 40, 'e2e-politicas-documentos-ui': 40, 'e2e-antimalware-produccion': 30 };
@@ -104,7 +106,11 @@ const tail = (file, n = 15) => { try { return fs.readFileSync(file, 'utf8').spli
   const dir = path.join(LOGS, runId); fs.mkdirSync(dir, { recursive: true });
   const summaryFile = path.join(dir, 'resumen.json');
   const previous = opt.resume && fs.existsSync(summaryFile) ? JSON.parse(fs.readFileSync(summaryFile, 'utf8')) : null;
-  const summary = previous || { runId, startedAt: new Date().toISOString(), host: os.hostname(), continuous: !opt.resume && !opt.from && !opt.filter, results: [] };
+  // Qué código se somete a prueba: commit exacto, árbol de trabajo e imágenes en ejecución (la certificación sólo vale para ese estado).
+  const git = (...a) => { const r = spawnSync('git', a, { cwd: path.join(__dirname, '..'), encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
+  const dockerField = (name, fmt) => { const r = spawnSync('docker', ['inspect', '-f', fmt, name], { encoding: 'utf8', timeout: 60000 }); return r.status === 0 ? r.stdout.trim() : null; };
+  const tested = { commit: git('rev-parse', 'HEAD'), branch: git('rev-parse', '--abbrev-ref', 'HEAD'), workingTreeClean: git('status', '--porcelain') === '', backendImage: dockerField('vuelos-sanitarios-e2e-backend-1', '{{.Config.Image}} {{.Image}}'), frontendImage: dockerField('vuelos-sanitarios-e2e-frontend-1', '{{.Config.Image}} {{.Image}}') };
+  const summary = previous || { runId, tested, startedAt: new Date().toISOString(), host: os.hostname(), continuous: !opt.resume && !opt.from && !opt.filter, results: [] };
   if (previous) { summary.resumedAt = new Date().toISOString(); summary.continuous = false; }
   console.log(`Corrida ${runId}: ${names.length} scripts. Logs en ${dir}`);
   if (!(await health())) { console.error(`El stack aislado no responde en ${API}/actuator/health. Levántelo antes de ejecutar la suite.`); process.exit(2); }

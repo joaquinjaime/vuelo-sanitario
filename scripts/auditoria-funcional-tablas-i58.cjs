@@ -63,8 +63,11 @@ for (const f of main) {
 
 const isRepo = (f) => /\/repository\//.test(rel(f.p));
 const isEntity = (f) => /\/domain\//.test(rel(f.p));
+// Repositorio de una entidad: la interfaz que extiende JpaRepository<Entidad, ...> (el nombre no siempre sigue la convención <Entidad>Repository)
+const repoByEntity = new Map();
+for (const f of main) { if (!isRepo(f)) continue; const m = f.text.match(/interface\s+(\w+)\s+extends\s+\w*Repository<\s*(\w+)/); if (m) repoByEntity.set(m[2], m[1]); }
 function users(cls) {
-  const repoName = cls + "Repository";
+  const repoName = repoByEntity.get(cls) || cls + "Repository";
   const hits = main.filter((f) => !isEntity(f) && (new RegExp(`\\b${cls}\\b`).test(f.text) || new RegExp(`\\b${repoName}\\b`).test(f.text)));
   const nonRepo = hits.filter((f) => !isRepo(f));
   const writers = nonRepo.filter((f) => /\.(save|saveAndFlush|saveAll|delete|deleteAll|deleteById|persist)\s*\(|new\s+[A-Z]\w*\s*\(.*\)\s*;?\s*\w*\.save|@Modifying/.test(f.text) || /\bpersist\(/.test(f.text));
@@ -77,6 +80,12 @@ function users(cls) {
 }
 const mentions = (list, re) => list.filter((f) => re.test(f.text));
 
+// Algunas tablas sólo se ejercen a través de la API (los scripts no nombran la tabla). Cada vínculo se verifica: el script debe existir y llamar al endpoint indicado.
+const VIA_API = {
+  coordinaciones_aa2000: [["e2e-coordinaciones-ui.cjs", /coordinacion|aa2000/i]],
+  informacion_hangar: [["e2e-hangar-ui.cjs", /hangar/i]],
+  prioridades_vuelo: [["e2e-cierre.cjs", /prioridad/i], ["e2e-solicitudes.cjs", /prioridad|priority/i]],
+};
 const result = [];
 for (const t of tables) {
   const m = mapping.get(t.name.toLowerCase());
@@ -86,14 +95,15 @@ for (const t of tables) {
     const u = users(ownerCls);
     row.writers = u.writers.map((f) => path.basename(f.p, ".java"));
     row.readers = u.readers.map((f) => path.basename(f.p, ".java"));
-    const re = new RegExp(`\\b(${ownerCls}|${ownerCls}Repository)\\b`);
+    const re = new RegExp(`\\b(${ownerCls}|${ownerCls}Repository|${repoByEntity.get(ownerCls) || "NOREPO"})\\b`);
     row.junit = mentions(tests, re).map((f) => path.basename(f.p, ".java"));
     row.ui = [];
   }
   const tableRe = new RegExp(`\\b${t.name}\\b`);
   const e2eHit = mentions(e2e, tableRe).map((f) => path.basename(f.p));
   const jUnitSql = mentions(tests, tableRe).map((f) => path.basename(f.p, ".java"));
-  row.e2e = e2eHit; row.junit = [...new Set([...row.junit, ...jUnitSql])];
+  const viaApi = (VIA_API[t.name] || []).filter(([file, re]) => { const s = e2e.find((x) => path.basename(x.p) === file) || (fs.existsSync(path.join(root, "scripts", file)) && { text: read(path.join(root, "scripts", file)) }); return s && re.test(s.text); }).map(([file]) => file + " (vía API)");
+  row.e2e = [...e2eHit, ...viaApi]; row.junit = [...new Set([...row.junit, ...jUnitSql])];
   if (m && m.kind === "asociación") row.notes.push(`asociación gestionada por la entidad ${m.owner}`);
   if (m && m.kind === "colección") row.notes.push(`colección gestionada por la entidad ${m.owner}`);
   if (t.infra) { row.verdict = "INFRAESTRUCTURA"; result.push(row); continue; }
