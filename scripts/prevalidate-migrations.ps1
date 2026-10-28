@@ -138,6 +138,15 @@ ELSE BEGIN
        AND COL_LENGTH(N'dbo.documentos_vuelo',N'esta_activo') IS NOT NULL
        AND EXISTS (SELECT 1 FROM dbo.documentos_vuelo d WHERE d.esta_activo=0 AND NOT EXISTS (SELECT 1 FROM dbo.versiones_documento_vuelo v WHERE v.id_documentos_vuelo=d.id_documentos_vuelo))
         SELECT N'ISSUE|hay documentos inactivos sin versiones: V52 se detiene con THROW 51052 porque no puede atribuir la baja; revise esos registros.';
+    -- V56-V60 (I-5.7). V57 se detiene (THROW 51057) si hay licencias de comandante duplicadas: se avisa antes de la ventana. V59 y V60 no tienen condiciones de aborto sobre datos.
+    IF @current < 57 AND OBJECT_ID(N'dbo.perfiles_comandante',N'U') IS NOT NULL AND COL_LENGTH(N'dbo.perfiles_comandante',N'numero_licencia_normalizada') IS NOT NULL
+       AND EXISTS (SELECT 1 FROM dbo.perfiles_comandante GROUP BY numero_licencia_normalizada HAVING COUNT(*) > 1)
+        SELECT N'ISSUE|hay licencias aeronauticas de comandante duplicadas: V57 se detiene con THROW 51057; resuelvalas manualmente (no se elige cual conservar).';
+    IF @current < 59 AND OBJECT_ID(N'dbo.documentos_habilitacion',N'U') IS NOT NULL BEGIN
+        DECLARE @legacyDocs int = (SELECT COUNT(*) FROM dbo.documentos_habilitacion);
+        IF @legacyDocs > 0 SELECT CONCAT(N'WARNING|V59 dejara ', @legacyDocs, N' documento(s) de habilitacion como LEGADO_SIN_ANALISIS (restringidos hasta regularizarlos con un antivirus acreditado); V60 los clasificara como ANTERIOR_V59.');
+    END;
+    IF @current < 59 SELECT N'INFO|politicas-habilitacion|V59 no siembra ninguna: hasta activar una politica (docs/POLITICAS_HABILITACION_PROPUESTA_I57_2026-10-28.md) nadie sera elegible para ninguna funcion.';
     IF @current < 49 AND OBJECT_ID(N'dbo.correos_electronicos',N'U') IS NOT NULL AND COL_LENGTH(N'dbo.correos_electronicos',N'direccion_normalizada') IS NULL BEGIN
         DECLARE @dupMail int = (SELECT COUNT(*) FROM (SELECT id_personas FROM dbo.correos_electronicos GROUP BY id_personas, LOWER(LTRIM(RTRIM(direccion))) HAVING COUNT(*) > 1) x);
         IF @dupMail > 0 SELECT CONCAT(N'WARNING|V49 dara de baja (DUPLICADO_MIGRACION, sin borrar) correos repetidos de una misma persona: ', @dupMail, N' grupos.');

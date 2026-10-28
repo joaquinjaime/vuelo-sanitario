@@ -130,7 +130,7 @@ public class LegacyDocumentService {
    d.scanDetail=cut(infected?Objects.toString(result.detail(),"Rechazado")+" (documento anterior a V59)":"Documento anterior a V59 regularizado el "+now+"; la huella se calculó en la regularización y no prueba integridad desde la carga original",500);
    documents.saveAndFlush(d);
    audit.record(null,by,"CREDENTIAL_DOCUMENT",d.getId(),"REGULARIZE",null,json("status",d.scanStatus,"engine",Objects.toString(result.engine(),""),"hashMoment",Objects.toString(d.hashMoment,"")));
-   credentials.decision(c,actor,"ANALISIS_DOCUMENTO","Documento "+d.name+" (anterior a V59) regularizado: "+d.scanStatus+(infected?" ("+d.scanDetail+")":"")+"; huella "+Objects.toString(d.hashMoment,"sin registrar")+" (calculada en la regularización)",d);
+   credentials.decision(c,actor,"ANALISIS_DOCUMENTO","Documento "+d.name+" (anterior a V59) regularizado: "+d.scanStatus+(infected?" ("+d.scanDetail+")":"")+(d.hashMoment==null?"; sin huella registrada":"; huella calculada en la regularización, que no prueba integridad desde la carga original"),d);
    if(infected&&"VERIFICADA".equals(c.status)&&documents.findActiveByCredentialId(c.getId()).stream().noneMatch(x->CredentialDocument.CLEAN.equals(x.scanStatus))){
     credentials.reset(c);credentialRepository.saveAndFlush(c);credentials.record(c,actor,"DOCUMENT_REJECTED_REVIEW",before);
     credentials.decision(c,actor,"MODIFICACION","Revisión requerida: el único documento que sustentaba la verificación fue rechazado al regularizarlo",d);

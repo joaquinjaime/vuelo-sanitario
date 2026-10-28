@@ -76,11 +76,11 @@ Criterios aplicados a cada una: funcionalidad, relaciones, reglas de negocio, ut
 |---|---|---:|---:|---:|---:|---:|---:|
 ${rows}
 
-Reproducción: \`node scripts/inventario-tablas.cjs --out docs/evidencia-i57/inventario-tablas-e2e-v60.json\` (contenedor y base configurables con \`--container\`, \`--db\`, \`--env\`; sólo lee). Para la base habitual (sólo lectura): `--container vuelos-sanitarios-sqlserver-1 --db vuelos_sanitarios --env .env`.
+Reproducción: \`node scripts/inventario-tablas.cjs --out docs/evidencia-i57/inventario-tablas-e2e-v60.json\` (contenedor y base configurables con \`--container\`, \`--db\`, \`--env\`; sólo lee). Para la base habitual (sólo lectura): \`--container vuelos-sanitarios-sqlserver-1 --db vuelos_sanitarios --env .env\`.
 
 ## 5. La base habitual (V47), sólo lectura
 
-Informe: `docs/evidencia-i57/inventario-tablas-habitual-v47-solo-lectura.json`. La habitual tiene **42 tablas físicas = 40 de negocio + 2 de infraestructura**: `flyway_schema_history` y `sysdiagrams` (la crea SQL Server Management Studio al usar «diagramas de base de datos»; no es de la aplicación, no está en las bases creadas por Flyway y se conserva tal cual). La conciliación contra la matriz informa exactamente las **5 tablas de negocio que V48–V59 todavía no crearon** —`contactos_coordinacion_traslado` (V51), `verificaciones_correo` (V54) y las tres de V59—: 40 + 5 = 45. Tras la migración se esperan **47 tablas físicas = 45 de negocio + 2 de infraestructura**, y el script debe informar «CONCILIADO».
+Informe: \`docs/evidencia-i57/inventario-tablas-habitual-v47-solo-lectura.json\`. La habitual tiene **42 tablas físicas = 40 de negocio + 2 de infraestructura**: \`flyway_schema_history\` y \`sysdiagrams\` (la crea SQL Server Management Studio al usar «diagramas de base de datos»; no es de la aplicación, no está en las bases creadas por Flyway y se conserva tal cual). La conciliación contra la matriz informa exactamente las **5 tablas de negocio que V48–V59 todavía no crearon** —\`contactos_coordinacion_traslado\` (V51), \`verificaciones_correo\` (V54) y las tres de V59—: 40 + 5 = 45. Tras la migración se esperan **47 tablas físicas = 45 de negocio + 2 de infraestructura**, y el script debe informar «CONCILIADO».
 `;
 fs.writeFileSync(path.join(root, "docs", "CONCILIACION_TABLAS_I57_2026-10-28.md"), md);
 console.log("escrito docs/CONCILIACION_TABLAS_I57_2026-10-28.md");

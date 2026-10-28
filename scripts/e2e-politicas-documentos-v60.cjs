@@ -75,13 +75,15 @@ const blocked = (statement, pattern) => { let message = ''; try { sql(statement)
   blocked(`UPDATE politicas_habilitacion SET motivo_baja=N'reescrito' WHERE id_politicas_habilitacion=${retiredPolicy}`, /51064/);
   sql(`UPDATE politicas_habilitacion SET tipo_habilitacion=tipo_habilitacion,activa=activa WHERE id_politicas_habilitacion=${activePolicy}`);
   pass('políticas: no se borran, no cambian su definición, no se reactivan y una actualización idéntica (Hibernate) sigue permitida');
-  const sampleDoc = one(`SELECT TOP 1 id_documentos_habilitacion FROM documentos_habilitacion WHERE hash_sha256 IS NOT NULL ORDER BY id_documentos_habilitacion`);
+  const sampleDoc = one(`SELECT TOP 1 id_documentos_habilitacion FROM documentos_habilitacion WHERE hash_sha256 IS NOT NULL AND origen_registro='POSTERIOR_V59' ORDER BY id_documentos_habilitacion`);
   blocked(`UPDATE documentos_habilitacion SET hash_sha256=REPLICATE('a',64) WHERE id_documentos_habilitacion=${sampleDoc}`, /51066/);
   blocked(`UPDATE documentos_habilitacion SET clave_archivo=N'otro.pdf' WHERE id_documentos_habilitacion=${sampleDoc}`, /51066/);
   blocked(`UPDATE documentos_habilitacion SET origen_registro='ANTERIOR_V59' WHERE id_documentos_habilitacion=${sampleDoc}`, /51066/);
   blocked(`DELETE FROM documentos_habilitacion WHERE id_documentos_habilitacion=${sampleDoc}`);
   pass('documentos: la huella registrada, el archivo y el origen no se alteran ni se eliminan filas');
 
+  // V60_SOLO_DOCUMENTOS=1 omite las secciones B y C (lista de preparación y política, que tardan minutos en la base E2E) para iterar sobre los documentos heredados.
+  if (!process.env.V60_SOLO_DOCUMENTOS) {
   // ================= B: lista de preparación =================
   assert.equal((await call('/admin/readiness', { token: dts.token, expect: [403] })).status, 403);
   assert.equal((await call('/admin/readiness', { expect: [401, 403] })).status >= 401, true);
@@ -159,6 +161,8 @@ const blocked = (statement, pattern) => { let message = ''; try { sql(statement)
   await activate(restore, restoreReport.fingerprint, 'Restauración de las políticas E2E ' + MARK, restoreReport.requiresAcknowledgement);
   assert.equal(activeNurse(), snapshot.length); pass('las políticas E2E originales se restauraron');
 
+  }
+
   // ================= D: documentos heredados =================
   const carrierOwner = await createUser(admin, 'DTS', 'v60c');
   const carrier = await newCredential(carrierOwner, 'MEDICO', 'Documento E2E');
@@ -176,6 +180,9 @@ const blocked = (statement, pattern) => { let message = ''; try { sql(statement)
   const l1View = await view(c1.id); const l1Doc = l1View.documents.find((d) => d.id === l1);
   assert.equal(l1Doc.origin, 'ANTERIOR_V59'); assert.equal(l1Doc.scanStatus, 'LEGADO_SIN_ANALISIS'); assert.equal(l1Doc.sha256, null); assert.match(l1Doc.restriction, /V59/);
   assert.equal(l1View.documentStatus, 'LEGADO_SIN_ANALISIS');
+  const exposed = JSON.stringify(l1View);
+  assert.ok(!exposed.includes(cleanKey) && !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf/.test(exposed), 'la respuesta no expone la clave ni la ruta privada del archivo');
+  assert.ok(!/\/data\/documents|clave_archivo/i.test(JSON.stringify(status)) && !JSON.stringify(status).includes('clamav'), 'el estado del analizador no expone rutas ni el nombre interno del servicio');
   const denied = await call(`/professional-credential-documents/${l1}`, { token: admin, expect: [409] }); assert.equal(denied.data.code, 'DOCUMENTO_NO_DISPONIBLE'); assert.match(denied.data.error, /V59/);
   assert.equal((await decide(c1.id, 'VERIFICADA', { notes: 'x', confirmsSufficiency: true }, [409])).data.code, 'DOCUMENTACION_NO_LIMPIA');
   assert.equal((await call(`/professional-credential-documents/${l1}/rescan`, { method: 'POST', token: admin, expect: [409] })).data.code, 'DOCUMENTO_HEREDADO', 'un heredado se regulariza; no se reanaliza a ciegas');

@@ -15,7 +15,10 @@ const base = (process.env.POLICY_API_BASE || E2E_BASE).replace(/\/$/, "");
 const [command, file] = process.argv.slice(2);
 const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const flag = (name) => process.argv.includes(`--${name}`);
-const fail = (message) => { console.error(message); process.exit(2); };
+// process.exit() con conexiones HTTP todavía cerrándose provoca en Node/Windows un «Assertion failed: UV_HANDLE_CLOSING» y un código de salida 0xC0000409: después de la red sólo se fija process.exitCode.
+class Failure extends Error {}
+const fail = (message) => { if (started) throw new Failure(message); console.error(message); process.exit(2); };
+let started = false;
 
 if (!["validate", "simulate", "activate"].includes(command) || !file) fail("Uso: politicas-habilitacion.cjs <validate|simulate|activate> <propuesta.json> [opciones]");
 let proposal;
@@ -41,6 +44,7 @@ async function post(endpoint, body, bearer) {
 }
 
 (async () => {
+  started = true;
   const bearer = await token();
   if (command === "simulate") {
     const { status, data } = await post("/credential-policies/simulation", proposal, bearer);
@@ -52,7 +56,8 @@ async function post(endpoint, body, bearer) {
     for (const r of data.plan) console.log(`  ${r.roleCode}: ${r.proposed} propuesta(s), ${r.keep} sin cambios, ${r.create} alta(s), ${r.retire} baja(s)${r.eligibleAfterActivation ? "" : " — SIN POLÍTICA: no elegible"}`);
     for (const p of data.people) console.log(`  Personas ${p.roleCode}: seguirían elegibles ${p.stayEligible}, pasarían a no elegibles ${p.becomeIneligible}, pasarían a elegibles ${p.becomeEligible}, seguirían no elegibles ${p.stayIneligible}`);
     console.log(`  Vuelos abiertos examinados: ${data.flightsExamined} · nuevas incompatibilidades: ${data.newIncompatibilities} · resueltas: ${data.resolvedIncompatibilities}`);
-    process.exit(data.canActivate ? 0 : 1);
+    process.exitCode = data.canActivate ? 0 : 1;
+    return;
   }
   // activate
   const fingerprint = arg("fingerprint"), approval = arg("approval");
@@ -61,4 +66,4 @@ async function post(endpoint, body, bearer) {
   const { status, data } = await post("/credential-policies/activation", { proposal, approvedFingerprint: fingerprint, approvalReference: approval, acknowledgeIncompatibilities: flag("acknowledge") }, bearer);
   if (status !== 200) fail(`La activación fue rechazada (HTTP ${status}): ${data.code || ""} ${data.message || JSON.stringify(data).slice(0, 400)}`);
   console.log(data.changed ? `Lote ${data.batchId}: ${data.created} alta(s), ${data.retired} baja(s), ${data.kept} sin cambios.` : "La política propuesta ya estaba activa: sin cambios.");
-})().catch((e) => fail(e.message));
+})().catch((e) => { console.error(e instanceof Failure ? e.message : "Error inesperado: " + e.message); process.exitCode = 2; });
