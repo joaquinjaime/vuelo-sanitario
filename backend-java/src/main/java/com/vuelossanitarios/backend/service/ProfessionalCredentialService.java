@@ -78,6 +78,15 @@ public class ProfessionalCredentialService {
  private boolean externalCheckPassed(ProfessionalCredential c){return checks.findFirstByCredentialIdOrderByIdDesc(c.getId()).filter(k->ExternalCredentialCheck.MATCH.equals(k.result)&&Objects.equals(k.numberChecked,c.number)).isPresent();}
  /** La fecha de vencimiento incluye todo el día local. La salida es el hito exigido por la regla operativa existente. */
  public record Assessment(boolean eligible,String code,String message,LocalDate expires){}
+ private static final Object POLICY_CACHE=new Object();
+ /** Políticas activas de la función, leídas una sola vez por transacción: listar cientos de candidatos no repite la misma consulta, y dentro de una transacción la lectura ya era consistente. */
+ @SuppressWarnings("unchecked") private List<CredentialPolicy> activePolicies(String role){
+  if(!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())return policies.findActiveByRole(role);
+  Map<String,List<CredentialPolicy>> cache=(Map<String,List<CredentialPolicy>>)org.springframework.transaction.support.TransactionSynchronizationManager.getResource(POLICY_CACHE);
+  if(cache==null){cache=new HashMap<>();org.springframework.transaction.support.TransactionSynchronizationManager.bindResource(POLICY_CACHE,cache);
+   org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){@Override public void afterCompletion(int status){org.springframework.transaction.support.TransactionSynchronizationManager.unbindResourceIfPossible(POLICY_CACHE);}});}
+  return cache.computeIfAbsent(role,policies::findActiveByRole);
+ }
  public Assessment assess(User u,String role,LocalDate on){return assess(u,role,on,CredentialSufficiency.Context.ANY);}
  public Assessment assess(User u,String role,LocalDate on,CredentialSufficiency.Context context){
   if(u.getPerson()==null)return new Assessment(false,"HABILITACION_AUSENTE","No tiene habilitación profesional para esta función",null);
@@ -85,7 +94,7 @@ public class ProfessionalCredentialService {
   List<ProfessionalCredential> all=credentials.findByPersonIdOrderByIdDesc(u.getPerson().getId()).stream().filter(c->role.equals(c.role.getCodigo())).toList();
   List<ProfessionalCredential> currents=all.stream().filter(c->current(c,date)).toList();
   if(!currents.isEmpty()){
-   var outcome=CredentialSufficiency.evaluate(policies.findActiveByRole(role),currents,context,this::externalCheckPassed);
+   var outcome=CredentialSufficiency.evaluate(activePolicies(role),currents,context,this::externalCheckPassed);
    if(!outcome.sufficient())return new Assessment(false,outcome.code(),outcome.message(),null);
    ProfessionalCredential c=outcome.credential();String restriction=c.restrictions==null?"":" Restricciones registradas: "+c.restrictions;
    if(c.expires!=null&&!c.expires.isAfter(today().plusDays(30)))return new Assessment(true,"HABILITACION_POR_VENCER","La habilitación vence el "+c.expires+"."+restriction,c.expires);

@@ -211,7 +211,9 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
     const scan = [...(await ok('/audit?size=100&page=0', { token: admin })).items, ...sensitiveTypes.items, ...userEvents.items, ...f1Events.map((e) => ({ id: e.id }))];
     let scanned = 0; for (const e of scan) { const text = JSON.stringify((await detailOf(admin, e.id)).data); scanned++;
       for (const leak of ['$2a$', '$2b$', 'eyJ', PASSWORD, DX, 'passwordHash', 'tokenHash']) assert.ok(!text.includes(leak), `evento ${e.id} filtra ${leak}`); }
-    const credEvent = (await detailOf(admin, sensitiveTypes.items[0].id)).data; const numberChange = credEvent.changes.find((c) => c.field === 'number');
+    // El evento más reciente de habilitaciones puede ser un aviso de vencimiento o una consulta externa (sin número): se examina una alta, que sí lo registra.
+    const creations = await ok('/audit?entityType=PROFESSIONAL_CREDENTIAL&operation=CREATE&size=100', { token: admin }); assert.ok(creations.total >= 1);
+    const credEvent = (await detailOf(admin, creations.items[0].id)).data; const numberChange = credEvent.changes.find((c) => c.field === 'number');
     assert.ok(numberChange.masked && numberChange.after.startsWith('••••') && !/E2E-\d{3,}/.test(numberChange.after), 'número de habilitación enmascarado: ' + numberChange.after);
     const fullAudit = JSON.stringify(await ok(`/audit/flights/${F1}?size=100`, { token: ops.token }));
     assert.ok(!fullAudit.includes(DX) && !fullAudit.includes('Obs-' + MARK), 'ni siquiera Operaciones recibe el contenido clínico por la auditoría');
