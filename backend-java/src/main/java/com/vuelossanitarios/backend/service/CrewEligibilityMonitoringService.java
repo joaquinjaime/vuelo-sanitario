@@ -27,6 +27,10 @@ public class CrewEligibilityMonitoringService {
   for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(event.userId()))ids.add(c.getFlight().getId());
   for(Long id:ids)flights.findById(id).ifPresent(f->review(f,event.userId()));
  }
+ /** Una política creada o dada de baja puede cambiar la suficiencia de cualquier persona: se revisan todos los vuelos abiertos. */
+ @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
+ @Transactional(propagation=Propagation.REQUIRES_NEW)
+ public void policyChanged(CredentialPolicyService.PolicyChanged event){sweep();}
  @Scheduled(fixedDelayString="${app.crew-eligibility.sweep-ms:3600000}",initialDelayString="${app.crew-eligibility.sweep-initial-ms:60000}")
  @Transactional
  public void sweep(){for(Flight f:flights.findByEstadoVueloCodigoIn(List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION","PLANIFICADO","EN_CURSO")))review(f,null);}

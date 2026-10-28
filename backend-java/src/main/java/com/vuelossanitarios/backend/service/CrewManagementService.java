@@ -37,7 +37,9 @@ public class CrewManagementService {
  public Eligibility evaluate(Flight flight,User member,String code,boolean availability){
   return evaluateOn(flight,member,code,flight.getFechaPlanificadaSalida()==null?null:flight.getFechaPlanificadaSalida().toLocalDate(),availability);
  }
- public Eligibility evaluateOn(Flight flight,User member,String code,java.time.LocalDate on,boolean availability){
+ public Eligibility evaluateOn(Flight flight,User member,String code,java.time.LocalDate on,boolean availability){return evaluateOn(flight,member,code,on,availability,null);}
+ /** {@code aircraft} sustituye a la del vuelo cuando la operación que se evalúa la está cambiando (asignación de recursos, cambio de aeronave). */
+ public Eligibility evaluateOn(Flight flight,User member,String code,java.time.LocalDate on,boolean availability,com.vuelossanitarios.backend.domain.catalog.Aircraft aircraft){
   if(!active(member))return denied("CUENTA_INACTIVA","La cuenta del tripulante no está activa");
   if(!qualifications.existsByUserIdAndRoleCodigo(member.getId(),code))return denied("CLASIFICACION_INCOMPATIBLE","Falta la clasificación administrativa para esta función");
   if("COMANDANTE".equals(code)){
@@ -45,10 +47,16 @@ public class CrewManagementService {
    if(profile==null||profile.getLicenseNumber()==null||profile.getLicenseNumber().isBlank()||member.getUserRoles().stream().noneMatch(r->"COMANDANTE".equals(r.getRole().getCodigo())))return denied("PERFIL_COMANDANTE_INCOMPLETO","El comandante requiere rol de acceso y licencia registrada");
    if(commanderAccess!=null&&commanderAccess.isBlocked(member.getId()))return denied("INFORME_FINAL_VENCIDO","El comandante tiene informes finales vencidos");
   }
-  var credential=credentials.assess(member,code,on);
+  var credential=credentials.assess(member,code,on,context(flight,aircraft));
   if(!credential.eligible())return new Eligibility(false,credential.code(),credential.message(),credential.expires());
   if(availability&&flight.getId()!=null){Optional<Flight> clash=conflictingFlight(flight,member);if(clash.isPresent())return denied("CONFLICTO_ASIGNACION","Tiene el vuelo "+clash.get().getCodigo()+" comprometido en un horario incompatible");}
   return new Eligibility(true,credential.code(),credential.message(),credential.expires());
+ }
+ /** Contexto operativo de la política de suficiencia: tipo de vuelo y categoría de la aeronave. Sin vuelo la consulta es informativa. */
+ static CredentialSufficiency.Context context(Flight flight,com.vuelossanitarios.backend.domain.catalog.Aircraft aircraft){
+  if(flight==null)return CredentialSufficiency.Context.ANY;
+  var plane=aircraft!=null?aircraft:flight.getAircraft();
+  return CredentialSufficiency.Context.of(flight.getTipoVuelo()==null?null:flight.getTipoVuelo().getCodigo(),plane==null?null:plane.getTipo());
  }
  public CrewManagementService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewRoleRepository r,CrewQualificationRepository q,AuditService a,ProfessionalCredentialService p,NotificationService n,Clock clock){flights=f;crews=c;users=u;roles=r;qualifications=q;audit=a;credentials=p;notifications=n;this.clock=clock;}
  private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}

@@ -60,7 +60,7 @@ class CrewClassificationConcurrencyIntegrationTest {
  private long rows(Long userId,String code){return tx.execute(st->qualifications.findAllByUserId(userId).stream().filter(q->q.getRole().getCodigo().equals(code)).count());}
  private long vigentes(Long userId,String code){return tx.execute(st->qualifications.findAllByUserId(userId).stream().filter(q->q.getRole().getCodigo().equals(code)&&q.isVigente()).count());}
 
- @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
+ @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   Province p=new Province();p.setCodigoOficial("CL1");p.setNombre("Provincia clasificación");p.setActivo(true);province=provinces.save(p);

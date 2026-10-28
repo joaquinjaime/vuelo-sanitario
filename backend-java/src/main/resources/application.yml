@@ -47,6 +47,26 @@ app:
     documents-directory: ${DOCUMENTS_DIRECTORY:./data/documents}
     max-pdf-bytes: ${MAX_PDF_BYTES:10485760}
     document-lock-seconds: ${DOCUMENT_LOCK_SECONDS:300}
+  # Análisis antimalware de la documentación de habilitaciones (clamd por TCP). Sin analizador configurado ningún documento puede aprobarse: falla de forma segura.
+  antimalware:
+    enabled: ${APP_ANTIMALWARE_ENABLED:false}
+    host: ${APP_ANTIMALWARE_HOST:}
+    port: ${APP_ANTIMALWARE_PORT:3310}
+    timeout-ms: ${APP_ANTIMALWARE_TIMEOUT_MS:20000}
+    retry-ms: ${APP_ANTIMALWARE_RETRY_MS:300000}
+    retry-initial-ms: ${APP_ANTIMALWARE_RETRY_INITIAL_MS:120000}
+    retry-after-seconds: ${APP_ANTIMALWARE_RETRY_AFTER_SECONDS:60}
+  # Avisos preventivos de vencimiento de habilitaciones.
+  credential-expiry:
+    enabled: ${APP_CREDENTIAL_EXPIRY_ENABLED:true}
+    notice-days: ${APP_CREDENTIAL_EXPIRY_NOTICE_DAYS:60,30,7,0}
+    catch-up-days: ${APP_CREDENTIAL_EXPIRY_CATCH_UP_DAYS:30}
+    sweep-ms: ${APP_CREDENTIAL_EXPIRY_SWEEP_MS:3600000}
+    sweep-initial-ms: ${APP_CREDENTIAL_EXPIRY_SWEEP_INITIAL_MS:90000}
+  # Retención de documentación personal: no existe política aprobada, por lo que no hay ninguna purga automática. Este indicador sólo se informa.
+  retention:
+    credential-documents:
+      purge-enabled: false
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

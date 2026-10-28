@@ -63,7 +63,7 @@ class GeographicIntegrityIntegrationTest {
  private Province newProvince(String name){int n=next();Province p=new Province();p.setCodigoOficial("G"+n);p.setNombre(name+n);p.setActivo(true);return provinces.save(p);}
  private Locality newLocality(Province p){int n=next();Locality l=new Locality();l.setCodigoOficial("LG"+n);l.setNombre("Localidad"+n);l.setProvincia(p);l.setActivo(true);return localities.save(l);}
 
- @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
+ @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   province=newProvince("Provincia integridad");

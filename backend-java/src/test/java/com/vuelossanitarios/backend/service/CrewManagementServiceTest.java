@@ -52,7 +52,7 @@ class CrewManagementServiceTest {
   flight.setComandante(commander);
   when(flights.lockById(1L)).thenReturn(Optional.of(flight));when(flights.findById(1L)).thenReturn(Optional.of(flight));
   when(users.lockById(2L)).thenReturn(Optional.of(member));when(users.lockById(9L)).thenReturn(Optional.of(commander));when(users.findById(3L)).thenReturn(Optional.of(actor));
-  when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
+  when(credentials.assess(any(),eq("MEDICO"),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
   when(roles.findByCodigo("MEDICO")).thenReturn(Optional.of(medico));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(true);
   when(crews.saveAndFlush(any(FlightCrew.class))).thenAnswer(i->i.getArgument(0));
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(1L)).thenReturn(List.of(row(100L,flight,commander,commanderRole)));
@@ -105,8 +105,8 @@ class CrewManagementServiceTest {
  @Test void deactivatedOrPendingUsersAndUnqualifiedUsersAreRejected(){
   member.setActivo(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
   member.setActivo(true);member.setEstadoCuenta("PENDIENTE_ACTIVACION");assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
-  member.setEstadoCuenta("ACTIVO");when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(false,"HABILITACION_AUSENTE","Sin habilitación",null));assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
-  when(credentials.assess(any(),eq("MEDICO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
+  member.setEstadoCuenta("ACTIVO");when(credentials.assess(any(),eq("MEDICO"),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(false,"HABILITACION_AUSENTE","Sin habilitación",null));assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
+  when(credentials.assess(any(),eq("MEDICO"),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));when(qualifications.existsByUserIdAndRoleCodigo(2L,"MEDICO")).thenReturn(false);assertThrows(ApiException.class,()->service.assign(1L,new Crew(2L,"MEDICO"),3L));
   verify(crews,never()).saveAndFlush(any());
  }
  @Test void startedFinishedOrCancelledFlightsDoNotAllowCrewChanges(){
@@ -145,7 +145,7 @@ class CrewManagementServiceTest {
  @Test void replacementClosesTheOldAssignmentAndCreatesANewOneKeepingBothAsHistory(){
   User newcomer=user(4L,"otro");CrewRole enfermero=new CrewRole();enfermero.setCodigo("ENFERMERO");enfermero.setNombre("Enfermero");
   FlightCrew existing=row(101L,flight,member,medico);when(crews.findById(101L)).thenReturn(Optional.of(existing));
-  when(users.lockById(4L)).thenReturn(Optional.of(newcomer));when(roles.findByCodigo("ENFERMERO")).thenReturn(Optional.of(enfermero));when(qualifications.existsByUserIdAndRoleCodigo(4L,"ENFERMERO")).thenReturn(true);when(credentials.assess(any(),eq("ENFERMERO"),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
+  when(users.lockById(4L)).thenReturn(Optional.of(newcomer));when(roles.findByCodigo("ENFERMERO")).thenReturn(Optional.of(enfermero));when(qualifications.existsByUserIdAndRoleCodigo(4L,"ENFERMERO")).thenReturn(true);when(credentials.assess(any(),eq("ENFERMERO"),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(1L)).thenReturn(List.of(row(100L,flight,commander,commanderRole),existing));
   service.replace(1L,101L,new Crew(4L,"ENFERMERO"),3L);
   assertEquals("REEMPLAZO",existing.getMotivoBaja());assertNotNull(existing.getFechaBaja());

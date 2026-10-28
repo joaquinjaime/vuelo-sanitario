@@ -87,6 +87,13 @@
             <version>9.0.42</version>
         </dependency>
 
+        <!-- Análisis estructural de PDF (estructura, cifrado y contenido activo) antes de aceptar documentación de habilitaciones -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+
         <!-- Envío de correo saliente (verificación de correos); sólo se activa con app.mail.enabled=true -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

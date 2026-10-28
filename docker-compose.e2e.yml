@@ -45,11 +45,38 @@ services:
       # Plazos cortos sólo para las pruebas: el intervalo de reenvío real es de 60 s; el límite por correo (5 por día) se conserva para probarlo.
       EMAIL_VERIFICATION_RESEND_SECONDS: 2
       EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
+      APP_ANTIMALWARE_ENABLED: ${E2E_ANTIMALWARE_ENABLED:-false}
+      APP_ANTIMALWARE_HOST: clamav
+      APP_ANTIMALWARE_TIMEOUT_MS: 60000
+      APP_ANTIMALWARE_RETRY_MS: 3600000
+      APP_ANTIMALWARE_RETRY_INITIAL_MS: 3600000
+      APP_ANTIMALWARE_RETRY_AFTER_SECONDS: 1
+      APP_CREDENTIAL_EXPIRY_SWEEP_MS: 3600000
+      APP_CREDENTIAL_EXPIRY_SWEEP_INITIAL_MS: 3600000
     depends_on:
       mailbox:
         condition: service_started
     ports:
       - "18080:8080"
+
+  # Analizador antimalware REAL (motor ClamAV/clamd) para las pruebas de documentación de habilitaciones. Perfil opcional.
+  # Usa una base de firmas mínima (sólo EICAR): prueba la integración con poca memoria y sin descargas, no la cobertura antimalware.
+  # Se levanta con `--profile antimalware` y se activa en el backend con E2E_ANTIMALWARE_ENABLED=true.
+  clamav:
+    profiles: ["antimalware"]
+    image: clamav/clamav:1.4.6_base
+    entrypoint: ["clamd", "--foreground", "--config-file=/etc/clamav-e2e/clamd.conf"]
+    mem_limit: ${E2E_CLAMAV_MEM_LIMIT:-384m}
+    volumes:
+      - ./docker/clamav/e2e:/etc/clamav-e2e:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [internal]
+    restart: unless-stopped
 
   mailbox:
     image: axllent/mailpit:latest
