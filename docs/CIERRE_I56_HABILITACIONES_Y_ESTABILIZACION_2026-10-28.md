@@ -54,7 +54,7 @@ Hallazgo de rendimiento adicional (corregido): la evaluación de hasta cientos d
 
 ## F. Git y entornos
 
-* Commits locales de esta fase: `3bec7af`, `a87957b`, `211866c`, `0d9ff04` (más el de documentación final). Sin push.
+* Commits locales de esta fase: `3bec7af`, `a87957b`, `211866c`, `0d9ff04`, `6448983`. Sin push.
 * Flyway: base aislada V59; base habitual V47 (sin tocar); candidatas V48–V59 sin modificaciones retroactivas (V1–V55 idénticas a `release/v55-integracion`).
 * Contenedores: stack aislado reconstruido (backend y frontend) + `clamav` (E2E, 384 MiB máx.); stack habitual sin cambios (backend/frontend/SQL con imágenes anteriores).
 * Sin desplegar: todo lo de V56–V59 y de esta fase permanece en la copia aislada.
