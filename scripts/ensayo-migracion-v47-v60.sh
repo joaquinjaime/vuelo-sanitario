@@ -70,7 +70,7 @@ sed -i "/^APP_ANTIMALWARE_/d" "$W/ensayo.env"; printf 'APP_ANTIMALWARE_ENABLED=t
 APP_ANTIMALWARE_HOST=clamav
 APP_ANTIMALWARE_TIMEOUT_MS=15000
 ' >> "$W/ensayo.env"
-docker run -d --name "$BK" --network vuelos-sanitarios-e2e_internal --env-file "$W/ensayo.env" -e JAVA_TOOL_OPTIONS=-Xmx400m -p 127.0.0.1:18090:8080 -v vuelos-sanitarios-ensayo_documents:/data/documents vuelos-sanitarios-e2e-backend:latest >/dev/null
+docker run -d --name "$BK" --network vuelos-sanitarios-e2e_internal --env-file "$W/ensayo.env" -e JAVA_TOOL_OPTIONS=-Xmx400m -p 127.0.0.1:18090:8080 -v vuelos-sanitarios-ensayo_documents:/data/documents ${ENSAYO_V60_IMAGE:-vuelos-sanitarios-e2e-backend:latest} >/dev/null
 wait_started
 echo "== 7. Prueba funcional"
 node scripts/ensayo-funcional-v60.cjs 2>&1 | tee "$W/logs/funcional.log" | tail -16 | cut -c1-400

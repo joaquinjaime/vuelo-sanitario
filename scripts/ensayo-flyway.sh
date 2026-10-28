@@ -30,7 +30,7 @@ MSYS_NO_PATHCONV=1 docker run --rm --name "vuelos-sanitarios-ensayo-flyway-$$-$R
   -e MIGRATION_JDBC_URL='jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_ensayo_v47;encrypt=true;trustServerCertificate=true' \
   -e MIGRATION_SQL_USERNAME="$mig_user" -e MIGRATION_JDBC_PASSWORD -e MIGRATION_LOCATION='classpath:db/migration' \
   -v "$(cygpath -w "$m2")":/m2:ro -v "$(cygpath -w "$work")":/runner:ro \
-  --entrypoint java vuelos-sanitarios-e2e-backend:latest -Xmx200m -cp "/runner:/runner/classes${cp_in}" FlywayMigrationRunner "$target" $mode
+  --entrypoint java ${ENSAYO_V60_IMAGE:-vuelos-sanitarios-e2e-backend:latest} -Xmx200m -cp "/runner:/runner/classes${cp_in}" FlywayMigrationRunner "$target" $mode
 }
 for attempt in 1 2 3 4; do
   rc=0; out=$(run_flyway 2>&1) || rc=$?
