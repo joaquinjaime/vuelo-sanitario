@@ -40,6 +40,10 @@ Ver el informe de cierre y `scripts/e2e-roles-clasificaciones.cjs`: retiro contr
 
 Por lo anterior `habilitaciones_profesionales` y `documentos_habilitacion` permanecen **parciales**.
 
-## 6. Evidencia
+## 6. Evidencia (2026-10-27, base aislada en Flyway V58; la habitual sigue en V47)
 
-Se completa al cierre (sección siguiente del informe y matriz).
+* **Backend:** `mvn test` 519 pruebas, 0 fallos (antes 506): ciclo de la clasificación y comandante inelegible (unitarias), `CrewClassificationConcurrencyIntegrationTest` (5, con hilos reales en H2) y aceptación del comandante.
+* **Frontend:** 227 pruebas, 0 fallos (antes 226); `npm run build` correcto.
+* **E2E reales:** `e2e-roles-clasificaciones` (8 bloques en SQL Server: catálogo y permisos, ciclo con historial, restricciones SQL, comandante por todas las vías, negativos, uso protegido, 5 familias de carreras con ambos órdenes y vuelo sanitario) y `e2e-roles-clasificaciones-ui` (5 bloques en Chrome). Carreras: retiro/asignación, retiro/comandante, dos retiros, reemplazo simultáneo y revocación/asignación; en todas una sola operación incompatible confirma.
+* **Suite completa:** el primer intento (44 scripts) quedó cortado a mitad de camino —se interrumpió el proceso en segundo plano al cancelarse una espera— tras 38 scripts aprobados y 1 fallo (`e2e-contactos-tripulacion`: una aserción obsoleta que fijaba «ninguna migración posterior a V57»; corregida y repetida: 8 bloques aprobados). Los 6 scripts siguientes se ejecutaron después en dos tandas (el segundo corte fue de nuevo del proceso en segundo plano, no del sistema) y los 8 restantes pasaron. Por lo tanto **no hubo una única ejecución continua y limpia de los 44 scripts**: cada uno terminó aprobado en una ejecución completa propia.
+* **Defecto real corregido:** el comandante no se evaluaba con clasificación y habilitación al asignarlo directamente, al crear/replanificar un vuelo operativo ni al aceptar.
