@@ -23,6 +23,7 @@ const SUITE = [
   'e2e-documentos', 'e2e-documentos-integracion-ui',
   'e2e-rutas-revision', 'e2e-rutas-revision-ui', 'e2e-rutas-estabilizacion',
   'e2e-geografia-catalogos', 'e2e-geografia-integridad', 'e2e-i53-operativo-ui', 'e2e-sanitario-replanificacion-ui',
+  'e2e-perfiles-comandante', 'e2e-roles-clasificaciones', 'e2e-roles-clasificaciones-ui',
 ];
 const filter = process.argv[2];
 const results = [];
