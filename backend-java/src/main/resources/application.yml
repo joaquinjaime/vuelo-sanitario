@@ -32,6 +32,8 @@ spring:
 
 # Configuracion propia de JWT (se usa mas adelante en la capa de seguridad)
 app:
+  # Entorno: desarrollo | pruebas | produccion. En produccion el analisis antimalware exige una base de firmas completa y reciente.
+  environment: ${APP_ENVIRONMENT:desarrollo}
   # DATETIME2 de solicitudes se interpreta como hora civil de esta zona, nunca como reloj del navegador o SQL Server.
   business-time-zone: ${BUSINESS_TIME_ZONE:America/Argentina/Tucuman}
   jwt:
@@ -56,13 +58,18 @@ app:
     retry-ms: ${APP_ANTIMALWARE_RETRY_MS:300000}
     retry-initial-ms: ${APP_ANTIMALWARE_RETRY_INITIAL_MS:120000}
     retry-after-seconds: ${APP_ANTIMALWARE_RETRY_AFTER_SECONDS:60}
+    # Vacio = se exige solo en produccion. true/false lo fuerza. Una base minima (E2E) nunca se acepta como proteccion productiva.
+    require-full-database: ${APP_ANTIMALWARE_REQUIRE_FULL_DATABASE:}
+    max-signature-age-days: ${APP_ANTIMALWARE_MAX_SIGNATURE_AGE_DAYS:7}
   # Avisos preventivos de vencimiento de habilitaciones.
   # Revisión de los vuelos abiertos tras crear o dar de baja una política de suficiencia (asíncrona y coalescida).
   crew-eligibility:
     policy-review-enabled: ${APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED:true}
   credential-expiry:
     enabled: ${APP_CREDENTIAL_EXPIRY_ENABLED:true}
+    # 60/30/7/0 es una PROPUESTA inicial, no un plazo normativo: hasta que se apruebe (approved=true) la lista de preparacion la informa como pendiente.
     notice-days: ${APP_CREDENTIAL_EXPIRY_NOTICE_DAYS:60,30,7,0}
+    approved: ${APP_CREDENTIAL_EXPIRY_APPROVED:false}
     catch-up-days: ${APP_CREDENTIAL_EXPIRY_CATCH_UP_DAYS:30}
     sweep-ms: ${APP_CREDENTIAL_EXPIRY_SWEEP_MS:3600000}
     sweep-initial-ms: ${APP_CREDENTIAL_EXPIRY_SWEEP_INITIAL_MS:90000}

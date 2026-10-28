@@ -64,7 +64,7 @@ public class CredentialDocumentService {
     if(Boolean.TRUE.equals(replaced.retentionHold))throw conflict("DOCUMENTO_BAJO_BLOQUEO_CONSERVACION","El documento a reemplazar está bajo bloqueo de conservación");}
    String before=credentials.snap(c);String key=storage.storeValidatedPdfBytes(bytes);
    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCompletion(int result){if(result!=STATUS_COMMITTED)storage.deleteQuietly(key);}});
-   CredentialDocument d=new CredentialDocument();d.credential=c;d.key=key;d.name=fileName;d.uploader=users.findById(actor).orElseThrow();d.uploadedAt=now();d.purpose=documentPurpose;d.sha256=hash;d.sizeBytes=(long)bytes.length;
+   CredentialDocument d=new CredentialDocument();d.credential=c;d.key=key;d.name=fileName;d.uploader=users.findById(actor).orElseThrow();d.uploadedAt=now();d.purpose=documentPurpose;d.sha256=hash;d.hashMoment=CredentialDocument.HASH_AT_UPLOAD;d.sizeBytes=(long)bytes.length;
    d.version=documents.findByCredentialIdOrderByIdDesc(credentialId).stream().mapToInt(x->x.version).max().orElse(0)+1;d.replacesId=replaced==null?null:replaced.getId();d.scanStatus=CredentialDocument.QUARANTINE;documents.saveAndFlush(d);
    if(replaced!=null){replaced.retiredAt=now();replaced.retiredBy=d.uploader;replaced.retireReason="Reemplazado por la versión "+d.version;documents.saveAndFlush(replaced);}
    audit.record(null,d.uploader,"CREDENTIAL_DOCUMENT",d.getId(),"CREATE",null,json("credentialId",String.valueOf(credentialId),"version",String.valueOf(d.version),"purpose",documentPurpose,"sha256",hash));
@@ -76,8 +76,13 @@ public class CredentialDocumentService {
   return credentials.find(credentialId);
  }
 
- /** Reintenta el análisis de un documento en cuarentena, con error de análisis o anterior a V59. Es idempotente. */
- public ProfessionalCredentialService.View rescan(Long documentId,Long actor){CredentialDocument d=document(documentId);scan(documentId,actor);return credentials.find(d.credential.getId());}
+ /** Reintenta el análisis de un documento en cuarentena o con error de análisis. Es idempotente. Los anteriores a V59 se regularizan aparte. */
+ public ProfessionalCredentialService.View rescan(Long documentId,Long actor){
+  CredentialDocument d=document(documentId);
+  // Un heredado no se reanaliza «a ciegas»: su regularización valida la estructura, rotula la huella como posterior, audita y, si lo rechaza, devuelve a revisión la verificación que sostenía.
+  if(d.isLegacy())throw conflict("DOCUMENTO_HEREDADO","Un documento anterior a V59 se regulariza (calcula su huella y lo analiza); use «Regularizar»");
+  scan(documentId,actor);return credentials.find(d.credential.getId());
+ }
 
  private void scan(Long documentId,Long actor){
   record Pending(String key,String previous){}
@@ -93,7 +98,7 @@ public class CredentialDocumentService {
    String next=switch(outcome.status()){case CLEAN->CredentialDocument.CLEAN;case INFECTED->CredentialDocument.REJECTED;case ERROR->CredentialDocument.SCAN_ERROR;};
    boolean repeatedFailure=next.equals(d.scanStatus)&&CredentialDocument.SCAN_ERROR.equals(next);
    d.scanStatus=next;d.scannedAt=now();d.scanEngine=outcome.engine();d.scanDetail=outcome.detail()==null?null:outcome.detail().length()>500?outcome.detail().substring(0,500):outcome.detail();
-   if(content!=null&&d.sha256==null){d.sha256=sha256(content);d.sizeBytes=(long)content.length;}
+   if(content!=null&&d.sha256==null){d.sha256=sha256(content);d.sizeBytes=(long)content.length;d.hashMoment=CredentialDocument.HASH_AT_REGULARIZATION;}
    documents.saveAndFlush(d);
    if(repeatedFailure)return;
    audit.record(null,users.findById(who).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"SCAN",null,json("status",next,"engine",Objects.toString(outcome.engine(),""),"automatic",String.valueOf(actor==null)));
@@ -110,10 +115,10 @@ public class CredentialDocumentService {
   for(Long id:ids)try{scan(id,null);}catch(RuntimeException ignored){}
  }
 
- /** Descarga autenticada: sólo documentos limpios (o anteriores a V59 aún sin análisis) y con la huella íntegra; cada acceso se audita. */
+ /** Descarga autenticada: sólo documentos limpios (los anteriores a V59 deben regularizarse antes) y con la huella íntegra; cada acceso se audita. */
  @Transactional public Download download(Long documentId,Long actor){
   CredentialDocument d=document(documentId);
-  if(!CredentialDocument.CLEAN.equals(d.scanStatus)&&!CredentialDocument.LEGACY.equals(d.scanStatus))throw conflict("DOCUMENTO_NO_DISPONIBLE","El documento no superó el análisis antimalware y no puede descargarse");
+  if(!CredentialDocument.CLEAN.equals(d.scanStatus))throw conflict("DOCUMENTO_NO_DISPONIBLE",CredentialDocument.LEGACY.equals(d.scanStatus)?"Documento anterior a V59 sin análisis antimalware: regularícelo antes de descargarlo":"El documento no superó el análisis antimalware y no puede descargarse");
   byte[] data=storage.read(d.key).bytes();
   if(d.sha256!=null&&!d.sha256.equals(sha256(data))){independentTx.executeWithoutResult(st->audit.record(null,users.findById(actor).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"INTEGRITY_FAILURE",null,json("sha256",d.sha256)));throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,"INTEGRIDAD_DOCUMENTO","El documento almacenado no coincide con su huella registrada",Map.of());}
   audit.record(null,users.findById(actor).orElseThrow(),"CREDENTIAL_DOCUMENT",d.getId(),"DOWNLOAD",null,json("credentialId",String.valueOf(d.credential.getId())));
@@ -162,6 +167,10 @@ public class CredentialDocumentService {
    all.stream().filter(d->!CredentialDocument.CLEAN.equals(d.scanStatus)).count(),
    "No hay una política de retención aprobada: el sistema no purga documentos ni siquiera retirados o reemplazados. La decisión de plazos y obligaciones de conservación (incluida la Ley 25.326) debe adoptarse antes de operar con datos reales.");
  }
- public record AntimalwareStatus(boolean configured,String engine,boolean failSafe){}
- public AntimalwareStatus antimalwareStatus(){String engine=scannerEnabled?scanner.describe():null;return new AntimalwareStatus(scannerEnabled&&engine!=null,engine,true);}
+ /** {@code configured}: hay un analizador que responde y, si el entorno lo exige, con una base de firmas acreditada. Si no, todo documento queda en cuarentena. */
+ public record AntimalwareStatus(boolean configured,String engine,boolean failSafe,boolean accreditedDatabaseRequired,String signatureProblem){}
+ public AntimalwareStatus antimalwareStatus(){
+  String engine=scannerEnabled?scanner.describe():null;boolean required=scanner.requiresAccreditedDatabase();String problem=scannerEnabled&&engine!=null?scanner.signatureProblem():null;
+  return new AntimalwareStatus(scannerEnabled&&engine!=null&&(!required||problem==null),engine,true,required,problem);
+ }
 }

@@ -37,7 +37,8 @@ public class ProfessionalCredentialService {
    @Size(max=50) String aircraftCategory,Long jurisdictionId,@Size(max=1000) String restrictions){}
  public record Decision(@NotBlank @Size(max=4000) String notes,Boolean confirmsSufficiency,Boolean acceptsRestrictions){}
  public record ExternalCheckInput(@NotBlank @Size(max=20) String authority,LocalDateTime consultedAt,@NotBlank @Size(max=1000) String comparedData,@NotBlank @Size(max=20) String result,@Size(max=2000) String notes,Long evidenceDocumentId){}
- public record DocumentView(Long id,String name,String uploader,LocalDateTime uploadedAt,String purpose,int version,String sha256,Long sizeBytes,String scanStatus,String scanDetail,LocalDateTime scannedAt,boolean retired,LocalDateTime retiredAt,String retireReason,boolean retentionHold,String holdReason,Long replacesId){}
+ public record DocumentView(Long id,String name,String uploader,LocalDateTime uploadedAt,String purpose,int version,String sha256,Long sizeBytes,String scanStatus,String scanDetail,LocalDateTime scannedAt,boolean retired,LocalDateTime retiredAt,String retireReason,boolean retentionHold,String holdReason,Long replacesId,
+   String origin,String hashMoment,LocalDateTime regularizedAt,String regularizedBy,String restriction){}
  public record ExternalCheckView(Long id,String authority,String authorityUrl,LocalDateTime consultedAt,String responsible,String numberChecked,String comparedData,String result,String notes,Long evidenceDocumentId){}
  public record EligibilityView(boolean eligible,String code,String message){}
  public record View(Long id,Long personId,String roleCode,String type,String number,String issuer,LocalDate issued,LocalDate expires,boolean noExpiry,String status,LocalDateTime verifiedAt,String verifier,String notes,boolean current,List<DocumentView> documents,
@@ -88,13 +89,15 @@ public class ProfessionalCredentialService {
   return cache.computeIfAbsent(role,policies::findActiveByRole);
  }
  public Assessment assess(User u,String role,LocalDate on){return assess(u,role,on,CredentialSufficiency.Context.ANY);}
- public Assessment assess(User u,String role,LocalDate on,CredentialSufficiency.Context context){
+ public Assessment assess(User u,String role,LocalDate on,CredentialSufficiency.Context context){return assess(u,role,on,context,null);}
+ /** {@code rules} sustituye a las políticas activas para simular una configuración propuesta; null evalúa con las activas. No escribe nada. */
+ public Assessment assess(User u,String role,LocalDate on,CredentialSufficiency.Context context,List<CredentialPolicy> rules){
   if(u.getPerson()==null)return new Assessment(false,"HABILITACION_AUSENTE","No tiene habilitación profesional para esta función",null);
   LocalDate date=on==null?today():on;
   List<ProfessionalCredential> all=credentials.findByPersonIdOrderByIdDesc(u.getPerson().getId()).stream().filter(c->role.equals(c.role.getCodigo())).toList();
   List<ProfessionalCredential> currents=all.stream().filter(c->current(c,date)).toList();
   if(!currents.isEmpty()){
-   var outcome=CredentialSufficiency.evaluate(activePolicies(role),currents,context,this::externalCheckPassed);
+   var outcome=CredentialSufficiency.evaluate(rules!=null?rules:activePolicies(role),currents,context,this::externalCheckPassed);
    if(!outcome.sufficient())return new Assessment(false,outcome.code(),outcome.message(),null);
    ProfessionalCredential c=outcome.credential();String restriction=c.restrictions==null?"":" Restricciones registradas: "+c.restrictions;
    if(c.expires!=null&&!c.expires.isAfter(today().plusDays(30)))return new Assessment(true,"HABILITACION_POR_VENCER","La habilitación vence el "+c.expires+"."+restriction,c.expires);
@@ -112,7 +115,19 @@ public class ProfessionalCredentialService {
   }
   return new Assessment(false,"HABILITACION_AUSENTE","No tiene habilitación profesional para esta función",null);
  }
- static DocumentView documentView(CredentialDocument d){return new DocumentView(d.getId(),d.name,d.uploader.getUsername(),d.uploadedAt,d.purpose,d.version,d.sha256,d.sizeBytes,d.scanStatus,d.scanDetail,d.scannedAt,d.retiredAt!=null,d.retiredAt,d.retireReason,Boolean.TRUE.equals(d.retentionHold),d.holdReason,d.replacesId);}
+ static DocumentView documentView(CredentialDocument d){return new DocumentView(d.getId(),d.name,d.uploader.getUsername(),d.uploadedAt,d.purpose,d.version,d.sha256,d.sizeBytes,d.scanStatus,d.scanDetail,d.scannedAt,d.retiredAt!=null,d.retiredAt,d.retireReason,Boolean.TRUE.equals(d.retentionHold),d.holdReason,d.replacesId,
+   d.origin,d.hashMoment,d.regularizedAt,d.regularizedBy==null?null:d.regularizedBy.getUsername(),d.isActive()?restriction(d):null);}
+ /** Por qué un documento no puede descargarse ni sustentar una verificación; null si está limpio. Es la explicación que ve el administrador. */
+ static String restriction(CredentialDocument d){
+  return switch(d.scanStatus){
+   case CredentialDocument.CLEAN->null;
+   case CredentialDocument.LEGACY->"Documento anterior a V59, sin análisis antimalware ni huella verificable: permanece restringido hasta regularizarlo (se calcula su huella y se analiza)"+(d.scanDetail!=null&&d.regularizedAt!=null?". Último intento: "+d.scanDetail:"");
+   case CredentialDocument.QUARANTINE->"En cuarentena: pendiente de análisis antimalware";
+   case CredentialDocument.SCAN_ERROR->"El análisis antimalware no pudo completarse: permanece en cuarentena hasta repetirlo con éxito";
+   case CredentialDocument.REJECTED->"Rechazado por el análisis antimalware o por la validación estructural del PDF";
+   default->"Estado de análisis desconocido: restringido";
+  };
+ }
  /** Estado documental de la habilitación: lo pendiente o fallido bloquea; un documento rechazado no oculta que exista documentación limpia (el rechazado sigue visible en la lista). */
  private String documentStatus(List<CredentialDocument> active){
   if(active.isEmpty())return "SIN_DOCUMENTOS";

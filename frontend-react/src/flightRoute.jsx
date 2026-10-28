@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.
@@ -44,12 +44,15 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
   const [airports, setAirports] = useState([]), [airportQuery, setAirportQuery] = useState("");
   const [form, setForm] = useState(EMPTY), [note, setNote] = useState(""), [returnReason, setReturnReason] = useState("");
 
+  const latest = useRef(0);
   const load = async () => {
+    const mine = ++latest.current;
     try {
       const d = await api(`/flights/${flightId}/route`);
+      if (mine !== latest.current) return;
       if (!d || typeof d.estado !== "string" || !Array.isArray(d.versiones)) throw new Error("Respuesta de ruta inválida");
       setData(d); setForm(formOf(d.versiones[0])); setNote(""); setReturnReason(""); setError("");
-    } catch (e) { setError(e.message); }
+    } catch (e) { if (mine === latest.current) setError(e.message); }
   };
   useEffect(() => { load(); }, [flightId]);
   useEffect(() => {

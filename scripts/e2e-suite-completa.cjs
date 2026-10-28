@@ -37,9 +37,11 @@ const SUITE = [
   'e2e-geografia-catalogos', 'e2e-geografia-integridad', 'e2e-i53-operativo-ui', 'e2e-sanitario-replanificacion-ui',
   'e2e-perfiles-comandante', 'e2e-roles-clasificaciones', 'e2e-roles-clasificaciones-ui',
   'e2e-habilitaciones', 'e2e-habilitaciones-vuelos', 'e2e-habilitaciones-ui', 'e2e-tripulacion-actualizacion-ui',
+  // I-5.7: V60, procedimiento de políticas, documentos heredados, lista de preparación y antivirus con la exigencia de producción (este último recrea el backend E2E y lo restablece).
+  'e2e-politicas-documentos-v60', 'e2e-politicas-documentos-ui', 'e2e-antimalware-produccion',
 ];
 /** Tiempo máximo en minutos de los scripts que históricamente tardan más (el resto usa --timeout-min, 25 por defecto). */
-const LONG = { 'e2e-usuarios-aislado': 30, 'e2e-geografia-integridad': 40, 'e2e-i53-operativo-ui': 40, 'e2e-roles-clasificaciones': 35, 'e2e-roles-clasificaciones-ui': 35, 'e2e-habilitaciones': 35, 'e2e-habilitaciones-ui': 35, 'e2e-habilitaciones-vuelos': 45 };
+const LONG = { 'e2e-usuarios-aislado': 30, 'e2e-geografia-integridad': 40, 'e2e-i53-operativo-ui': 40, 'e2e-roles-clasificaciones': 35, 'e2e-roles-clasificaciones-ui': 35, 'e2e-habilitaciones': 35, 'e2e-habilitaciones-ui': 35, 'e2e-habilitaciones-vuelos': 45, 'e2e-politicas-documentos-v60': 40, 'e2e-politicas-documentos-ui': 40, 'e2e-antimalware-produccion': 30 };
 const API = process.env.E2E_API || 'http://127.0.0.1:18080';
 const LOGS = path.join(__dirname, 'e2e-logs');
 

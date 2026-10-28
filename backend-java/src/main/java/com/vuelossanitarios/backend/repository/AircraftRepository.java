@@ -20,4 +20,7 @@ public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
     boolean existsByMatriculaIgnoreCase(String matricula);
     boolean existsByMatriculaIgnoreCaseAndIdNot(String matricula, Long id);
     boolean existsByAeropuertoActualIdAndActivoTrue(Long aeropuertoId);
+    /** Tipos (categorías) de aeronave en uso y cuántas aeronaves activas tiene cada uno. */
+    @Query("select a.tipo,count(a) from Aircraft a where a.activo=true group by a.tipo order by a.tipo")
+    List<Object[]> countActiveByType();
 }

@@ -18,7 +18,9 @@ const RESULT = { COINCIDE: "Coincide", NO_COINCIDE: "No coincide", NO_ENCONTRADO
 const empty = { roleCode: "MEDICO", type: "", number: "", issuer: "", issued: "", expires: "", noExpiry: false, notes: "", aircraftCategory: "", jurisdictionId: "", restrictions: "" };
 const toForm = (c) => ({ roleCode: c.roleCode, type: c.type, number: c.number, issuer: c.issuer, issued: c.issued || "", expires: c.expires || "", noExpiry: c.noExpiry, notes: c.notes || "", aircraftCategory: c.aircraftCategory || "", jurisdictionId: c.jurisdictionId ? String(c.jurisdictionId) : "", restrictions: c.restrictions || "" });
 const payload = (f) => ({ ...f, issued: f.issued || null, expires: f.expires || null, aircraftCategory: f.aircraftCategory.trim() || null, jurisdictionId: f.jurisdictionId ? Number(f.jurisdictionId) : null, restrictions: f.restrictions.trim() || null });
-const canDownload = (d) => d.scanStatus === "LIMPIO" || d.scanStatus === "LEGADO_SIN_ANALISIS";
+// Sólo un documento con análisis antimalware limpio puede descargarse; uno anterior a V59 debe regularizarse primero.
+const canDownload = (d) => d.scanStatus === "LIMPIO";
+const HASH_MOMENT = { CARGA: "calculada al cargar", REGULARIZACION: "calculada en la regularización (no prueba integridad desde la carga original)" };
 
 function Badges({ c }) {
   const el = c.eligibility;
@@ -112,10 +114,13 @@ export function ProfessionalCredentials({ userId, notify }) {
       </div>
       <label>Motivo (retiro o bloqueo de conservación)<input value={docReason} onChange={(e) => setDocReason(e.target.value)} /></label>
       <ul>{current.documents.map((d) => <li key={d.id}>
-        v{d.version} · {d.name} · {d.purpose} · {SCAN[d.scanStatus] || d.scanStatus}{d.scanDetail ? ` (${d.scanDetail})` : ""} · {d.uploader} · {dt(d.uploadedAt)} · SHA-256 {d.sha256 ? d.sha256.slice(0, 12) + "…" : "sin huella (legado)"}
+        v{d.version} · {d.name} · {d.purpose} · {SCAN[d.scanStatus] || d.scanStatus}{d.scanDetail ? ` (${d.scanDetail})` : ""} · {d.uploader} · {dt(d.uploadedAt)} · SHA-256 {d.sha256 ? <>{d.sha256.slice(0, 12)}… <em>{HASH_MOMENT[d.hashMoment] || ""}</em></> : "sin huella (anterior a V59)"}
+        {d.origin === "ANTERIOR_V59" && <> · <strong>Documento anterior a V59</strong>{d.regularizedAt && <> (regularizado {dt(d.regularizedAt)} por {d.regularizedBy})</>}</>}
+        {!d.retired && d.restriction && <> · <span className="restriction">Restringido: {d.restriction}</span></>}
         {d.retired && <> · RETIRADO {dt(d.retiredAt)}: {d.retireReason}</>}{d.retentionHold && <> · BLOQUEO DE CONSERVACIÓN: {d.holdReason}</>}{" "}
         {canDownload(d) && <button type="button" onClick={() => download(d)}>Descargar {d.name}</button>}
-        {!d.retired && ["EN_CUARENTENA", "ERROR_ANALISIS", "LEGADO_SIN_ANALISIS"].includes(d.scanStatus) && <button type="button" disabled={busy} onClick={() => run(async () => { await api(`/professional-credential-documents/${d.id}/rescan`, { method: "POST" }); }, "Análisis solicitado")}>Reintentar análisis</button>}
+        {!d.retired && ["EN_CUARENTENA", "ERROR_ANALISIS"].includes(d.scanStatus) && <button type="button" disabled={busy} onClick={() => run(async () => { await api(`/professional-credential-documents/${d.id}/rescan`, { method: "POST" }); }, "Análisis solicitado")}>Reintentar análisis</button>}
+        {!d.retired && d.origin === "ANTERIOR_V59" && !["LIMPIO", "RECHAZADO"].includes(d.scanStatus) && <button type="button" disabled={busy} onClick={() => run(async () => { const r = await api(`/professional-credential-documents/${d.id}/regularize`, { method: "POST" }); notify(r.result === "REGULARIZADO" ? "Documento regularizado y analizado" : r.result === "RECHAZADO" ? "El análisis rechazó el documento" : `Sigue restringido: ${r.detail || r.result}`); }, "")}>Regularizar (huella y análisis)</button>}
         {!d.retired && <button type="button" disabled={busy || !docReason.trim()} onClick={() => documentAction(d.id, "retire", { reason: docReason }, "Documento retirado (se conserva el registro)")}>Retirar documento</button>}
         {!d.retired && <button type="button" disabled={busy || !docReason.trim()} onClick={() => documentAction(d.id, "retention-hold", { hold: !d.retentionHold, reason: docReason }, d.retentionHold ? "Bloqueo liberado" : "Bloqueo de conservación aplicado")}>{d.retentionHold ? "Liberar bloqueo de conservación" : "Bloquear conservación"}</button>}
       </li>)}</ul>
@@ -173,10 +178,11 @@ export function CredentialPolicies({ notify }) {
     <p>Define qué habilitación verificada y vigente es suficiente para cumplir cada función, según el tipo de operación y la categoría de aeronave. Es <strong>configuración interna de la organización</strong>: el sistema no trae requisitos regulatorios propios. Sin una política activa para una función, nadie queda habilitado para ella (POLITICA_HABILITACION_NO_CONFIGURADA).</p>
     {error && <p role="alert">{error}</p>}
     <p>Funciones con política activa: {Object.keys(ROLES).map((r) => <span key={r}>{ROLES[r]}: <strong>{roles.has(r) ? "configurada" : "sin configurar"}</strong> · </span>)}</p>
-    <ul>{items.length ? items.map((p) => <li key={p.id}>
+    <ul>{items.filter((p) => p.active).length ? items.filter((p) => p.active).map((p) => <li key={p.id}>
       {ROLES[p.roleCode]} · {p.credentialType} · operación: {p.flightTypeCode || "cualquiera"} · aeronave: {p.aircraftCategory || "cualquiera"}{p.requiresJurisdiction ? " · exige jurisdicción" : ""}{p.requiresExternalCheck ? " · exige consulta externa coincidente" : ""} · origen: {p.origin === "FUENTE_OFICIAL_CITADA" ? `fuente citada (${p.sourceReference})` : "configuración interna"} · {p.active ? "activa" : `dada de baja (${p.retireReason})`}
       {p.active && <button type="button" disabled={busy || !reason.trim()} onClick={() => run(async () => { await api(`/credential-policies/${p.id}/deactivate`, { method: "POST", body: JSON.stringify({ reason }) }); setReason(""); }, "Política dada de baja")}>Dar de baja</button>}
     </li>) : <li>No hay políticas configuradas: ninguna persona puede ser elegible.</li>}</ul>
+    {items.some((p) => !p.active) && <details><summary>Historial de políticas dadas de baja ({items.filter((p) => !p.active).length})</summary><ul>{items.filter((p) => !p.active).map((p) => <li key={p.id}>{ROLES[p.roleCode]} · {p.credentialType} · operación: {p.flightTypeCode || "cualquiera"} · aeronave: {p.aircraftCategory || "cualquiera"} · dada de baja por {p.retiredBy} el {dt(p.retiredAt)} ({p.retireReason})</li>)}</ul></details>}
     <label>Motivo de baja<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
     <div className="grid-form">
       <label>Función<select value={form.roleCode} onChange={(e) => setForm({ ...form, roleCode: e.target.value })}>{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -190,8 +196,94 @@ export function CredentialPolicies({ notify }) {
       <label>Observaciones<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
       <button type="button" disabled={busy || !form.credentialType.trim() || (form.origin === "FUENTE_OFICIAL_CITADA" && !form.sourceReference.trim())} onClick={() => run(async () => { await api("/credential-policies", { method: "POST", body: JSON.stringify(form) }); setForm(emptyPolicy); }, "Política creada")}>Agregar política</button>
     </div>
+    <PolicyActivation notify={notify} reload={load} />
     <h3>Análisis antimalware y retención</h3>
-    <p>Analizador: {scanner ? (scanner.configured ? `activo (${scanner.engine})` : "NO configurado: ningún documento puede aprobarse") : "—"}.</p>
+    <p>Analizador: {scanner ? (scanner.configured ? `activo (${scanner.engine})` : scanner.signatureProblem ? `NO acreditado: ${scanner.signatureProblem}. Los documentos permanecen en cuarentena` : "NO configurado: ningún documento puede aprobarse") : "—"}.</p>
     {retention && <p>Documentos activos: {retention.activeDocuments} · retirados: {retention.retiredDocuments} · bajo bloqueo de conservación: {retention.heldDocuments} · sin análisis limpio: {retention.unscannedDocuments}. Purga automática: {retention.purgeEnabled ? "habilitada" : "deshabilitada"}. {retention.statement}</p>}
+    <LegacyDocuments notify={notify} />
+    <ReadinessPanel />
   </section>;
+}
+
+const SEVERITY = { ERROR: "Error", WARNING: "Advertencia", INFO: "Información" };
+
+/** Carga, simulación y activación aprobada de un lote de políticas. Nada se activa sin simular y sin referencia de aprobación. */
+function PolicyActivation({ notify, reload }) {
+  const [text, setText] = useState(""), [report, setReport] = useState(null), [simulated, setSimulated] = useState(""), [approval, setApproval] = useState(""), [ack, setAck] = useState(false);
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [result, setResult] = useState(null);
+  const parse = () => { try { return JSON.parse(text); } catch { throw new Error("El contenido no es un JSON válido"); } };
+  const simulate = async () => {
+    setBusy(true);
+    try { const r = await api("/credential-policies/simulation", { method: "POST", body: JSON.stringify(parse()) }); setReport(r); setSimulated(text); setAck(false); setResult(null); setError(""); }
+    catch (e) { setError(e.message); setReport(null); }
+    finally { setBusy(false); }
+  };
+  const activate = async () => {
+    setBusy(true);
+    try {
+      const r = await api("/credential-policies/activation", { method: "POST", body: JSON.stringify({ proposal: parse(), approvedFingerprint: report.fingerprint, approvalReference: approval, acknowledgeIncompatibilities: ack }) });
+      setResult(r); setError(""); await reload(); notify(r.changed ? `Política activada: ${r.created} alta(s), ${r.retired} baja(s)` : "La política ya estaba activa: sin cambios");
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+  const stale = !!report && simulated !== text;
+  const canActivate = !!report && !stale && report.canActivate && approval.trim() && (!report.requiresAcknowledgement || ack);
+  return <div className="policy-activation">
+    <h3>Carga, simulación y activación de políticas</h3>
+    <p>Pegue o cargue la propuesta aprobada (JSON). <strong>Simular no modifica nada</strong>: valida la propuesta y muestra qué personas y vuelos abiertos quedarían no elegibles. Activar exige la referencia de la aprobación y sólo acepta exactamente la propuesta simulada.</p>
+    {error && <p role="alert">{error}</p>}
+    <label>Archivo de propuesta (JSON)<input type="file" accept="application/json,.json" onChange={async (e) => { const f = e.target.files[0]; if (f) { setText(await f.text()); setReport(null); } }} /></label>
+    <label>Propuesta de políticas (JSON)<textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} /></label>
+    <button type="button" disabled={busy || !text.trim()} onClick={simulate}>Validar y simular</button>
+    {report && <div>
+      <p>Huella de la propuesta: <code>{report.fingerprint}</code>{stale && <strong> · el texto cambió después de simular: vuelva a simular</strong>}</p>
+      <p>{report.canActivate ? "Sin errores bloqueantes." : "Hay errores que impiden activarla."} Vuelos abiertos examinados: {report.flightsExamined} · integrantes que dejarían de ser elegibles: {report.newIncompatibilities} · que pasarían a serlo: {report.resolvedIncompatibilities}.</p>
+      <ul>{report.issues.map((i, n) => <li key={n}>[{SEVERITY[i.severity] || i.severity}] {i.message}</li>)}</ul>
+      <ul>{report.plan.map((r) => <li key={r.roleCode}>{ROLES[r.roleCode] || r.roleCode}: {r.proposed} política(s) propuesta(s) · {r.keep} sin cambios · {r.create} alta(s) · {r.retire} baja(s) · {r.eligibleAfterActivation ? "con política" : "sin política: no elegible"}</li>)}</ul>
+      <ul>{report.people.map((r) => <li key={r.roleCode}>Personas clasificadas como {ROLES[r.roleCode] || r.roleCode}: seguirían elegibles {r.stayEligible} · pasarían a no elegibles {r.becomeIneligible} · pasarían a elegibles {r.becomeEligible} · seguirían no elegibles {r.stayIneligible}</li>)}</ul>
+      {report.flightImpacts.length > 0 && <ul>{report.flightImpacts.map((f, n) => <li key={n}>Vuelo {f.flightCode} ({f.flightState}) · {f.username} como {ROLES[f.roleCode] || f.roleCode}: {f.before} → {f.after}</li>)}</ul>}
+      <label>Referencia de la aprobación (acta, expediente o responsable)<input value={approval} onChange={(e) => setApproval(e.target.value)} /></label>
+      {report.requiresAcknowledgement && <label className="check"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />Reconozco que {report.newIncompatibilities} integrante(s) de vuelos abiertos dejarán de ser elegibles y se alertará a Operaciones</label>}
+      <button type="button" disabled={busy || !canActivate} onClick={activate}>Activar política aprobada</button>
+    </div>}
+    {result && <p>Lote {result.batchId}: {result.created} alta(s), {result.retired} baja(s), {result.kept} sin cambios.</p>}
+  </div>;
+}
+
+/** Documentos anteriores a V59: qué falta regularizar y a quién afecta. */
+function LegacyDocuments({ notify }) {
+  const [report, setReport] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [summary, setSummary] = useState(null);
+  const load = () => api("/professional-credential-documents/legacy/report").then(setReport).catch((e) => setError(e.message));
+  useEffect(() => { load(); }, []);
+  const regularize = async () => {
+    setBusy(true);
+    try { const s = await api("/professional-credential-documents/legacy/regularize?limit=50", { method: "POST" }); setSummary(s); setError(""); await load(); notify("Regularización ejecutada"); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+  if (!report || typeof report.legacyDocuments !== "number") return error ? <p role="alert">{error}</p> : null;
+  return <div className="legacy-documents">
+    <h3>Documentos anteriores a V59</h3>
+    {error && <p role="alert">{error}</p>}
+    <p>{report.legacyDocuments} documento(s) heredado(s) · {report.pendingActive} activo(s) sin resultado de análisis · {report.withoutFingerprint} sin huella · {report.missingFiles} con archivo no disponible · analizador {report.analyzerConfigured ? "disponible" : "NO disponible"}. {report.statement}</p>
+    <p>Habilitaciones verificadas sostenidas sólo por documentos heredados sin analizar: <strong>{report.verifiedCredentialsSupportedOnlyByLegacy}</strong> · vuelos abiertos con tripulantes en esa situación: {report.openFlightsWithAffectedCrew}.</p>
+    {Array.isArray(report.credentials) && report.credentials.length > 0 && <ul>{report.credentials.slice(0, 10).map((c) => <li key={c.credentialId}>{c.username} · {ROLES[c.roleCode] || c.roleCode} · {c.type} · documentos: {c.documentStatus}</li>)}</ul>}
+    <button type="button" disabled={busy || report.pendingActive === 0} onClick={regularize}>Regularizar documentos heredados (lote de 50)</button>
+    {summary && <p>Lote: {summary.examined} examinados · {summary.regularized} regularizados · {summary.rejected} rechazados · {summary.restricted} siguen restringidos · {summary.alreadyResolved} ya resueltos.</p>}
+  </div>;
+}
+
+const READINESS = { OK: "Correcto", PENDIENTE: "Pendiente", PROPUESTA: "Propuesta sin aprobar", ERROR: "Error", ATENCION: "Atención" };
+
+/** Configuraciones obligatorias que faltan antes de operar (política, almacenamiento, antivirus en producción) y decisiones pendientes. */
+function ReadinessPanel() {
+  const [data, setData] = useState(null);
+  useEffect(() => { api("/admin/readiness").then(setData).catch(() => {}); }, []);
+  if (!data || !Array.isArray(data.items)) return null;
+  return <div className="readiness">
+    <h3>Preparación para operar ({data.environment})</h3>
+    <p>{data.readyForOperation ? "Configuraciones obligatorias completas." : `Faltan configuraciones obligatorias: ${data.pendingMandatory.join(", ")}.`} Esquema V{data.flywayVersion}.</p>
+    <ul>{data.items.map((i) => <li key={i.key}>{i.label}: <strong>{READINESS[i.status] || i.status}</strong>{i.mandatory ? " (obligatorio)" : ""} — {i.detail}</li>)}</ul>
+    <p>{data.note}</p>
+  </div>;
 }

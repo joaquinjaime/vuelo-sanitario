@@ -40,6 +40,7 @@ public class CredentialPolicyService {
   String origin=input.origin()==null||input.origin().isBlank()?CredentialPolicy.INTERNAL:input.origin();
   if(!Set.of(CredentialPolicy.INTERNAL,CredentialPolicy.OFFICIAL).contains(origin))throw bad("ORIGEN_INVALIDO","Origen de la política inválido");
   if(CredentialPolicy.OFFICIAL.equals(origin)&&blank(input.sourceReference())==null)throw bad("FUENTE_REQUERIDA","Cite la fuente oficial en la que se basa la política");
+  roles.lockByCodes(List.of(input.roleCode()));
   CredentialPolicy p=new CredentialPolicy();p.role=roles.findByCodigo(input.roleCode()).orElseThrow(()->bad("FUNCION_INVALIDA","Función inexistente"));
   p.flightType=blank(input.flightTypeCode())==null?null:flightTypes.findByCodigoAndActivoTrue(input.flightTypeCode().trim()).orElseThrow(()->bad("TIPO_VUELO_INVALIDO","Tipo de vuelo inexistente o inactivo"));
   p.aircraftCategory=blank(input.aircraftCategory());p.credentialType=input.credentialType().trim();p.requiresJurisdiction=Boolean.TRUE.equals(input.requiresJurisdiction());p.requiresExternalCheck=Boolean.TRUE.equals(input.requiresExternalCheck());
@@ -52,6 +53,7 @@ public class CredentialPolicyService {
  }
  @Transactional public View deactivate(Long id,String reason,Long actor){
   if(reason==null||reason.isBlank())throw bad("MOTIVO_REQUERIDO","Indique el motivo de la baja");if(reason.trim().length()>500)throw bad("MOTIVO_INVALIDO","El motivo admite hasta 500 caracteres");
+  roles.lockByCodes(List.of(policies.findRoleCodeById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Política inexistente"))));
   CredentialPolicy p=policies.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Política inexistente"));
   if(!Boolean.TRUE.equals(p.active))throw new ApiException(HttpStatus.CONFLICT,"POLITICA_YA_INACTIVA","La política ya fue dada de baja; actualice la pantalla",Map.of());
   String before=snapshot(p);p.active=false;p.retiredBy=users.findById(actor).orElseThrow();p.retiredAt=LocalDateTime.ofInstant(clock.instant(),zone);p.retireReason=reason.trim();policies.saveAndFlush(p);

@@ -1,0 +1,11 @@
+{
+  "name": "FIXTURE DE PRUEBA — tipos de habilitación ficticios; NO representa ningún requisito real",
+  "roles": ["COMANDANTE", "COPILOTO", "MEDICO", "ENFERMERO"],
+  "policies": [
+    { "roleCode": "COMANDANTE", "credentialType": "TIPO FICTICIO AERONAUTICO A", "aircraftCategory": null, "notes": "Fixture de ensayo" },
+    { "roleCode": "COPILOTO", "credentialType": "TIPO FICTICIO AERONAUTICO B", "notes": "Fixture de ensayo" },
+    { "roleCode": "MEDICO", "credentialType": "TIPO FICTICIO SANITARIO M", "flightTypeCode": "SANITARIO", "requiresJurisdiction": true, "notes": "Fixture de ensayo" },
+    { "roleCode": "ENFERMERO", "credentialType": "TIPO FICTICIO SANITARIO E", "flightTypeCode": "SANITARIO", "requiresJurisdiction": true, "requiresExternalCheck": true, "notes": "Fixture de ensayo" }
+  ],
+  "pendingDecisions": []
+}

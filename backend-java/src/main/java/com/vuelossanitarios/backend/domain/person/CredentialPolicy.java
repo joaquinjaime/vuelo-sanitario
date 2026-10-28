@@ -27,4 +27,7 @@ public class CredentialPolicy extends BaseEntity {
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_baja") public User retiredBy;
  @Column(name="fecha_baja") public LocalDateTime retiredAt;
  @Column(name="motivo_baja",length=500) public String retireReason;
+ /** Referencia de la aprobación del lote que la activó (acta, expediente); NULL en un alta individual. */
+ @Column(name="referencia_aprobacion",length=500) public String approvalReference;
+ @Column(name="lote_activacion",length=36) public String activationBatch;
 }

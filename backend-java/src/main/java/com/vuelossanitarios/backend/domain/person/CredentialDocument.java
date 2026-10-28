@@ -29,5 +29,13 @@ public class CredentialDocument extends BaseEntity {
  @Column(name="motivo_baja",length=500) public String retireReason;
  @Column(name="bloqueo_conservacion",nullable=false) public Boolean retentionHold=false;
  @Column(name="motivo_bloqueo",length=500) public String holdReason;
+ /** ANTERIOR_V59: cargado antes del análisis obligatorio; la condición se conserva aunque luego se analice. */
+ public static final String BEFORE_V59="ANTERIOR_V59",AFTER_V59="POSTERIOR_V59",HASH_AT_UPLOAD="CARGA",HASH_AT_REGULARIZATION="REGULARIZACION";
+ @Column(name="origen_registro",nullable=false,length=15) public String origin=AFTER_V59;
+ /** CARGA: la huella prueba que el archivo no cambió desde que se recibió. REGULARIZACION: se calculó después y sólo prueba que no cambió desde entonces. */
+ @Column(name="hash_momento",length=15) public String hashMoment;
+ @Column(name="fecha_regularizacion") public LocalDateTime regularizedAt;
+ @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_regularizacion") public User regularizedBy;
  public boolean isActive(){return retiredAt==null;}
+ public boolean isLegacy(){return BEFORE_V59.equals(origin);}
 }

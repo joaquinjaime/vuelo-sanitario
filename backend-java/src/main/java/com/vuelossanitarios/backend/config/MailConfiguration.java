@@ -24,9 +24,11 @@ public class MailConfiguration {
         Properties p = sender.getJavaMailProperties();
         p.put("mail.transport.protocol", "smtp");
         p.put("mail.smtp.connectiontimeout", "5000"); p.put("mail.smtp.timeout", "10000"); p.put("mail.smtp.writetimeout", "10000");
+        // Las credenciales SMTP nunca viajan sin cifrar: o hay TLS implícito, o STARTTLS obligatorio (si el servidor no lo ofrece, el envío falla en lugar de degradarse a texto plano).
+        if (!username.isBlank() && !ssl && !starttls) throw new IllegalStateException("MAIL_USERNAME requiere MAIL_SSL=true o MAIL_STARTTLS=true: las credenciales no se envían sin cifrar");
         if (!username.isBlank()) { sender.setUsername(username); sender.setPassword(password); p.put("mail.smtp.auth", "true"); }
-        if (ssl) p.put("mail.smtp.ssl.enable", "true");
-        else if (starttls) p.put("mail.smtp.starttls.enable", "true");
+        if (ssl) { p.put("mail.smtp.ssl.enable", "true"); p.put("mail.smtp.ssl.checkserveridentity", "true"); }
+        else if (starttls) { p.put("mail.smtp.starttls.enable", "true"); p.put("mail.smtp.starttls.required", "true"); p.put("mail.smtp.ssl.checkserveridentity", "true"); }
         return sender;
     }
 }

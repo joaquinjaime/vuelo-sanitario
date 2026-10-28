@@ -17,8 +17,9 @@ services:
       retries: 15
       start_period: 30s
     restart: unless-stopped
+    # Sólo el equipo local alcanza SQL Server (SSMS, copias, ensayos). Publicarlo en todas las interfaces expondría el puerto de la base a la red.
     ports:
-      - "14330:1433"
+      - "127.0.0.1:14330:1433"
 
 
   db-init:
@@ -76,7 +77,13 @@ services:
       APP_ANTIMALWARE_ENABLED: ${APP_ANTIMALWARE_ENABLED:-false}
       APP_ANTIMALWARE_HOST: ${APP_ANTIMALWARE_HOST:-}
       APP_ANTIMALWARE_PORT: ${APP_ANTIMALWARE_PORT:-3310}
+      # desarrollo | pruebas | produccion. En produccion el antivirus exige una base de firmas completa y reciente (ver docs/PREPARACION_PRODUCCION_I57).
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-desarrollo}
+      APP_ANTIMALWARE_REQUIRE_FULL_DATABASE: ${APP_ANTIMALWARE_REQUIRE_FULL_DATABASE:-}
+      APP_ANTIMALWARE_MAX_SIGNATURE_AGE_DAYS: ${APP_ANTIMALWARE_MAX_SIGNATURE_AGE_DAYS:-7}
+      # 60/30/7/0 es una propuesta pendiente de aprobación; APPROVED=true sólo después de aprobarla.
       APP_CREDENTIAL_EXPIRY_NOTICE_DAYS: ${APP_CREDENTIAL_EXPIRY_NOTICE_DAYS:-60,30,7,0}
+      APP_CREDENTIAL_EXPIRY_APPROVED: ${APP_CREDENTIAL_EXPIRY_APPROVED:-false}
       APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED: ${APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED:-true}
     depends_on:
       db-init:

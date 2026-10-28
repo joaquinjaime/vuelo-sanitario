@@ -5,7 +5,7 @@ services:
   sqlserver:
     environment:
       MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
-    ports: !reset ["14331:1433"]
+    ports: !reset ["127.0.0.1:14331:1433"]
     # El primer arranque de SQL Server en un volumen vacío puede tardar más de
     # cinco segundos en responder a sqlcmd en equipos con recursos compartidos.
     healthcheck:
@@ -47,6 +47,9 @@ services:
       # Plazos cortos sólo para las pruebas: el intervalo de reenvío real es de 60 s; el límite por correo (5 por día) se conserva para probarlo.
       EMAIL_VERIFICATION_RESEND_SECONDS: 2
       EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
+      APP_ENVIRONMENT: pruebas
+      # Vacío: la base mínima de E2E es válida. true reproduce la exigencia de producción (la base mínima debe dejar los documentos en cuarentena).
+      APP_ANTIMALWARE_REQUIRE_FULL_DATABASE: ${E2E_ANTIMALWARE_REQUIRE_FULL_DATABASE:-}
       APP_ANTIMALWARE_ENABLED: ${E2E_ANTIMALWARE_ENABLED:-false}
       APP_ANTIMALWARE_HOST: clamav
       APP_ANTIMALWARE_TIMEOUT_MS: 15000
