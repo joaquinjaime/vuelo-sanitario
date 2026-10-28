@@ -25,6 +25,24 @@ function sql(query, database = DB_NAME) {
 const one = (query) => sql(query).split(/\r?\n/)[0].trim();
 const count = (query) => Number(one(query));
 
+/** Aplica docker/sqlserver/apply-db-permissions.sql (mismo script que db-init/db-grants y que el procedimiento de producción) a una base de escenario:
+ *  cuenta de migraciones = db_owner, cuenta de la aplicación = sólo datos. Los logins salen del entorno del backend E2E de referencia. */
+function backendEnv() {
+  const r = spawnSync('docker', ['inspect', BACKEND], { encoding: 'utf8' });
+  assert.equal(r.status, 0, 'no se pudo inspeccionar ' + BACKEND);
+  return Object.fromEntries(JSON.parse(r.stdout)[0].Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
+}
+function applyDbPermissions(database, env = backendEnv()) {
+  const appLogin = env.DB_USERNAME, migrationLogin = env.MIGRATION_DB_USERNAME;
+  assert.match(String(appLogin), /^[A-Za-z0-9_]+$/, 'cuenta de aplicación no reconocida');
+  assert.match(String(migrationLogin), /^[A-Za-z0-9_]+$/, 'el backend E2E no tiene cuenta de migraciones (MIGRATION_DB_USERNAME)');
+  const script = fs.readFileSync(path.join(ROOT, 'docker', 'sqlserver', 'apply-db-permissions.sql'), 'utf8');
+  const r = spawnSync('docker', ['exec', '-i', '-e', 'APP_LOGIN=' + appLogin, '-e', 'MIGRATION_LOGIN=' + migrationLogin, SQL_CONTAINER, 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -I -S localhost -U sa -C -d ' + database + ' -i /dev/stdin'], { input: script, encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0) throw new Error('apply-db-permissions falló: ' + out.slice(0, 600));
+  return out.trim();
+}
+
 async function call(p, { method = 'GET', body, token, expect = [200] } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
@@ -157,4 +175,4 @@ async function withoutPolicies(admin, roleCode, fn) {
   }
 }
 
-module.exports = { withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };
+module.exports = { applyDbPermissions, backendEnv, withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };

@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BACKEND, SQL_CONTAINER, DB_NAME, sql } = require('./e2e-cierre-support.cjs');
+const { ROOT, BACKEND, SQL_CONTAINER, DB_NAME, sql, applyDbPermissions } = require('./e2e-cierre-support.cjs');
 
 const docker = (...args) => spawnSync('docker', args, { encoding: 'utf8' });
 const mark = crypto.randomBytes(3).toString('hex');
@@ -32,10 +32,8 @@ const port = process.env.E2E_ADMIN_SCENARIO_PORT || '18090';
   try {
     for (const n of paused) assert.equal(docker('stop', n).status, 0, 'no se pudo detener ' + n);
     sql(`CREATE DATABASE [${scenarioDb}]`, 'master'); created = true;
-    // Mismo alta que docker/sqlserver/init-db.sh: el usuario de la aplicación es propietario de la base nueva.
-    const appLogin = (inspect.Config.Env.find((x) => x.startsWith('DB_USERNAME=')) || '').slice('DB_USERNAME='.length);
-    assert.match(appLogin, /^[A-Za-z0-9_]+$/, 'usuario de aplicación no reconocido');
-    sql(`IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'${appLogin}') CREATE USER [${appLogin}] FOR LOGIN [${appLogin}]; ALTER ROLE db_owner ADD MEMBER [${appLogin}];`, scenarioDb);
+    // Mismo reparto de permisos que docker/sqlserver/init-db.sh: la cuenta de migraciones (Flyway) es db_owner de la base nueva y la de la aplicación sólo lee/escribe datos.
+    applyDbPermissions(scenarioDb);
     // Equivale al servicio documents-init de docker-compose.yml: el volumen documental propio del escenario debe pertenecer al usuario de la aplicación.
     const chown = docker('run', '--rm', '--user', 'root', '-v', `${container}-docs:/data/documents`, '--entrypoint', 'chown', inspect.Config.Image, '-R', '999:999', '/data/documents'); assert.equal(chown.status, 0, chown.stderr);
     const args = ['run', '-d', '--name', container, '--network', network, '-p', `127.0.0.1:${port}:8080`, '-v', `${container}-docs:/data/documents`, ...env.flatMap((x) => ['-e', x]), inspect.Config.Image];

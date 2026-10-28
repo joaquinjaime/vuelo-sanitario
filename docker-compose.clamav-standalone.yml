@@ -1,0 +1,34 @@
+# ClamAV en un equipo SEPARADO (recomendado si el servidor de la aplicación no dispone de ~3 GB de RAM libres además de SQL Server).
+# Se levanta SOLO en el equipo de análisis; el backend de producción apunta a él con APP_ANTIMALWARE_HOST=<dirección privada de este equipo> y
+# APP_ANTIMALWARE_PORT=3310 (el docker-compose.prod.yml del equipo principal no debe declarar la dependencia de `clamav`; el estado
+# «Base de firmas no acreditada» de la lista de preparación sigue aplicando igual).
+#
+#   CLAMAV_BIND_ADDRESS=10.0.0.5 docker compose -f docker-compose.clamav-standalone.yml config -q     (validar)
+#   CLAMAV_BIND_ADDRESS=10.0.0.5 docker compose -f docker-compose.clamav-standalone.yml up -d         (levantar)
+#
+# Seguridad: clamd no tiene autenticación. CLAMAV_BIND_ADDRESS es OBLIGATORIA y debe ser una dirección de red PRIVADA (nunca 0.0.0.0); además, el
+# firewall del equipo debe permitir el puerto 3310 únicamente desde el servidor de la aplicación. Los documentos viajan sin cifrar por esa red privada.
+# Recursos mínimos orientativos del equipo de análisis: 4 GB de RAM (el motor con base completa ocupa ~1,3-2 GB, más la recarga), 2 vCPU, 2 GB de disco para firmas
+# y salida a Internet (freshclam). Estos valores NO se midieron en esta máquina de desarrollo: confírmelos al dimensionar el equipo real.
+services:
+  clamav:
+    image: clamav/clamav:1.4.6
+    volumes:
+      - clamav_db:/var/lib/clamav
+      - ./docker/clamav/prod-clamd.conf:/etc/clamav/clamd.conf:ro
+    ports:
+      - "${CLAMAV_BIND_ADDRESS:?Defina CLAMAV_BIND_ADDRESS con una dirección privada del equipo (no 0.0.0.0)}:3310:3310"
+    mem_limit: ${CLAMAV_MEM_LIMIT:-3g}
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG && printf 'VERSION\\n' | nc -w 3 127.0.0.1 3310 | grep -Eq '^ClamAV [^/]+/[1-9][0-9]*/'"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    restart: unless-stopped
+
+volumes:
+  clamav_db:

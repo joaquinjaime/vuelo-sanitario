@@ -7,6 +7,10 @@
   authorization switch, after human approval of the maintenance window. No web services
   are stopped or started by this helper. Credentials come from the existing backend
   environment and are forwarded by variable name, never as process arguments.
+
+  I-5.8: Flyway runs with the dedicated MIGRATION account (db_owner), never with the application account (data only). The migration credentials are supplied by the
+  operator through the process environment (MIGRATION_DB_USERNAME / MIGRATION_DB_PASSWORD, loaded from the protected .env.production); the production backend does not
+  receive them. The JDBC URL still comes from the habitual backend configuration. After a successful Migrate, run docker/sqlserver/apply-db-permissions.sql (step in the procedure).
 #>
 [CmdletBinding()]
 param(
@@ -46,17 +50,31 @@ try{
         if($versionExit -ne 0 -or $current -ne '47'){throw 'The habitual database is not exactly at Flyway V47; the upgrade is refused.'}
     }
     $values=@{}
-    foreach($name in @('DB_URL','DB_USERNAME','DB_PASSWORD')){
+    foreach($name in @('DB_URL','DB_USERNAME')){
         $prefix=$name+'='
         $entry=@($backend.Config.Env|Where-Object {$_.StartsWith($prefix)})
-        if($entry.Count -ne 1){throw 'A required application credential is unavailable.'}
+        if($entry.Count -ne 1){throw 'A required application setting is unavailable.'}
         $values[$name]=$entry[0].Substring($prefix.Length)
     }
+    # Migration account: operator-supplied environment first; the backend container only carries it in development stacks.
+    $migrationUser=[Environment]::GetEnvironmentVariable('MIGRATION_DB_USERNAME','Process')
+    $migrationPassword=[Environment]::GetEnvironmentVariable('MIGRATION_DB_PASSWORD','Process')
+    if([string]::IsNullOrWhiteSpace($migrationUser) -or [string]::IsNullOrWhiteSpace($migrationPassword)){
+        foreach($pair in @(@('MIGRATION_DB_USERNAME','migrationUser'),@('MIGRATION_DB_PASSWORD','migrationPassword'))){
+            $entry=@($backend.Config.Env|Where-Object {$_.StartsWith($pair[0]+'=')})
+            if($entry.Count -eq 1){Set-Variable -Name $pair[1] -Value $entry[0].Substring($pair[0].Length+1)}
+        }
+    }
+    if([string]::IsNullOrWhiteSpace($migrationUser) -or [string]::IsNullOrWhiteSpace($migrationPassword)){
+        throw 'Set MIGRATION_DB_USERNAME and MIGRATION_DB_PASSWORD in the process environment (migration account, db_owner); the application account is never used to migrate.'
+    }
+    if($migrationUser -ieq $values.DB_USERNAME){throw 'The migration account must differ from the application account (least privilege).'}
+    $values['DB_PASSWORD']=$migrationPassword
     if($values.DB_URL -ne 'jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios;encrypt=true;trustServerCertificate=true'){
         throw 'Habitual JDBC target differs from the verified maintenance target.'
     }
-    $env:MIGRATION_SQL_USERNAME=$values.DB_USERNAME
-    $env:MIGRATION_JDBC_PASSWORD=$values.DB_PASSWORD
+    $env:MIGRATION_SQL_USERNAME=$migrationUser
+    $env:MIGRATION_JDBC_PASSWORD=$migrationPassword
     $env:MIGRATION_JDBC_URL=$values.DB_URL
     $env:MIGRATION_LOCATION='classpath:db/migration'
     $env:MIGRATION_HABITUAL_AUTHORIZATION=if($Mode -eq 'Migrate'){'V47_TO_V60_AUTHORIZED'}else{''}
@@ -78,7 +96,7 @@ try{
     $result=@(docker start -a $container 2>&1)
     $flywayExit=$LASTEXITCODE
     if($flywayExit -ne 0){
-        # Keep the failing migration identifiable (V52 stops with THROW 51052): print only Flyway/SQL Server error lines, with the application password removed.
+        # Keep the failing migration identifiable (V52 stops with THROW 51052): print only Flyway/SQL Server error lines, with the migration password removed.
         $result|ForEach-Object{([string]$_).Replace($values.DB_PASSWORD,'***')}|Where-Object{$_ -match 'ERROR|Migration|failed|SQL State|Error Code|Message|Location|Line \d'}|Select-Object -Last 20|ForEach-Object{Write-Warning $_}
         throw 'Prepared Flyway operation failed; password-redacted diagnostics were printed above.'
     }

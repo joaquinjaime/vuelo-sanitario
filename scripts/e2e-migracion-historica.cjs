@@ -4,7 +4,7 @@
  * histórica; 3) migra a la última versión con validación Hibernate; 4) comprueba que ninguna decisión se fabrica. */
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
-const { MARK, BACKEND, sql, one, sleep } = require('./e2e-cierre-support.cjs');
+const { MARK, BACKEND, sql, one, sleep, applyDbPermissions } = require('./e2e-cierre-support.cjs');
 
 const DB = 'vuelos_migracion_' + MARK;
 const NETWORK = 'vuelos-sanitarios-e2e_internal';
@@ -17,7 +17,7 @@ async function runBackend(label, extraEnv) {
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
   const name = `${BACKEND.replace('-backend-1', '')}-migracion-${MARK}-${label}`;
   const args = ['run', '-d', '--name', name, '--network', NETWORK, '-e', `DB_URL=jdbc:sqlserver://sqlserver:1433;databaseName=${DB};encrypt=true;trustServerCertificate=true`,
-    '-e', 'DB_USERNAME=' + env.DB_USERNAME, '-e', 'DB_PASSWORD=' + env.DB_PASSWORD, '-e', 'JWT_SECRET=' + env.JWT_SECRET, '-e', 'SPRING_PROFILES_ACTIVE=docker',
+    '-e', 'DB_USERNAME=' + env.DB_USERNAME, '-e', 'DB_PASSWORD=' + env.DB_PASSWORD, '-e', 'MIGRATION_DB_USERNAME=' + env.MIGRATION_DB_USERNAME, '-e', 'MIGRATION_DB_PASSWORD=' + env.MIGRATION_DB_PASSWORD, '-e', 'JWT_SECRET=' + env.JWT_SECRET, '-e', 'SPRING_PROFILES_ACTIVE=docker',
     '-e', 'DOCUMENTS_DIRECTORY=/tmp/docs', '-e', 'FINAL_REPORT_SWEEP_ENABLED=false', ...Object.entries(extraEnv).flatMap(([k, v]) => ['-e', `${k}=${v}`]), info.Config.Image];
   const started = docker(...args); assert.equal(started.status, 0, 'docker run: ' + started.stderr.slice(0, 300));
   try {
@@ -65,8 +65,7 @@ UNION ALL SELECT @f1,@ops,N'FLIGHT',@f1,N'FINISH',N'{"estado":"FINALIZADO"}';
 (async () => {
   assert.notEqual(one('SELECT DB_NAME()'), '');
   sql(`CREATE DATABASE [${DB}]`, 'master');
-  const info = JSON.parse(docker('inspect', BACKEND).stdout)[0]; const login = info.Config.Env.find((x) => x.startsWith('DB_USERNAME=')).slice(12);
-  q(`CREATE USER [${login}] FOR LOGIN [${login}]; ALTER ROLE db_owner ADD MEMBER [${login}];`);
+  applyDbPermissions(DB);
   await runBackend('v41', { SPRING_FLYWAY_TARGET: '41', SPRING_JPA_HIBERNATE_DDL_AUTO: 'none' });
   assert.equal(one(`SELECT MAX(CAST(version AS int)) FROM [${DB}].dbo.flyway_schema_history WHERE version IS NOT NULL`), '41');
   assert.equal(Number(one(`SELECT COUNT(*) FROM [${DB}].sys.columns WHERE object_id = OBJECT_ID(N'[${DB}].dbo.informes_finales_vuelo') AND name = N'estado_revision'`)), 0, 'la base descartable aún no tiene el esquema V42');

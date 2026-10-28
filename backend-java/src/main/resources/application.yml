@@ -36,6 +36,11 @@ app:
   environment: ${APP_ENVIRONMENT:desarrollo}
   # DATETIME2 de solicitudes se interpreta como hora civil de esta zona, nunca como reloj del navegador o SQL Server.
   business-time-zone: ${BUSINESS_TIME_ZONE:America/Argentina/Tucuman}
+  # Cuenta con la que Flyway aplica el esquema (db_owner). Vacía = Flyway usa la cuenta de la aplicación (sólo desarrollo local; en producción se rechaza).
+  # La cuenta de la aplicación (spring.datasource.*) sólo tiene lectura/escritura de datos: ver docker/sqlserver/apply-db-permissions.sql.
+  migration:
+    username: ${MIGRATION_DB_USERNAME:}
+    password: ${MIGRATION_DB_PASSWORD:}
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: 3600000

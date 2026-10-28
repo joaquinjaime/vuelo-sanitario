@@ -25,6 +25,9 @@ services:
     mem_limit: ${PROD_BACKEND_MEM_LIMIT:-768m}
     environment:
       APP_ENVIRONMENT: produccion
+      # El backend de producción no recibe las credenciales de migración: sólo opera con la cuenta de datos (db_datareader/db_datawriter).
+      MIGRATION_DB_USERNAME: !reset null
+      MIGRATION_DB_PASSWORD: !reset null
       # Las migraciones NO se aplican al arrancar: sólo el procedimiento controlado (respaldo previo + ayudante invoke-prepared-flyway-v60.ps1) las ejecuta. Con el esquema por debajo de la versión del código,
       # Hibernate (ddl validate) impide el arranque en lugar de migrar sin respaldo (columnas o tablas ausentes). validate no detecta un esquema POSTERIOR al código: la versión aplicada se informa en la lista de preparación.
       SPRING_FLYWAY_ENABLED: "false"

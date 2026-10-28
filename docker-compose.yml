@@ -29,13 +29,35 @@ services:
         condition: service_healthy
     environment:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Configure MSSQL_SA_PASSWORD in .env}
+      # Cuenta de la aplicación (sólo datos) y cuenta de migraciones (db_owner, la usa Flyway): son identidades distintas.
       DB_USERNAME: ${DB_USERNAME:-vuelos_app}
       DB_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env}
+      MIGRATION_DB_USERNAME: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Configure MIGRATION_DB_PASSWORD in .env (must differ from DB_PASSWORD)}
       DB_NAME: vuelos_sanitarios
     volumes:
       - ./docker/sqlserver/init-db.sh:/scripts/init-db.sh:ro
+      - ./docker/sqlserver/apply-db-permissions.sql:/scripts/apply-db-permissions.sql:ro
     networks: [internal]
     command: ["/bin/bash", "/scripts/init-db.sh"]
+    restart: "no"
+
+  # Segunda pasada de permisos, DESPUÉS de que el backend (Flyway) creó o actualizó el esquema: ahora existe flyway_schema_history y puede denegarse a la
+  # cuenta de la aplicación su escritura. Orden de una instalación nueva: db-init (logins, usuarios, roles) -> backend (Flyway con la cuenta de migraciones) -> db-grants.
+  db-grants:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Configure MSSQL_SA_PASSWORD in .env}
+      APP_LOGIN: ${DB_USERNAME:-vuelos_app}
+      MIGRATION_LOGIN: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      DB_NAME: vuelos_sanitarios
+    volumes:
+      - ./docker/sqlserver/apply-db-permissions.sql:/scripts/apply-db-permissions.sql:ro
+    networks: [internal]
+    command: ["/bin/bash", "-c", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" exec /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -I -d \"$$DB_NAME\" -i /scripts/apply-db-permissions.sql"]
     restart: "no"
 
   # El backend se ejecuta como el usuario no privilegiado `spring` (UID 999),
@@ -56,6 +78,9 @@ services:
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios;encrypt=true;trustServerCertificate=true
       DB_USERNAME: ${DB_USERNAME:-vuelos_app}
       DB_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env}
+      # Flyway (arranque automático de desarrollo/E2E) usa esta cuenta; el acceso normal a datos usa DB_USERNAME. Producción retira estas dos variables (docker-compose.prod.yml).
+      MIGRATION_DB_USERNAME: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Configure MIGRATION_DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Configure JWT_SECRET in .env}
       DOCUMENTS_DIRECTORY: /data/documents
       MAX_PDF_BYTES: ${MAX_PDF_BYTES:-10485760}
@@ -111,7 +136,8 @@ services:
       - clamav_db:/var/lib/clamav
       - ./docker/clamav/prod-clamd.conf:/etc/clamav/clamd.conf:ro
     healthcheck:
-      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG"]
+      # Sano = clamd responde Y declara una base de firmas con versión (ClamAV <programa>/<versión de firmas>/<fecha>). La frescura (antigüedad máxima) la verifica el backend en cada análisis.
+      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG && printf 'VERSION\\n' | nc -w 3 127.0.0.1 3310 | grep -Eq '^ClamAV [^/]+/[1-9][0-9]*/'"]
       interval: 30s
       timeout: 10s
       retries: 20

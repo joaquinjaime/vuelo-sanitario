@@ -30,6 +30,25 @@ public class ReadinessService {
    @Value("${app.retention.credential-documents.purge-enabled:false}") boolean purgeEnabled){
   policies=p;documents=d;documentService=ds;this.flyway=flyway;this.jdbc=jdbc;this.environment=environment.trim().toLowerCase(Locale.ROOT);storageDirectory=storage;jwtSecret=jwt;this.mailHost=mailHost;this.mailEnabled=mailEnabled;this.bootstrapUser=bootstrapUser;this.expiryDays=expiryDays;this.expiryApproved=expiryApproved;this.purgeEnabled=purgeEnabled;
  }
+ /**
+  * La cuenta con la que opera la aplicación no debe poder alterar el esquema (mínimo privilegio): db_owner/db_ddladmin o permiso para crear tablas la reprueban.
+  * Las migraciones las aplica una cuenta distinta (docker/sqlserver/apply-db-permissions.sql). Sólo evalúa SQL Server; con otro motor (pruebas H2) informa que no es verificable.
+  */
+ private Item databasePrivileges(boolean production){
+  var template=jdbc.getIfAvailable();
+  if(template==null) return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","ERROR",production,"No hay acceso JDBC para comprobar los privilegios");
+  try{
+   var row=template.queryForMap("SELECT CAST(ISNULL(IS_MEMBER('db_owner'),0) AS int) AS owner, CAST(ISNULL(IS_MEMBER('db_ddladmin'),0) AS int) AS ddl, CAST(ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','CREATE TABLE'),0) AS int) AS create_table, CAST(ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','ALTER ANY USER'),0) AS int) AS alter_user, CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.flyway_schema_history','OBJECT','UPDATE'),0) AS int) AS history_write");
+   boolean ownerOrDdl=((Number)row.get("owner")).intValue()==1||((Number)row.get("ddl")).intValue()==1;
+   boolean canChangeSchema=((Number)row.get("create_table")).intValue()==1||((Number)row.get("alter_user")).intValue()==1;
+   boolean canEditHistory=((Number)row.get("history_write")).intValue()==1;
+   if(ownerOrDdl||canChangeSchema) return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","ERROR",production,"La cuenta de la aplicación puede alterar el esquema (db_owner/db_ddladmin o permiso DDL): aplique docker/sqlserver/apply-db-permissions.sql con la cuenta de migraciones separada");
+   if(canEditHistory) return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","ERROR",production,"La cuenta de la aplicación puede modificar flyway_schema_history: vuelva a aplicar docker/sqlserver/apply-db-permissions.sql después de migrar");
+   return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","OK",production,"Sólo lectura y escritura de datos; sin DDL ni escritura en el historial de migraciones");
+  }catch(RuntimeException e){
+   return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","NO_VERIFICABLE",production,"No se pudieron comprobar los privilegios del motor de base de datos actual");
+  }
+ }
  @Transactional(readOnly=true) public Readiness check(){
   boolean production="produccion".equals(environment);List<Item> items=new ArrayList<>();
   String version="desconocida";Flyway f=flyway.getIfAvailable();
@@ -54,6 +73,7 @@ public class ReadinessService {
   items.add(new Item("DOCUMENTOS_HEREDADOS","Documentos anteriores a V59 sin analizar",legacyPending==0?"OK":"PENDIENTE",false,legacyPending==0?"Ninguno pendiente":legacyPending+" documento(s) restringidos hasta regularizarlos"));
   Path dir=Paths.get(storageDirectory).toAbsolutePath().normalize();boolean writable=Files.isDirectory(dir)&&Files.isWritable(dir);
   items.add(new Item("ALMACENAMIENTO","Directorio privado de documentos",writable?"OK":"ERROR",true,writable?"Existe y es escribible":"No existe o no es escribible"));
+  items.add(databasePrivileges(production));
   items.add(new Item("SECRETO_JWT","Secreto de firma de sesiones",jwtSecret.length()>=32?"OK":"ERROR",true,jwtSecret.length()>=32?"Configurado (longitud suficiente)":"Ausente o demasiado corto (mínimo 32 caracteres)"));
   boolean mail=mailEnabled&&!mailHost.isBlank();
   items.add(new Item("CORREO","Servidor de correo saliente",mail?"OK":"PENDIENTE",false,mail?"Configurado":"No configurado: las verificaciones de correo informan 503 MAIL_NOT_CONFIGURED y los correos quedan sin verificar (decisión de infraestructura pendiente)"));

@@ -23,7 +23,7 @@ function password() {
 }
 
 function sql(query) {
-  const raw = execFileSync("docker", ["exec", "-i", "-e", `SQLCMDPASSWORD=${password()}`, container, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-d", db, "-h", "-1", "-W", "-s", "|", "-b", "-Q", `SET NOCOUNT ON; ${query}`], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const raw = execFileSync("docker", ["exec", "-i", "-e", "SQLCMDPASSWORD", container, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-d", db, "-h", "-1", "-W", "-s", "|", "-b", "-Q", `SET NOCOUNT ON; ${query}`], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: { ...process.env, SQLCMDPASSWORD: password() } });
   return raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.split("|"));
 }
 
