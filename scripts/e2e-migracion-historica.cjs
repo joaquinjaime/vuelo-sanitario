@@ -62,6 +62,13 @@ UNION ALL SELECT @f1,@ops,N'FINAL_REPORT',r.id_informes_finales_vuelo,N'APPROVE'
 UNION ALL SELECT @f1,@ops,N'FLIGHT',@f1,N'FINISH',N'{"estado":"FINALIZADO"}';
 `;
 
+/** Última migración del código: la mayor versión entre los archivos SQL y las migraciones Java (la expectativa no se fija a mano en cada incremento). */
+function latestMigration() {
+  const fs = require('node:fs'), path = require('node:path'); const root = path.resolve(__dirname, '..', 'backend-java', 'src', 'main');
+  const versions = [path.join(root, 'resources', 'db', 'migration'), path.join(root, 'java', 'db', 'migration')].filter((d) => fs.existsSync(d)).flatMap((d) => fs.readdirSync(d)).map((n) => (n.match(/^V([0-9]+)__/) || [])[1]).filter(Boolean).map(Number);
+  return Math.max(...versions);
+}
+
 (async () => {
   assert.notEqual(one('SELECT DB_NAME()'), '');
   // La VM de Docker (≈3,4 GB) no soporta un segundo backend junto al de trabajo: se detienen (sin borrar nada) el backend y el frontend E2E mientras dura el escenario y se reinician al salir.
@@ -78,8 +85,8 @@ UNION ALL SELECT @f1,@ops,N'FLIGHT',@f1,N'FINISH',N'{"estado":"FINALIZADO"}';
   pass('base descartable en V41 con 8 versiones, 7 obligaciones y auditoría con la forma histórica');
 
   await runBackend('latest', {});
-  assert.equal(one(`SELECT MAX(CAST(version AS int)) FROM [${DB}].dbo.flyway_schema_history WHERE version IS NOT NULL`), '43');
-  pass('V42 y V43 aplicadas sobre datos históricos y Hibernate valida el esquema resultante');
+  assert.equal(one(`SELECT MAX(CAST(version AS int)) FROM [${DB}].dbo.flyway_schema_history WHERE version IS NOT NULL`), String(latestMigration()));
+  pass(`V42 en adelante (hasta la V${latestMigration()}, la última del código) aplicadas sobre datos históricos y Hibernate valida el esquema resultante`);
 
   const row = (code) => q(`SELECT r.estado_revision, r.origen_decision, ISNULL(CONVERT(varchar(30), r.fecha_revision, 126), 'NULL'), ISNULL(CAST(r.id_usuario_revisor AS varchar), 'NULL'), ISNULL(r.motivo_devolucion, 'NULL'), r.version, r.es_version_actual, r.resumen FROM informes_finales_vuelo r JOIN vuelos v ON v.id_vuelos = r.id_vuelos WHERE v.codigo_vuelo = N'${code}' ORDER BY r.version`).split(/\r?\n/).map((l) => l.split('|').map((x) => x.trim()));
   const ops = q(`SELECT id_usuarios FROM usuarios WHERE nombre_usuario = N'hist_ops'`);

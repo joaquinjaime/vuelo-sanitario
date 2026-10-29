@@ -56,8 +56,10 @@ function makePdf(label, comment = '') {
     await adminPage.getByRole('heading', { name: 'Política de suficiencia de habilitaciones' }).waitFor();
     await adminPage.getByText(/activo \(ClamAV/).waitFor(); await adminPage.getByText(/Purga automática: deshabilitada/).waitFor();
     await adminPage.getByLabel('Tipo de habilitación aceptado').fill(TYPE);
+    // Diagnóstico ante un fallo intermitente (una vez en la corrida continua de I-5.8, no reproducido después): si el aviso no aparece, informa respuestas HTTP y avisos visibles antes de fallar.
+    const policyCalls = []; adminPage.on('response', (r) => { if (/credential-policies/.test(r.url())) policyCalls.push(`${r.request().method()} ${r.status()}`); });
     await adminPage.getByRole('button', { name: 'Agregar política' }).click();
-    await adminPage.getByText('Política creada').waitFor();
+    await adminPage.getByText('Política creada').waitFor().catch(async (e) => { console.error('Diagnóstico: llamadas =', policyCalls.join(', ') || '(ninguna)', '| avisos =', JSON.stringify(await adminPage.locator('.error, [role=alert], .notice').allTextContents()), '| botón habilitado =', await adminPage.getByRole('button', { name: 'Agregar política' }).isEnabled().catch(() => 'n/d')); throw e; });
     assert.equal(count(`SELECT COUNT(*) FROM politicas_habilitacion WHERE tipo_habilitacion=N'${TYPE}' AND activa=1 AND origen='CONFIGURACION_INTERNA'`), 1);
     await snap(adminPage, 'hab01-politica');
     pass('UI-1 el administrador ve el analizador real, la ausencia de purga y crea la política de suficiencia (persistida en SQL Server)');
