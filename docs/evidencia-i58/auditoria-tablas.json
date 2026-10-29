@@ -11,7 +11,7 @@
   {
    "table": "activaciones_cuenta",
    "infra": false,
-   "rows": 6582,
+   "rows": 407,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 1,
@@ -45,7 +45,7 @@
   {
    "table": "aeronaves",
    "infra": false,
-   "rows": 4168,
+   "rows": 259,
    "fkOut": 1,
    "fkIn": 2,
    "checks": 1,
@@ -101,7 +101,7 @@
   {
    "table": "aeropuertos",
    "infra": false,
-   "rows": 1104,
+   "rows": 638,
    "fkOut": 2,
    "fkIn": 6,
    "checks": 0,
@@ -164,7 +164,7 @@
   {
    "table": "bitacora_vuelos",
    "infra": false,
-   "rows": 1853,
+   "rows": 82,
    "fkOut": 3,
    "fkIn": 1,
    "checks": 1,
@@ -192,7 +192,7 @@
   {
    "table": "bloqueos_documento_vuelo",
    "infra": false,
-   "rows": 11,
+   "rows": 0,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 1,
@@ -222,7 +222,7 @@
   {
    "table": "clasificaciones_tripulacion",
    "infra": false,
-   "rows": 3319,
+   "rows": 223,
    "fkOut": 4,
    "fkIn": 0,
    "checks": 1,
@@ -259,7 +259,7 @@
   {
    "table": "consultas_externas_habilitacion",
    "infra": false,
-   "rows": 10,
+   "rows": 2,
    "fkOut": 3,
    "fkIn": 0,
    "checks": 2,
@@ -288,7 +288,7 @@
   {
    "table": "contactos_coordinacion_traslado",
    "infra": false,
-   "rows": 269,
+   "rows": 14,
    "fkOut": 3,
    "fkIn": 0,
    "checks": 5,
@@ -320,7 +320,7 @@
   {
    "table": "coordinaciones_aa2000",
    "infra": false,
-   "rows": 47,
+   "rows": 0,
    "fkOut": 3,
    "fkIn": 0,
    "checks": 2,
@@ -348,7 +348,7 @@
   {
    "table": "correos_electronicos",
    "infra": false,
-   "rows": 7042,
+   "rows": 434,
    "fkOut": 2,
    "fkIn": 1,
    "checks": 2,
@@ -392,7 +392,7 @@
   {
    "table": "decisiones_habilitacion",
    "infra": false,
-   "rows": 3762,
+   "rows": 1010,
    "fkOut": 3,
    "fkIn": 0,
    "checks": 1,
@@ -423,7 +423,7 @@
   {
    "table": "documentos_habilitacion",
    "infra": false,
-   "rows": 3420,
+   "rows": 251,
    "fkOut": 5,
    "fkIn": 3,
    "checks": 8,
@@ -460,7 +460,7 @@
   {
    "table": "documentos_vuelo",
    "infra": false,
-   "rows": 938,
+   "rows": 45,
    "fkOut": 3,
    "fkIn": 2,
    "checks": 1,
@@ -600,7 +600,7 @@
   {
    "table": "eventos_auditoria",
    "infra": false,
-   "rows": 69415,
+   "rows": 4666,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 1,
@@ -751,7 +751,7 @@
   {
    "table": "habilitaciones_profesionales",
    "infra": false,
-   "rows": 3403,
+   "rows": 246,
    "fkOut": 5,
    "fkIn": 4,
    "checks": 2,
@@ -791,7 +791,7 @@
   {
    "table": "informacion_hangar",
    "infra": false,
-   "rows": 123,
+   "rows": 4,
    "fkOut": 5,
    "fkIn": 0,
    "checks": 0,
@@ -819,7 +819,7 @@
   {
    "table": "informacion_medica_vuelo",
    "infra": false,
-   "rows": 1799,
+   "rows": 75,
    "fkOut": 1,
    "fkIn": 0,
    "checks": 0,
@@ -854,7 +854,7 @@
   {
    "table": "informes_finales_vuelo",
    "infra": false,
-   "rows": 498,
+   "rows": 17,
    "fkOut": 3,
    "fkIn": 1,
    "checks": 4,
@@ -890,7 +890,7 @@
   {
    "table": "instantaneas_clima",
    "infra": false,
-   "rows": 110,
+   "rows": 4,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 0,
@@ -920,7 +920,7 @@
   {
    "table": "localidades",
    "infra": false,
-   "rows": 4065,
+   "rows": 4040,
    "fkOut": 1,
    "fkIn": 3,
    "checks": 0,
@@ -1001,7 +1001,7 @@
   {
    "table": "negociaciones_horario_vuelo",
    "infra": false,
-   "rows": 5568,
+   "rows": 290,
    "fkOut": 3,
    "fkIn": 1,
    "checks": 1,
@@ -1033,7 +1033,7 @@
   {
    "table": "notificaciones",
    "infra": false,
-   "rows": 1829050,
+   "rows": 7400,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 0,
@@ -1075,7 +1075,7 @@
   {
    "table": "obligaciones_informe_final",
    "infra": false,
-   "rows": 517,
+   "rows": 19,
    "fkOut": 6,
    "fkIn": 0,
    "checks": 3,
@@ -1112,7 +1112,7 @@
   {
    "table": "pacientes",
    "infra": false,
-   "rows": 1673,
+   "rows": 84,
    "fkOut": 1,
    "fkIn": 1,
    "checks": 0,
@@ -1179,7 +1179,7 @@
   {
    "table": "perfiles_comandante",
    "infra": false,
-   "rows": 2677,
+   "rows": 159,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 1,
@@ -1220,7 +1220,7 @@
   {
    "table": "personas",
    "infra": false,
-   "rows": 8020,
+   "rows": 479,
    "fkOut": 0,
    "fkIn": 6,
    "checks": 1,
@@ -1313,7 +1313,7 @@
   {
    "table": "politicas_habilitacion",
    "infra": false,
-   "rows": 300,
+   "rows": 48,
    "fkOut": 4,
    "fkIn": 0,
    "checks": 3,
@@ -1387,7 +1387,7 @@
   {
    "table": "provincias",
    "infra": false,
-   "rows": 52,
+   "rows": 27,
    "fkOut": 0,
    "fkIn": 4,
    "checks": 0,
@@ -1498,6 +1498,7 @@
     "e2e-roles-clasificaciones-ui.cjs",
     "e2e-roles-clasificaciones.cjs",
     "e2e-rutas-revision.cjs",
+    "e2e-seguridad-i58.cjs",
     "e2e-solicitudes.cjs",
     "e2e-suite-completa.cjs",
     "e2e-telefonos-internacionales.cjs",
@@ -1570,7 +1571,7 @@
   {
    "table": "rutas_vuelo",
    "infra": false,
-   "rows": 1244,
+   "rows": 119,
    "fkOut": 5,
    "fkIn": 0,
    "checks": 7,
@@ -1606,7 +1607,7 @@
   {
    "table": "telefonos",
    "infra": false,
-   "rows": 7125,
+   "rows": 437,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 3,
@@ -1650,6 +1651,7 @@
     "e2e-migracion-contactos.cjs",
     "e2e-perfiles-comandante.cjs",
     "e2e-rutas-revision.cjs",
+    "e2e-seguridad-i58.cjs",
     "e2e-suite-completa.cjs",
     "e2e-telefonos-internacionales.cjs",
     "e2e-usuarios.cjs",
@@ -1750,7 +1752,7 @@
   {
    "table": "usuarios",
    "infra": false,
-   "rows": 6569,
+   "rows": 407,
    "fkOut": 2,
    "fkIn": 48,
    "checks": 2,
@@ -1887,6 +1889,7 @@
     "e2e-roles-clasificaciones.cjs",
     "e2e-rutas-estabilizacion.cjs",
     "e2e-rutas-revision.cjs",
+    "e2e-seguridad-i58.cjs",
     "e2e-solicitudes.cjs",
     "e2e-suite-completa.cjs",
     "e2e-telefonos-internacionales.cjs",
@@ -1904,7 +1907,7 @@
   {
    "table": "usuarios_roles",
    "infra": false,
-   "rows": 6619,
+   "rows": 410,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 0,
@@ -1963,7 +1966,7 @@
   {
    "table": "verificaciones_correo",
    "infra": false,
-   "rows": 583,
+   "rows": 46,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 3,
@@ -1992,7 +1995,7 @@
   {
    "table": "versiones_documento_vuelo",
    "infra": false,
-   "rows": 1237,
+   "rows": 56,
    "fkOut": 2,
    "fkIn": 0,
    "checks": 1,
@@ -2021,7 +2024,7 @@
   {
    "table": "vuelos",
    "infra": false,
-   "rows": 4542,
+   "rows": 250,
    "fkOut": 9,
    "fkIn": 14,
    "checks": 3,
@@ -2150,7 +2153,7 @@
   {
    "table": "vuelos_sanitarios",
    "infra": false,
-   "rows": 1799,
+   "rows": 75,
    "fkOut": 8,
    "fkIn": 1,
    "checks": 1,
@@ -2215,7 +2218,7 @@
   {
    "table": "vuelos_tripulantes",
    "infra": false,
-   "rows": 4324,
+   "rows": 263,
    "fkOut": 5,
    "fkIn": 0,
    "checks": 1,

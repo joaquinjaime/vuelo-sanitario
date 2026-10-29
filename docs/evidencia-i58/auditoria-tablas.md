@@ -39,13 +39,13 @@ Criterio: mapeo JPA + escritor de producción + lector de producción + prueba J
 | politicas_habilitacion | entidad: CredentialPolicy | CredentialPolicyActivationService, CredentialPolicyService, ProfessionalCredentialService | CredentialPolicyActivationService, CredentialPolicyService, CredentialSufficiency | 4 | 4 | 4/0 | 3 | 1 | 1 | INTEGRADA |
 | prioridades_vuelo | entidad: FlightPriority | CatalogController, FlightService | CatalogController, FlightService | 7 | 1 | 0/1 | 0 | 1 | 0 | INTEGRADA |
 | provincias | entidad: Province | CatalogController, GeographicCatalogService, ProfessionalCredentialService | CatalogController, GeographicCatalogService, ProfessionalCredentialService | 15 | 1 | 0/4 | 0 | 2 | 0 | INTEGRADA |
-| roles | entidad: Role | AuthService | AuthService | 30 | 26 | 0/1 | 0 | 1 | 0 | INTEGRADA |
+| roles | entidad: Role | AuthService | AuthService | 30 | 27 | 0/1 | 0 | 1 | 0 | INTEGRADA |
 | roles_tripulacion | entidad: CrewRole | CatalogController, CredentialPolicyActivationService, CredentialPolicyService | CatalogController, CredentialPolicyActivationService, CredentialPolicyService | 16 | 5 | 0/4 | 0 | 1 | 0 | INTEGRADA |
 | rutas_vuelo | entidad: FlightRoute | FlightRouteService | FlightRouteService, GeographicDependencyService | 3 | 7 | 5/0 | 7 | 2 | 0 | INTEGRADA |
-| telefonos | entidad: PhoneContact | AuthService, PersonContactService | AuthService, CrewContactService, PersonContactService | 8 | 22 | 2/0 | 3 | 2 | 0 | INTEGRADA |
+| telefonos | entidad: PhoneContact | AuthService, PersonContactService | AuthService, CrewContactService, PersonContactService | 8 | 23 | 2/0 | 3 | 2 | 0 | INTEGRADA |
 | tipos_documento | entidad: DocumentType | CatalogController, DocumentService | CatalogController, DocumentService | 2 | 2 | 0/1 | 0 | 1 | 0 | INTEGRADA |
 | tipos_vuelo | entidad: FlightType | CatalogController, CredentialPolicyActivationService, CredentialPolicyService | CatalogController, CredentialPolicyActivationService, CredentialPolicyService | 20 | 4 | 0/2 | 0 | 1 | 0 | INTEGRADA |
-| usuarios | entidad: User | CatalogController, Aa2000CoordinationService, AircraftAdminService | CatalogController, JwtAuthenticationFilter, Aa2000CoordinationService | 44 | 35 | 2/48 | 2 | 2 | 0 | INTEGRADA |
+| usuarios | entidad: User | CatalogController, Aa2000CoordinationService, AircraftAdminService | CatalogController, JwtAuthenticationFilter, Aa2000CoordinationService | 44 | 36 | 2/48 | 2 | 2 | 0 | INTEGRADA |
 | usuarios_roles | entidad: UserRole | AuthService | AuthService | 25 | 9 | 2/0 | 0 | 1 | 0 | INTEGRADA |
 | verificaciones_correo | entidad: EmailVerification | EmailVerificationService | EmailVerificationService, PersonContactService | 1 | 2 | 2/0 | 3 | 1 | 0 | INTEGRADA |
 | versiones_documento_vuelo | entidad: FlightDocument | DocumentService | DocumentService | 1 | 3 | 2/0 | 1 | 2 | 0 | INTEGRADA |

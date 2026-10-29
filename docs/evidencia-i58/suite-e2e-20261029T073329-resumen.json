@@ -1,0 +1,341 @@
+{
+  "runId": "20261029T073329",
+  "startedAt": "2026-10-29T07:33:30.242Z",
+  "finishedAt": "2026-10-29T08:47:44.512Z",
+  "continuous": true,
+  "passed": 54,
+  "total": 54,
+  "tested": {
+    "commit": "a9f0799b1f47a53b413e3549286a47d262fd98c5",
+    "branch": "feature/completitud-funcional-post-v55",
+    "workingTreeClean": true,
+    "backendImage": "sha256:d5fd551567db971367386c03210564109026c4d1954d8b4c668ed27e3b7c770d sha256:d5fd551567db971367386c03210564109026c4d1954d8b4c668ed27e3b7c770d",
+    "frontendImage": "sha256:8d1c7b1673fd2766167044d3c3644ba4088d2223ac3364bb0230c5e31538eb7e sha256:8d1c7b1673fd2766167044d3c3644ba4088d2223ac3364bb0230c5e31538eb7e"
+  },
+  "results": [
+    {
+      "name": "e2e-usuarios-aislado",
+      "status": "OK",
+      "seconds": 220,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-usuarios-ui",
+      "status": "OK",
+      "seconds": 104,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-compartida",
+      "status": "OK",
+      "seconds": 12,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-compartida-ui",
+      "status": "OK",
+      "seconds": 12,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-dni",
+      "status": "OK",
+      "seconds": 74,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-dni-ui",
+      "status": "OK",
+      "seconds": 20,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-dni-usuarios",
+      "status": "OK",
+      "seconds": 108,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-identidad-dni-usuarios-ui",
+      "status": "OK",
+      "seconds": 36,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-paciente-solicitud",
+      "status": "OK",
+      "seconds": 7,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-paciente-solicitud-ui",
+      "status": "OK",
+      "seconds": 8,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-patient-directory",
+      "status": "OK",
+      "seconds": 12,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-patient-directory-ui",
+      "status": "OK",
+      "seconds": 12,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos",
+      "status": "OK",
+      "seconds": 90,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos-ui",
+      "status": "OK",
+      "seconds": 48,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos-solicitud",
+      "status": "OK",
+      "seconds": 99,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos-solicitud-ui",
+      "status": "OK",
+      "seconds": 50,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-migracion-contactos",
+      "status": "OK",
+      "seconds": 14,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-migracion-historica",
+      "status": "OK",
+      "seconds": 188,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos-tripulacion",
+      "status": "OK",
+      "seconds": 56,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-contactos-tripulacion-ui",
+      "status": "OK",
+      "seconds": 45,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-verificacion-correo",
+      "status": "OK",
+      "seconds": 116,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-telefonos-internacionales",
+      "status": "OK",
+      "seconds": 27,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-verificacion-contactos-ui",
+      "status": "OK",
+      "seconds": 24,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-auditoria",
+      "status": "OK",
+      "seconds": 88,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-auditoria-ui",
+      "status": "OK",
+      "seconds": 38,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-solicitudes",
+      "status": "OK",
+      "seconds": 128,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-solicitudes-ui",
+      "status": "OK",
+      "seconds": 66,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-aeronaves-tripulacion",
+      "status": "OK",
+      "seconds": 94,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-aeronaves-tripulacion-ui",
+      "status": "OK",
+      "seconds": 62,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-elegibilidad-tripulacion",
+      "status": "OK",
+      "seconds": 17,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-elegibilidad-tripulacion-ui",
+      "status": "OK",
+      "seconds": 18,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-cierre",
+      "status": "OK",
+      "seconds": 129,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-cierre-ui",
+      "status": "OK",
+      "seconds": 75,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-documentos",
+      "status": "OK",
+      "seconds": 97,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-documentos-integracion-ui",
+      "status": "OK",
+      "seconds": 80,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-rutas-revision",
+      "status": "OK",
+      "seconds": 158,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-rutas-revision-ui",
+      "status": "OK",
+      "seconds": 137,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-rutas-estabilizacion",
+      "status": "OK",
+      "seconds": 130,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-geografia-catalogos",
+      "status": "OK",
+      "seconds": 10,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-geografia-integridad",
+      "status": "OK",
+      "seconds": 75,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-i53-operativo-ui",
+      "status": "OK",
+      "seconds": 24,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-sanitario-replanificacion-ui",
+      "status": "OK",
+      "seconds": 158,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-perfiles-comandante",
+      "status": "OK",
+      "seconds": 27,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-roles-clasificaciones",
+      "status": "OK",
+      "seconds": 160,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-roles-clasificaciones-ui",
+      "status": "OK",
+      "seconds": 57,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-habilitaciones",
+      "status": "OK",
+      "seconds": 72,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-habilitaciones-vuelos",
+      "status": "OK",
+      "seconds": 78,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-habilitaciones-ui",
+      "status": "OK",
+      "seconds": 36,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-tripulacion-actualizacion-ui",
+      "status": "OK",
+      "seconds": 124,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-politicas-documentos-v60",
+      "status": "OK",
+      "seconds": 53,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-politicas-documentos-ui",
+      "status": "OK",
+      "seconds": 27,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-antimalware-produccion",
+      "status": "OK",
+      "seconds": 165,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-privilegios-bd",
+      "status": "OK",
+      "seconds": 266,
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-seguridad-i58",
+      "status": "OK",
+      "seconds": 128,
+      "exitCode": 0
+    }
+  ]
+}
