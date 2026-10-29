@@ -68,7 +68,9 @@ const blocked = (statement, pattern) => { let message = ''; try { sql(statement)
   const checkId = one('SELECT MIN(id_consultas_externas_habilitacion) FROM consultas_externas_habilitacion');
   if (checkId) { blocked(`UPDATE consultas_externas_habilitacion SET resultado='NO_COINCIDE' WHERE id_consultas_externas_habilitacion=${checkId}`, /51061/); blocked(`DELETE FROM consultas_externas_habilitacion WHERE id_consultas_externas_habilitacion=${checkId}`, /51061/); }
   pass('decisiones y consultas externas: UPDATE y DELETE rechazados por el motor de base de datos');
-  const retiredPolicy = one('SELECT MIN(id_politicas_habilitacion) FROM politicas_habilitacion WHERE activa=0'), activePolicy = one('SELECT MIN(id_politicas_habilitacion) FROM politicas_habilitacion WHERE activa=1');
+  // Una política dada de baja SIN equivalente activa: si hubiera una activa con la misma clave, el índice único ux_politica_habilitacion_activa rechazaría la reactivación antes que el trigger y la prueba no ejercería el trigger V60.
+  const retiredPolicy = one("SELECT MIN(r.id_politicas_habilitacion) FROM politicas_habilitacion r WHERE r.activa=0 AND NOT EXISTS (SELECT 1 FROM politicas_habilitacion a WHERE a.activa=1 AND a.id_roles_tripulacion=r.id_roles_tripulacion AND ISNULL(a.id_tipos_vuelo,0)=ISNULL(r.id_tipos_vuelo,0) AND ISNULL(a.categoria_aeronave,N'')=ISNULL(r.categoria_aeronave,N'') AND a.tipo_habilitacion=r.tipo_habilitacion)"), activePolicy = one('SELECT MIN(id_politicas_habilitacion) FROM politicas_habilitacion WHERE activa=1');
+  assert.ok(/^[0-9]+$/.test(retiredPolicy), "la prueba necesita una política dada de baja sin equivalente activa (la dejan las pruebas de habilitaciones y de activación por lote): " + retiredPolicy);
   blocked(`DELETE FROM politicas_habilitacion WHERE id_politicas_habilitacion=${retiredPolicy}`, /51062/);
   blocked(`UPDATE politicas_habilitacion SET tipo_habilitacion=N'alterada' WHERE id_politicas_habilitacion=${activePolicy}`, /51063/);
   blocked(`UPDATE politicas_habilitacion SET activa=1,fecha_baja=NULL,id_usuario_baja=NULL,motivo_baja=NULL WHERE id_politicas_habilitacion=${retiredPolicy}`, /51064/);

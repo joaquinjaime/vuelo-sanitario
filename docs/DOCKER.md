@@ -4,7 +4,7 @@
 
 `sqlserver` usa `mcr.microsoft.com/mssql/server:2022-latest` y sólo es accesible desde la red bridge privada `internal`. Su healthcheck ejecuta `sqlcmd SELECT 1`.
 
-`db-init` espera ese healthcheck y ejecuta un script idempotente: crea la base `vuelos_sanitarios`, el login configurado por `DB_USERNAME` y el usuario asociado. El usuario recibe `db_owner` en este entorno de desarrollo para que Flyway pueda crear y evolucionar el esquema; el backend nunca usa `sa`.
+`db-init` espera ese healthcheck y ejecuta un script idempotente: crea la base `vuelos_sanitarios` y **dos cuentas distintas** (mínimo privilegio, I-5.8): la de **migraciones** (`MIGRATION_DB_USERNAME`, `db_owner`, la usa Flyway) y la de la **aplicación** (`DB_USERNAME`, sólo `db_datareader` + `db_datawriter`, sin DDL). El backend nunca usa `sa` ni opera con `db_owner`. `db-grants` vuelve a aplicar los permisos cuando el backend ya migró (para denegar a la cuenta de la aplicación la escritura de `flyway_schema_history`). Detalle y pruebas: `docs/SEPARACION_CUENTAS_Y_ANTIMALWARE_I58_2026-10-28.md`. Ambas contraseñas son obligatorias en `.env` (ver `.env.example`) y deben diferir.
 
 `backend` compila Java 21 en una etapa Maven y ejecuta el JAR como usuario no root con el perfil `docker`. Expone sólo el puerto interno 8080, y el healthcheck consulta `/actuator/health`.
 

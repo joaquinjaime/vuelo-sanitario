@@ -85,3 +85,27 @@ test("flight log: a late page answer does not replace the newer page", async () 
   expect(screen.queryByText("primera")).not.toBeInTheDocument();
   expect(screen.getByText("segunda")).toBeInTheDocument();
 });
+
+test("operations center: the refresh that follows an action never reloads the flight that was selected when the button was clicked", async () => {
+  const { Ops } = await import("./main.jsx");
+  const detail = (id) => ({ vuelo: { id, codigo: `SAN-${id}`, estadoVuelo: null, datosSanitarios: { estadoSolicitud: "SOLICITADO", prioridad: "ALTA", fechaSolicitada: "2026-11-05T10:00:00" } }, negociacion: [], cierre: null });
+  const slowDone = deferred();
+  vi.mocked(api).mockImplementation((path, options) => {
+    if (path === "/flights/1" || path === "/flights/2") return Promise.resolve(detail(Number(path.split("/")[2])));
+    if (path === "/flights/1/schedule/accept" && options?.method === "POST") return Promise.resolve({});
+    return Promise.resolve([]);
+  });
+  const flights = [1, 2].map((id) => ({ id: String(id), codigo: `SAN-${id}`, estado: "SOLICITADO", extremaUrgencia: false }));
+  render(<Ops d={{ flights }} done={vi.fn(() => slowDone.promise)} msg={vi.fn()} />);
+  fireEvent.change(screen.getAllByLabelText("Solicitud")[0], { target: { value: "1" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Aceptar horario DTS" }));
+  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/1/schedule/accept", expect.anything()));
+  fireEvent.change(screen.getAllByLabelText("Solicitud")[0], { target: { value: "2" } });          // el usuario elige otra solicitud antes de que termine el refresco de la acción
+  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/2"));
+  const loadsOfFlight1 = () => vi.mocked(api).mock.calls.filter((c) => c[0] === "/flights/1").length;
+  const before = loadsOfFlight1();
+  slowDone.resolve();                                                                                 // termina la acción: el refresco posterior debe ser de la solicitud 2
+  await new Promise((r) => setTimeout(r, 80));
+  expect(loadsOfFlight1()).toBe(before);
+  expect(screen.getAllByLabelText("Solicitud")[0]).toHaveValue("2");
+});
