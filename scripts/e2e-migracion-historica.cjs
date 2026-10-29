@@ -64,6 +64,10 @@ UNION ALL SELECT @f1,@ops,N'FLIGHT',@f1,N'FINISH',N'{"estado":"FINALIZADO"}';
 
 (async () => {
   assert.notEqual(one('SELECT DB_NAME()'), '');
+  // La VM de Docker (≈3,4 GB) no soporta un segundo backend junto al de trabajo: se detienen (sin borrar nada) el backend y el frontend E2E mientras dura el escenario y se reinician al salir.
+  const paused = [BACKEND, BACKEND.replace(/backend-1$/, 'frontend-1')].filter((n) => docker('inspect', '-f', '{{.State.Running}}', n).stdout.trim() === 'true');
+  for (const n of paused) assert.equal(docker('stop', n).status, 0, 'no se pudo detener ' + n);
+  process.on('exit', () => { for (const n of paused.slice().reverse()) spawnSync('docker', ['start', n]); for (let i = 0; i < 40; i++) { const r = spawnSync('docker', ['inspect', '-f', '{{.State.Health.Status}}', BACKEND], { encoding: 'utf8' }); if (r.stdout && r.stdout.trim() === 'healthy') break; spawnSync(process.platform === 'win32' ? 'ping' : 'sleep', process.platform === 'win32' ? ['-n', '4', '127.0.0.1'] : ['3']); } });
   sql(`CREATE DATABASE [${DB}]`, 'master');
   applyDbPermissions(DB);
   await runBackend('v41', { SPRING_FLYWAY_TARGET: '41', SPRING_JPA_HIBERNATE_DDL_AUTO: 'none' });
@@ -102,5 +106,6 @@ UNION ALL SELECT @f1,@ops,N'FLIGHT',@f1,N'FINISH',N'{"estado":"FINALIZADO"}';
   q(`UPDATE vuelos SET motivo_vuelo = N'historico editado' WHERE codigo_vuelo = N'H-1'`); // una actualización histórica legítima no se bloquea
   rejects(`UPDATE o SET estado_obligacion = N'APROBADO' FROM obligaciones_informe_final o JOIN vuelos v ON v.id_vuelos = o.id_vuelos WHERE v.codigo_vuelo = N'H-5'`, /51044|ck_/);
   pass('SQL Server rechaza aprobar históricos sin decisión, COMPLETADO sin aprobación (también en sentencias multi-vuelo, atómicas) y la aprobación de obligaciones inconsistentes; las ediciones históricas legítimas siguen permitidas');
+  try { sql(`ALTER DATABASE [${DB}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${DB}]`, 'master'); } catch (e) { console.error('No se pudo eliminar la base descartable ' + DB + ': ' + String(e.message).slice(0, 160)); }
   console.log(`\nMIGRACIÓN HISTÓRICA COMPLETA: ${passed} bloques aprobados (base ${DB}).`);
 })().catch((e) => { console.error('FALLO MIGRACIÓN:', e.stack || e); process.exit(1); });

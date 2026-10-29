@@ -24,7 +24,7 @@ const SUITE = [
   'e2e-paciente-solicitud', 'e2e-paciente-solicitud-ui',
   'e2e-patient-directory', 'e2e-patient-directory-ui',
   'e2e-contactos', 'e2e-contactos-ui',
-  'e2e-contactos-solicitud', 'e2e-contactos-solicitud-ui', 'e2e-migracion-contactos',
+  'e2e-contactos-solicitud', 'e2e-contactos-solicitud-ui', 'e2e-migracion-contactos', 'e2e-migracion-historica',
   'e2e-contactos-tripulacion', 'e2e-contactos-tripulacion-ui',
   'e2e-verificacion-correo', 'e2e-telefonos-internacionales', 'e2e-verificacion-contactos-ui',
   'e2e-auditoria', 'e2e-auditoria-ui',

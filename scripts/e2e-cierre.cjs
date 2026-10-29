@@ -229,10 +229,16 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
 
   // ---------- L: histórico por API y barreras SQL del ciclo terminal ----------
   const historicRows = sql(`SELECT id_informes_finales_vuelo, estado_revision, origen_decision FROM informes_finales_vuelo WHERE origen_decision <> N'FLUJO_ACTUAL' ORDER BY 1`).split(/\r?\n/).filter(Boolean).map((l) => l.split('|').map((x) => x.trim()));
-  assert.ok(historicRows.length >= 4 && historicRows.every((r) => r[1] === 'APROBADO' && r[2] === 'HISTORICA_OBLIGACION_AUDITADA'), 'las aprobaciones previas conservan su procedencia: ' + JSON.stringify(historicRows));
+  // Las filas históricas sólo existen en una base que se actualizó desde un esquema anterior a V42 (la E2E acumulada); una instalación nueva no tiene ninguna. En ese caso la procedencia histórica la verifica
+  // e2e-migracion-historica con una migración REAL V41→V60 (H-1…H-7); aquí se comprueba sólo cuando hay datos históricos y se declara explícitamente cuando no los hay.
+  const hasHistoric = historicRows.length > 0;
+  if (hasHistoric) assert.ok(historicRows.length >= 4 && historicRows.every((r) => r[1] === 'APROBADO' && r[2] === 'HISTORICA_OBLIGACION_AUDITADA'), 'las aprobaciones previas conservan su procedencia: ' + JSON.stringify(historicRows));
+  else console.log('NOTA: base sin informes históricos (instalación nueva): procedencia histórica verificada en e2e-migracion-historica');
+  if (hasHistoric) {
   const historicFlight = one(`SELECT TOP 1 id_vuelos FROM informes_finales_vuelo WHERE origen_decision <> N'FLUJO_ACTUAL' ORDER BY id_informes_finales_vuelo`);
   const historicDetail = await ok(`/final-reports/flight/${historicFlight}`, { token: ops.token }); assert.equal(historicDetail.versiones[0].origenDecision, 'HISTORICA_OBLIGACION_AUDITADA'); assert.equal(historicDetail.versiones[0].estado, 'APROBADO');
   await call(`/final-reports/${historicDetail.obligacion.id}/review`, { method: 'POST', token: ops.token, body: { aprobar: true }, expect: [400] });
+  }
   const trigger = (statement, pattern) => assert.throws(() => sql(statement), (e) => pattern.test(e.sqlOutput || e.message), 'debía rechazarse: ' + statement.slice(0, 80));
   const stateId = (code) => `(SELECT id_estados_vuelo FROM estados_vuelo WHERE codigo_estado_vuelo=N'${code}')`;
   trigger(`UPDATE vuelos SET id_estados_vuelo=${stateId('PLANIFICADO')} WHERE id_vuelos=${sanitary}`, /51043/); trigger(`UPDATE vuelos SET id_estados_vuelo=${stateId('EN_CURSO')} WHERE id_vuelos=${opB.id}`, /51043/);
