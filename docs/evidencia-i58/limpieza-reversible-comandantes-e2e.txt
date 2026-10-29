@@ -1,0 +1,3 @@
+comandantes_activos_antes|2717
+comandantes_desactivados|2717
+comandantes_activos_despues|43
