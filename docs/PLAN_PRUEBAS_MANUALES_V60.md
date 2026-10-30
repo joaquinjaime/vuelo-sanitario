@@ -14,6 +14,8 @@ La persona Administradora debe crear exclusivamente desde el panel administrativ
 
 Antes del escenario integral, el Administrador debe confirmar en pantalla que existen dos aeropuertos activos, sus provincias/localidades activas, tipos de vuelo/prioridades, una aeronave ficticia activa con ubicación y un Comandante ficticio activo cuyo perfil sea compatible con esa ubicación. Si falta alguno, crearlo o configurarlo desde la interfaz administrativa y registrar su identificador sintético.
 
+La asignación de comandante y tripulación además depende de políticas de habilitación activas. No se debe inventar, simular como aprobada ni activar una política de negocio sólo para destrabar la prueba. Si no existe una política sintética con fuente, referencia de aprobación y revisión autorizadas, ejecutar los casos previos y registrar `MAN-E2E-01` como **BLOQUEADA** al llegar a la asignación; continuar el ciclo completo sólo después de la aprobación correspondiente.
+
 ## Escenario integral de punta a punta
 
 ### MAN-E2E-01 — Vuelo sanitario completo de prueba
