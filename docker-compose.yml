@@ -17,8 +17,9 @@ services:
       retries: 15
       start_period: 30s
     restart: unless-stopped
+    # Sólo el equipo local alcanza SQL Server (SSMS, copias, ensayos). Publicarlo en todas las interfaces expondría el puerto de la base a la red.
     ports:
-      - "14330:1433"
+      - "127.0.0.1:14330:1433"
 
 
   db-init:
@@ -28,13 +29,35 @@ services:
         condition: service_healthy
     environment:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Configure MSSQL_SA_PASSWORD in .env}
+      # Cuenta de la aplicación (sólo datos) y cuenta de migraciones (db_owner, la usa Flyway): son identidades distintas.
       DB_USERNAME: ${DB_USERNAME:-vuelos_app}
       DB_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env}
+      MIGRATION_DB_USERNAME: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Configure MIGRATION_DB_PASSWORD in .env (must differ from DB_PASSWORD)}
       DB_NAME: vuelos_sanitarios
     volumes:
       - ./docker/sqlserver/init-db.sh:/scripts/init-db.sh:ro
+      - ./docker/sqlserver/apply-db-permissions.sql:/scripts/apply-db-permissions.sql:ro
     networks: [internal]
     command: ["/bin/bash", "/scripts/init-db.sh"]
+    restart: "no"
+
+  # Segunda pasada de permisos, DESPUÉS de que el backend (Flyway) creó o actualizó el esquema: ahora existe flyway_schema_history y puede denegarse a la
+  # cuenta de la aplicación su escritura. Orden de una instalación nueva: db-init (logins, usuarios, roles) -> backend (Flyway con la cuenta de migraciones) -> db-grants.
+  db-grants:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Configure MSSQL_SA_PASSWORD in .env}
+      APP_LOGIN: ${DB_USERNAME:-vuelos_app}
+      MIGRATION_LOGIN: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      DB_NAME: vuelos_sanitarios
+    volumes:
+      - ./docker/sqlserver/apply-db-permissions.sql:/scripts/apply-db-permissions.sql:ro
+    networks: [internal]
+    command: ["/bin/bash", "-c", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" exec /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -I -d \"$$DB_NAME\" -i /scripts/apply-db-permissions.sql"]
     restart: "no"
 
   # El backend se ejecuta como el usuario no privilegiado `spring` (UID 999),
@@ -55,6 +78,9 @@ services:
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios;encrypt=true;trustServerCertificate=true
       DB_USERNAME: ${DB_USERNAME:-vuelos_app}
       DB_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env}
+      # Flyway (arranque automático de desarrollo/E2E) usa esta cuenta; el acceso normal a datos usa DB_USERNAME. Producción retira estas dos variables (docker-compose.prod.yml).
+      MIGRATION_DB_USERNAME: ${MIGRATION_DB_USERNAME:-vuelos_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Configure MIGRATION_DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Configure JWT_SECRET in .env}
       DOCUMENTS_DIRECTORY: /data/documents
       MAX_PDF_BYTES: ${MAX_PDF_BYTES:-10485760}
@@ -62,6 +88,28 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost}
+      # Correo saliente (verificación de correos). Sin MAIL_ENABLED=true y un servidor SMTP el servicio informa "no configurado".
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-true}
+      MAIL_SSL: ${MAIL_SSL:-false}
+      MAIL_FROM: ${MAIL_FROM:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      # Antimalware (clamd) y avisos de vencimiento: ver docs/DOCUMENTOS_HABILITACION_I56.md
+      APP_ANTIMALWARE_ENABLED: ${APP_ANTIMALWARE_ENABLED:-false}
+      APP_ANTIMALWARE_HOST: ${APP_ANTIMALWARE_HOST:-}
+      APP_ANTIMALWARE_PORT: ${APP_ANTIMALWARE_PORT:-3310}
+      # desarrollo | pruebas | produccion. En produccion el antivirus exige una base de firmas completa y reciente (ver docs/PREPARACION_PRODUCCION_I57).
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-desarrollo}
+      APP_ANTIMALWARE_REQUIRE_FULL_DATABASE: ${APP_ANTIMALWARE_REQUIRE_FULL_DATABASE:-}
+      APP_ANTIMALWARE_MAX_SIGNATURE_AGE_DAYS: ${APP_ANTIMALWARE_MAX_SIGNATURE_AGE_DAYS:-7}
+      # 60/30/7/0 es una propuesta pendiente de aprobación; APPROVED=true sólo después de aprobarla.
+      APP_CREDENTIAL_EXPIRY_NOTICE_DAYS: ${APP_CREDENTIAL_EXPIRY_NOTICE_DAYS:-60,30,7,0}
+      APP_CREDENTIAL_EXPIRY_APPROVED: ${APP_CREDENTIAL_EXPIRY_APPROVED:-false}
+      APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED: ${APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED:-true}
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -76,6 +124,25 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    restart: unless-stopped
+
+  # Analizador antimalware de la documentación de habilitaciones (ClamAV). Perfil opcional: `--profile antimalware`.
+  # Requisito de producción: sin él, la documentación queda en cuarentena y no puede aprobarse. Base completa mantenida por freshclam
+  # (necesita salida a Internet y ~2 GB de RAM libres). Activar en el backend con APP_ANTIMALWARE_ENABLED=true y APP_ANTIMALWARE_HOST=clamav.
+  clamav:
+    profiles: ["antimalware"]
+    image: clamav/clamav:1.4.6
+    volumes:
+      - clamav_db:/var/lib/clamav
+      - ./docker/clamav/prod-clamd.conf:/etc/clamav/clamd.conf:ro
+    healthcheck:
+      # Sano = clamd responde Y declara una base de firmas con versión (ClamAV <programa>/<versión de firmas>/<fecha>). La frescura (antigüedad máxima) la verifica el backend en cada análisis.
+      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG && printf 'VERSION\\n' | nc -w 3 127.0.0.1 3310 | grep -Eq '^ClamAV [^/]+/[1-9][0-9]*/'"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+    networks: [internal]
     restart: unless-stopped
 
   frontend:
@@ -94,5 +161,6 @@ networks:
     driver: bridge
 
 volumes:
+  clamav_db:
   sqlserver_data:
   documents_data:

@@ -30,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AircraftAdminService {
  private static final ObjectMapper JSON=new ObjectMapper();
- private final AircraftRepository aircraft; private final AirportRepository airports; private final FlightRepository flights; private final FlightCrewRepository crews; private final FlightMedicalInfoRepository medical; private final UserRepository users; private final AuditEventRepository events; private final AuditService audit; private final Clock clock;
- public AircraftAdminService(AircraftRepository a,AirportRepository ap,FlightRepository f,FlightCrewRepository c,FlightMedicalInfoRepository m,UserRepository u,AuditEventRepository e,AuditService au,Clock clock){aircraft=a;airports=ap;flights=f;crews=c;medical=m;users=u;events=e;audit=au;this.clock=clock;}
+ private final AircraftRepository aircraft; private final AirportRepository airports; private final AirportLocks airportLocks; private final FlightRepository flights; private final FlightCrewRepository crews; private final FlightMedicalInfoRepository medical; private final UserRepository users; private final AuditEventRepository events; private final AuditService audit; private final Clock clock;
+ public AircraftAdminService(AircraftRepository a,AirportRepository ap,AirportLocks al,FlightRepository f,FlightCrewRepository c,FlightMedicalInfoRepository m,UserRepository u,AuditEventRepository e,AuditService au,Clock clock){aircraft=a;airports=ap;airportLocks=al;flights=f;crews=c;medical=m;users=u;events=e;audit=au;this.clock=clock;}
 
  private ApiException bad(String message){return new ApiException(HttpStatus.BAD_REQUEST,message);}
  private ApiException conflict(String code,String message,Map<String,Object> details){return new ApiException(HttpStatus.CONFLICT,code,message,details);}
@@ -42,7 +42,7 @@ public class AircraftAdminService {
  private String json(Map<String,Object> values){try{return JSON.writeValueAsString(values);}catch(JsonProcessingException e){throw new IllegalStateException(e);}}
  private Map<String,Object> snapshot(Aircraft x){Map<String,Object> m=new LinkedHashMap<>();m.put("matricula",x.getMatricula());m.put("modelo",x.getModelo());m.put("tipo",x.getTipo());m.put("capacidadPacientes",x.getCapacidadPacientes());m.put("capacidadTripulacion",x.getCapacidadTripulacion());m.put("equipamientoMedico",x.getEquipamientoMedico());m.put("activo",Boolean.TRUE.equals(x.getActivo()));m.put("aeropuertoActualId",x.getAeropuertoActual()==null?null:x.getAeropuertoActual().getId());return m;}
  private Aircraft locked(Long id){return aircraft.lockById(id).orElseThrow(this::notFound);}
- private Airport activeAirport(Long id){return id==null?null:airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElse(null);}
+ private Airport activeAirport(Long id){if(id==null)return null;airportLocks.lockAll(id);return airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElse(null);}
 
  // ---------- Consultas ----------
  @Transactional(readOnly=true) public List<AircraftView> activeList(){return aircraft.findAllWithCurrentAirportOrderByMatricula().stream().filter(x->Boolean.TRUE.equals(x.getActivo())).map(this::view).toList();}

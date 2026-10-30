@@ -4,6 +4,8 @@ Relevamiento de `sys.columns`, claves foráneas, índices y restricciones en SQL
 
 ## `rutas_vuelo`
 
+> Implementado y ampliado: la planificación versionada existe desde V37 y la revisión operativa de cada versión desde V55 (I-4); ver `REVISION_OPERATIVA_RUTAS_I4_2026-10-25.md`. Lo que sigue es la propuesta original.
+
 - Datos: vuelo y usuario creador obligatorios, versión y marca de vigente, altitud en pies, distancia en millas náuticas, tiempo estimado en minutos, observaciones y fecha; los cuatro datos descriptivos son opcionales en el esquema. FK a `vuelos` y `usuarios`; `version > 0` y unicidad `(id_vuelos, version)`.
 - Propuesta: el comandante asignado registra la ruta durante la planificación; Operaciones y lectores autorizados del vuelo consultan vigente e historial. Corregir creando una nueva versión, no sobrescribir ni borrar el historial. Validar magnitudes no negativas, al menos un dato significativo, límites y estado del vuelo; bloqueo transaccional de la fila del vuelo y control de versión.
 - Interfaz: formulario e historial en planificación del comandante; lectura en Operaciones. Pruebas: permisos por vuelo, versiones, concurrencia, estados, integridad y persistencia SQL/reinicio.

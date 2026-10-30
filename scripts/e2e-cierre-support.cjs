@@ -11,8 +11,9 @@ const BASE = process.env.E2E_BASE || 'http://127.0.0.1:18080/api';
 const DB_NAME = process.env.E2E_DB_NAME || 'vuelos_sanitarios_e2e';
 const SQL_CONTAINER = process.env.E2E_SQL_CONTAINER || `${PROJECT}-sqlserver-1`;
 const BACKEND = process.env.E2E_BACKEND_CONTAINER || `${PROJECT}-backend-1`;
-const MARK = 'cie' + crypto.randomBytes(3).toString('hex');
-const PASSWORD = 'E2E-' + crypto.randomBytes(12).toString('base64url');
+// E2E_FIXED_MARK / E2E_FIXED_PASSWORD permiten que dos procesos (p. ej. la siembra y la verificación del ensayo de migración) compartan las cuentas que crearon.
+const MARK = process.env.E2E_FIXED_MARK || 'cie' + crypto.randomBytes(3).toString('hex');
+const PASSWORD = process.env.E2E_FIXED_PASSWORD || 'E2E-' + crypto.randomBytes(12).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sql(query, database = DB_NAME) {
@@ -23,6 +24,24 @@ function sql(query, database = DB_NAME) {
 }
 const one = (query) => sql(query).split(/\r?\n/)[0].trim();
 const count = (query) => Number(one(query));
+
+/** Aplica docker/sqlserver/apply-db-permissions.sql (mismo script que db-init/db-grants y que el procedimiento de producción) a una base de escenario:
+ *  cuenta de migraciones = db_owner, cuenta de la aplicación = sólo datos. Los logins salen del entorno del backend E2E de referencia. */
+function backendEnv() {
+  const r = spawnSync('docker', ['inspect', BACKEND], { encoding: 'utf8' });
+  assert.equal(r.status, 0, 'no se pudo inspeccionar ' + BACKEND);
+  return Object.fromEntries(JSON.parse(r.stdout)[0].Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
+}
+function applyDbPermissions(database, env = backendEnv()) {
+  const appLogin = env.DB_USERNAME, migrationLogin = env.MIGRATION_DB_USERNAME;
+  assert.match(String(appLogin), /^[A-Za-z0-9_]+$/, 'cuenta de aplicación no reconocida');
+  assert.match(String(migrationLogin), /^[A-Za-z0-9_]+$/, 'el backend E2E no tiene cuenta de migraciones (MIGRATION_DB_USERNAME)');
+  const script = fs.readFileSync(path.join(ROOT, 'docker', 'sqlserver', 'apply-db-permissions.sql'), 'utf8');
+  const r = spawnSync('docker', ['exec', '-i', '-e', 'APP_LOGIN=' + appLogin, '-e', 'MIGRATION_LOGIN=' + migrationLogin, SQL_CONTAINER, 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -I -S localhost -U sa -C -d ' + database + ' -i /dev/stdin'], { input: script, encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0) throw new Error('apply-db-permissions falló: ' + out.slice(0, 600));
+  return out.trim();
+}
 
 async function call(p, { method = 'GET', body, token, expect = [200] } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -43,7 +62,7 @@ const futureSlot = () => { const d = new Date(Date.now() + (dayCursor += 3) * 86
 async function createUser(admin, role, suffix) {
   const dni = String(100000000000 + Math.floor(Math.random() * 899999999999));
   const name = MARK + suffix;
-  const req = { nombre: 'E2E', apellido: suffix, dni, roles: [role], correos: [{ direccion: name + '@example.test' }], telefonos: [{ numero: '3815551234' }] };
+  const req = { nombre: 'E2E', apellido: suffix, dni, roles: [role], correos: [{ direccion: name + '@example.test' }], telefonos: [{ pais: 'AR', numero: '3815551234' }] };
   if (role === 'COMANDANTE') req.licenciaAeronautica = name.toUpperCase();
   const activation = (await call('/auth/users', { method: 'POST', body: req, token: admin })).data;
   await call('/auth/activar-cuenta', { method: 'POST', body: { dni, codigo: activation.codigo, username: name, password: PASSWORD, confirmacionPassword: PASSWORD }, expect: [204] });
@@ -52,22 +71,80 @@ async function createUser(admin, role, suffix) {
   return { name, token, id: me.id };
 }
 
-const PDF = (() => {
-  const NL = String.fromCharCode(10);
-  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>", ["<< /Length 0 >>", "stream", "", "endstream"].join(NL)];
-  let out = "%PDF-1.4" + NL; const offsets = [];
-  objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out)); out += [(i + 1) + " 0 obj", o, "endobj", ""].join(NL); });
+/**
+ * Deja aprobada la ruta vigente de un vuelo PLANIFICADO, como exige el inicio desde I-4: el comandante la planifica y la presenta
+ * y Operaciones la aprueba. Según el estado actual de la ruta guarda una versión, presenta el borrador o no hace nada.
+ */
+async function approveRoute(flightId, commanderToken, opsToken, recorrido = 'Ruta E2E directa') {
+  const route = await ok(`/flights/${flightId}/route`, { token: commanderToken });
+  if (route.estado === 'APROBADA') return route;
+  if (route.estado === 'BORRADOR') await ok(`/flights/${flightId}/route/submit`, { method: 'POST', token: commanderToken, body: { version: route.versionVigente } });
+  else if (route.estado !== 'PENDIENTE_REVISION') {
+    const body = { version: route.versionVigente || 0, recorrido, presentar: true };
+    if (route.requiereMotivo) body.motivoModificacion = 'Regularización de la ruta para el inicio E2E';
+    await ok(`/flights/${flightId}/route`, { method: 'PUT', token: commanderToken, body });
+  }
+  const pending = await ok(`/flights/${flightId}/route`, { token: opsToken });
+  return ok(`/flights/${flightId}/route/approve`, { method: 'POST', token: opsToken, body: { version: pending.versionVigente } });
+}
+
+/** PDF mínimo y estructuralmente válido (lo acepta el análisis de PDFBox del servidor); `label` lo vuelve único. */
+function makePdf(label = 'E2E', { catalogExtra = '', comment = '' } = {}) {
+  const NL = '\n', content = `BT /F1 12 Tf 20 50 Td (${label}) Tj ET`;
+  const objects = [`<< /Type /Catalog /Pages 2 0 R ${catalogExtra}>>`, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>', `<< /Length ${content.length} >>${NL}stream${NL}${content}${NL}endstream`];
+  let out = '%PDF-1.4' + NL + (comment ? '% ' + comment + NL : ''); const offsets = [];
+  objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out)); out += `${i + 1} 0 obj${NL}${o}${NL}endobj${NL}`; });
   const xref = Buffer.byteLength(out);
-  out += ["xref", "0 5", "0000000000 65535 f "].join(NL) + NL + offsets.map((o) => String(o).padStart(10, "0") + " 00000 n " + NL).join("");
-  return Buffer.from(out + ["trailer", "<< /Size 5 /Root 1 0 R >>", "startxref", String(xref), "%%EOF", ""].join(NL));
-})();
+  out += `xref${NL}0 5${NL}0000000000 65535 f ${NL}` + offsets.map((o) => String(o).padStart(10, '0') + ' 00000 n ' + NL).join('') + `trailer${NL}<< /Size 5 /Root 1 0 R >>${NL}startxref${NL}${xref}${NL}%%EOF${NL}`;
+  return Buffer.from(out, 'latin1');
+}
+const PDF = makePdf('E2E');
+const ensuredFor = new Set();
 async function provision(admin, user) {
+  if (!ensuredFor.has(admin)) { await ensureCredentialPolicies(admin); ensuredFor.add(admin); }
   await call(`/crew-qualifications/${user.id}/COMANDANTE`, { method: 'PUT', token: admin, expect: [204] });
   const credential = await ok(`/users/${user.id}/professional-credentials`, { method: 'POST', token: admin, body: { roleCode: 'COMANDANTE', type: 'Documento de prueba', number: 'E2E-' + user.id, issuer: 'Organismo de prueba', expires: null, noExpiry: true, notes: 'Pruebas aisladas' } });
   const form = new FormData(); form.append('file', new Blob([PDF], { type: 'application/pdf' }), 'credencial.pdf');
   const up = await fetch(`${BASE}/professional-credentials/${credential.id}/documents`, { method: 'POST', headers: { Authorization: 'Bearer ' + admin }, body: form });
   assert.equal(up.status, 200, 'carga de credencial');
   await call(`/professional-credentials/${credential.id}/decision/VERIFICADA`, { method: 'POST', token: admin, body: { notes: 'Revisión manual de datos de prueba', confirmsSufficiency: true } });
+}
+
+// ---- Bandeja de pruebas (Mailpit) del stack aislado: un servidor SMTP real que retiene los mensajes y no los entrega a nadie. ----
+const MAILBOX = process.env.E2E_MAILBOX || 'http://127.0.0.1:18025';
+const CODE_PATTERN = /([A-Z2-9]{4}-[A-Z2-9]{4})/;
+async function mailboxMessages(address) {
+  const res = await fetch(MAILBOX + '/api/v1/search?query=' + encodeURIComponent('to:"' + address + '"'));
+  if (!res.ok) throw new Error('La bandeja de pruebas no responde (' + res.status + ')');
+  return (await res.json()).messages || [];
+}
+/** Código del mensaje más reciente enviado a `address`; espera a que el SMTP de pruebas lo haya recibido. */
+async function mailboxCode(address, { after = 0 } = {}) {
+  for (let i = 0; i < 40; i++) {
+    const messages = await mailboxMessages(address);
+    if (messages.length > after) {
+      const detail = await (await fetch(MAILBOX + '/api/v1/message/' + messages[0].ID)).json();
+      const match = CODE_PATTERN.exec(detail.Text || '');
+      if (match) return { code: match[1], count: messages.length, message: detail };
+    }
+    await sleep(250);
+  }
+  throw new Error('No llegó ningún código a ' + address);
+}
+/** Deja un código vigente en la bandeja (solicita uno nuevo, esperando el intervalo mínimo de reenvío del E2E) y lo confirma como titular. */
+async function confirmEmail(user, emailId, address) {
+  const before = (await mailboxMessages(address)).length;
+  for (let i = 0; i < 8; i++) {
+    const r = await call('/auth/me/correos/' + emailId + '/verificacion', { method: 'POST', token: user.token, expect: [200, 429] });
+    if (r.status === 200) break;
+    await sleep(2300);
+  }
+  const { code } = await mailboxCode(address, { after: before });
+  return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
+}
+async function verifyEmail(user, emailId, address) {
+  const { code } = await mailboxCode(address);
+  return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
 }
 
 async function waitHealthy() {
@@ -77,4 +154,25 @@ async function waitHealthy() {
 }
 
 
-module.exports = { PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy };
+/** I-5.6: sin política de suficiencia nadie es elegible. Los E2E que necesitan tripulación habilitada cargan, por la API pública, la política mínima
+ *  para sus tipos de documento de prueba (configuración interna de la prueba, no un requisito regulatorio). Idempotente (409 POLITICA_DUPLICADA se tolera). */
+const E2E_CREDENTIAL_TYPES = ['Documento de prueba', 'Documento E2E', 'Documento E2E UI', 'Documento de independencia'];
+async function ensureCredentialPolicies(admin, types = E2E_CREDENTIAL_TYPES) {
+  for (const roleCode of ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO']) for (const credentialType of types) {
+    const r = await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }, expect: [200, 404, 409] });
+    if (r.status === 404) return; // backend anterior a V59 (siembra del ensayo de migración con el contrato V47): no existen políticas
+  }
+}
+
+/** Ejecuta `fn` sin ninguna política activa para `roleCode` (para comprobar POLITICA_HABILITACION_NO_CONFIGURADA con exactitud) y las restablece al terminar, aun si falla.
+ *  Las pruebas de la suite corren de a una; las políticas restablecidas son nuevas filas con los mismos datos (las dadas de baja se conservan como historial). */
+async function withoutPolicies(admin, roleCode, fn) {
+  const active = (await ok('/credential-policies', { token: admin })).filter((p) => p.active && p.roleCode === roleCode);
+  for (const p of active) await call(`/credential-policies/${p.id}/deactivate`, { method: 'POST', token: admin, body: { reason: 'E2E: se comprueba la ausencia de política' } });
+  try { return await fn(); }
+  finally {
+    for (const p of active) await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode: p.roleCode, flightTypeCode: p.flightTypeCode, aircraftCategory: p.aircraftCategory, credentialType: p.credentialType, requiresJurisdiction: p.requiresJurisdiction, requiresExternalCheck: p.requiresExternalCheck, origin: p.origin, sourceReference: p.sourceReference, notes: p.notes }, expect: [200, 409] });
+  }
+}
+
+module.exports = { applyDbPermissions, backendEnv, withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };

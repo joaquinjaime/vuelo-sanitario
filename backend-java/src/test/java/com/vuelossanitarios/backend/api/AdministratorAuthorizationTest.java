@@ -27,12 +27,23 @@ import static org.mockito.Mockito.when;
 class AdministratorAuthorizationTest {
  @Autowired MockMvc mvc; @MockBean JwtService jwt;
  @MockBean UserRepository users; @MockBean AuditService audit;
- @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean PatientService patients; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean AircraftAdminService aircraftAdmin; @MockBean CrewRoleRepository crewRoleRepository; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean CommanderProfileRepository commanderProfiles; @MockBean CancellationReasonRepository cancellationReasons; @MockBean DocumentTypeRepository documentTypes; @MockBean AuthService auth;
+ @MockBean SanitaryRequestRegistrationService registration; @MockBean com.vuelossanitarios.backend.service.PersonContactService personContacts; @MockBean com.vuelossanitarios.backend.service.TransferContactService transferContacts; @MockBean com.vuelossanitarios.backend.service.CrewContactService crewContacts; @MockBean com.vuelossanitarios.backend.service.EmailVerificationService emailVerification;
+ @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean PatientService patients; @MockBean PatientDirectoryService patientDirectory; @MockBean PatientRepository patientRepository; @MockBean NotificationService notifications; @MockBean FinalReportWorkflowService reports; @MockBean DocumentService documents; @MockBean PersonIdentityService personIdentity; @MockBean AircraftAdminService aircraftAdmin; @MockBean CrewRoleRepository crewRoleRepository; @MockBean AircraftRepository aircraft; @MockBean AirportRepository airports; @MockBean FlightPriorityRepository priorities; @MockBean ProvinceRepository provinces; @MockBean LocalityRepository localities; @MockBean FlightTypeRepository flightTypes; @MockBean CommanderProfileRepository commanderProfiles; @MockBean CancellationReasonRepository cancellationReasons; @MockBean DocumentTypeRepository documentTypes; @MockBean AuthService auth;
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorIsForbiddenFromResourcesOutsideAdministrativeScope() throws Exception {
-  mvc.perform(get("/api/patients")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/patients")).andExpect(status().isMethodNotAllowed());
   mvc.perform(get("/api/notifications")).andExpect(status().isForbidden());
   mvc.perform(get("/api/final-reports/mine")).andExpect(status().isForbidden());
   mvc.perform(get("/api/documents/1/versions")).andExpect(status().isForbidden());
+ }
+ @Test @WithMockUser(roles="OPERACIONES") void operationsCannotSearchOrCorrectPatientIdentity() throws Exception {
+  mvc.perform(get("/api/patients/search").param("dni","30111222")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/patients/1")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/patients/1/corrections")).andExpect(status().isForbidden());
+ }
+ @Test @WithMockUser(roles="DTS") void dtsCanSearchButCannotOpenAdministrativeIdentity() throws Exception {
+  mvc.perform(get("/api/patients/search").param("dni","30111222")).andExpect(status().isOk());
+  mvc.perform(get("/api/patients/1")).andExpect(status().isForbidden());
+  mvc.perform(get("/api/patients/1/corrections")).andExpect(status().isForbidden());
  }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanLoadOperationalCreationCatalogs() throws Exception { mvc.perform(get("/api/auth/users/commanders")).andExpect(status().isOk()); mvc.perform(get("/api/catalogs/aircraft")).andExpect(status().isOk()); }
  @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanReachUserManagementEndpoint() throws Exception { mvc.perform(get("/api/auth/users")).andExpect(status().isOk()); }
@@ -44,7 +55,7 @@ class AdministratorAuthorizationTest {
   mvc.perform(post("/api/auth/activar-cuenta").contentType("application/json").content("{\"dni\":\"30111222\",\"codigo\":\"codigo\",\"username\":\"ana\",\"password\":\"NuevaClave123\",\"confirmacionPassword\":\"NuevaClave123\"}"))
    .andExpect(status().isNoContent()).andExpect(content().string(""));
  }
- @Test @WithMockUser(roles="DTS") void localitySearchReturnsActiveLocalitiesForTheRequestedProvince() throws Exception {
+ @Test @WithMockUser(roles="ADMINISTRADOR") void administratorCanSearchActiveLocalitiesForAirportAssociation() throws Exception {
   Long rioNegro=1L; Locality viedma=locality("Viedma","62007090","Río Negro");
   when(localities.findTop50ByProvincia_IdAndActivoTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(rioNegro,"Vie")).thenReturn(List.of(viedma));
   mvc.perform(get("/api/catalogs/localities").param("provinceId",rioNegro.toString()).param("q","Vie"))
@@ -59,4 +70,3 @@ class AdministratorAuthorizationTest {
  }
  private Locality locality(String nombre,String codigo,String provinciaNombre){Province provincia=new Province();provincia.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));provincia.setNombre(provinciaNombre);Locality localidad=new Locality();localidad.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));localidad.setNombre(nombre);localidad.setCodigoOficial(codigo);localidad.setActivo(true);localidad.setProvincia(provincia);return localidad;}
 }
-

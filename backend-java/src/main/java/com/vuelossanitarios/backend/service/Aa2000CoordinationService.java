@@ -32,9 +32,9 @@ public class Aa2000CoordinationService {
         LocalDateTime salida,LocalDateTime llegada,List<Version> versiones) {}
     private static final Set<String> STATES=Set.of("PENDIENTE","EN_SEGUIMIENTO","CONFIRMADO","RECHAZADO","CANCELADO");
     private final FlightRepository flights; private final Aa2000CoordinationRepository records;
-    private final AirportRepository airports; private final UserRepository users; private final AuditService audit;
+    private final AirportRepository airports; private final AirportLocks airportLocks; private final UserRepository users; private final AuditService audit;
     private final ObjectMapper json; private final Clock clock;
-    public Aa2000CoordinationService(FlightRepository flights,Aa2000CoordinationRepository records,AirportRepository airports,UserRepository users,AuditService audit,ObjectMapper json,Clock clock){this.flights=flights;this.records=records;this.airports=airports;this.users=users;this.audit=audit;this.json=json;this.clock=clock;}
+    public Aa2000CoordinationService(FlightRepository flights,Aa2000CoordinationRepository records,AirportRepository airports,AirportLocks airportLocks,UserRepository users,AuditService audit,ObjectMapper json,Clock clock){this.flights=flights;this.records=records;this.airports=airports;this.airportLocks=airportLocks;this.users=users;this.audit=audit;this.json=json;this.clock=clock;}
 
     @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flight(id,false);User u=user(actor);if(!canRead(f,u))throw forbidden();return view(f,u);}
 
@@ -81,7 +81,7 @@ public class Aa2000CoordinationService {
     private boolean transition(String from,String to){if(Objects.equals(from,to))return !"CANCELADO".equals(from);return switch(from){case "PENDIENTE" -> Set.of("EN_SEGUIMIENTO","CONFIRMADO","RECHAZADO","CANCELADO").contains(to);case "EN_SEGUIMIENTO" -> Set.of("CONFIRMADO","RECHAZADO","CANCELADO").contains(to);case "CONFIRMADO" -> Set.of("EN_SEGUIMIENTO","CANCELADO").contains(to);case "RECHAZADO" -> "CANCELADO".equals(to);default -> false;};}
     private String context(Flight f){return String.join("|",String.valueOf(id(f.getAircraft())),String.valueOf(id(f.getOrigen())),String.valueOf(id(f.getDestino())),String.valueOf(f.getFechaPlanificadaSalida()),String.valueOf(f.getFechaPlanificadaLlegada()));}
     private Long id(BaseEntity e){return e==null?null:e.getId();}
-    private Airport activeAirport(Long id){return airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->bad("Aeropuerto inexistente o inactivo"));}
+    private Airport activeAirport(Long id){airportLocks.lockAll(id);return airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->bad("Aeropuerto inexistente o inactivo"));}
     private Flight flight(Long id,boolean lock){return (lock?flights.lockById(id):flights.findById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));}
     private boolean mutable(Flight f){if(f.getEstadoVuelo()!=null)return !Set.of("CANCELADO","FINALIZADO","COMPLETADO").contains(f.getEstadoVuelo().getCodigo());return f.getSanitario()!=null&&f.getSanitario().getEstadoSolicitud()!=null&&!"RECHAZADO".equals(f.getSanitario().getEstadoSolicitud().getCodigo());}
     private void requireMutable(Flight f){if(!mutable(f))throw bad("El vuelo no admite cambios en su estado actual");}

@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const HOUR = 3600000, DAY = 86400000, TZ_OFFSET = -3 * HOUR; // America/Argentina/Tucuman, sin horario de verano
 const civilDay = (ms) => new Date(ms + TZ_OFFSET).toISOString().slice(0, 10);
@@ -22,7 +22,7 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
   assert.ok(env.DB_URL.includes(`databaseName=${DB_NAME};`) && env.SPRING_PROFILES_ACTIVE.includes('e2e') && env.APP_E2E_CONTROLS_ENABLED === 'true', 'El backend no es el stack E2E aislado');
   assert.equal(one('SELECT DB_NAME()'), DB_NAME);
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47', 'La base aislada debe estar en V47 (o posterior)');
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47, 'La base aislada debe estar en V47 (o posterior)');
   assert.equal(count("SELECT COUNT(*) FROM sys.triggers WHERE name=N'tr_eventos_auditoria_inmutable' AND parent_id=OBJECT_ID('eventos_auditoria')"), 1);
   for (const ix of ['idx_eventos_auditoria_fecha', 'idx_eventos_auditoria_vuelo_fecha', 'idx_eventos_auditoria_actor_fecha', 'idx_eventos_auditoria_entidad_fecha', 'idx_eventos_auditoria_tipo_operacion'])
     assert.equal(count(`SELECT COUNT(*) FROM sys.indexes WHERE name=N'${ix}' AND object_id=OBJECT_ID('eventos_auditoria')`), 1, ix);
@@ -68,7 +68,7 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
     await ok(`/flights/${F1}/operational-planning`, { method: 'POST', token: cmd.cmdB.token, body: { origenId: airports[0].id, destinoId: airports[1].id, llegada: `${addDays(D0, 6)}T11:00:00` } });
     await call(`/flights/${F1}/weather`, { method: 'POST', token: cmd.cmdB.token, body: { condiciones: 'Cielo despejado', favorable: true, observaciones: 'Sin novedades' } });
     await call(`/flights/${F1}/log`, { method: 'POST', token: ops.token, body: { tipo: 'PREPARACION', descripcion: 'Preparación terrestre ' + MARK, ocurrido: new Date(Date.now() - 60000).toISOString(), importancia: 'NORMAL' } });
-    await call(`/flights/${F1}/start`, { method: 'POST', token: ops.token }); await call(`/flights/${F1}/finish`, { method: 'POST', token: ops.token });
+    await approveRoute(F1, cmd.cmdB.token, ops.token); await call(`/flights/${F1}/start`, { method: 'POST', token: ops.token }); await call(`/flights/${F1}/finish`, { method: 'POST', token: ops.token });
     const obligation = (await ok('/final-reports/mine', { token: cmd.cmdB.token })).find((x) => x.flightId === F1);
     await ok(`/final-reports/${obligation.id}/submit`, { method: 'POST', token: cmd.cmdB.token, body: { texto: 'Informe de auditoría ' + MARK, horasVuelo: 1.5, combustibleConsumidoLitros: 300, incidentes: 'Ninguno' } });
     await ok(`/final-reports/${obligation.id}/review`, { method: 'POST', token: ops.token, body: { aprobar: true } });
@@ -211,7 +211,9 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
     const scan = [...(await ok('/audit?size=100&page=0', { token: admin })).items, ...sensitiveTypes.items, ...userEvents.items, ...f1Events.map((e) => ({ id: e.id }))];
     let scanned = 0; for (const e of scan) { const text = JSON.stringify((await detailOf(admin, e.id)).data); scanned++;
       for (const leak of ['$2a$', '$2b$', 'eyJ', PASSWORD, DX, 'passwordHash', 'tokenHash']) assert.ok(!text.includes(leak), `evento ${e.id} filtra ${leak}`); }
-    const credEvent = (await detailOf(admin, sensitiveTypes.items[0].id)).data; const numberChange = credEvent.changes.find((c) => c.field === 'number');
+    // El evento más reciente de habilitaciones puede ser un aviso de vencimiento o una consulta externa (sin número): se examina una alta, que sí lo registra.
+    const creations = await ok('/audit?entityType=PROFESSIONAL_CREDENTIAL&operation=CREATE&size=100', { token: admin }); assert.ok(creations.total >= 1);
+    const credEvent = (await detailOf(admin, creations.items[0].id)).data; const numberChange = credEvent.changes.find((c) => c.field === 'number');
     assert.ok(numberChange.masked && numberChange.after.startsWith('••••') && !/E2E-\d{3,}/.test(numberChange.after), 'número de habilitación enmascarado: ' + numberChange.after);
     const fullAudit = JSON.stringify(await ok(`/audit/flights/${F1}?size=100`, { token: ops.token }));
     assert.ok(!fullAudit.includes(DX) && !fullAudit.includes('Obs-' + MARK), 'ni siquiera Operaciones recibe el contenido clínico por la auditoría');
@@ -237,7 +239,7 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
     // ---------- L: atomicidad: un fallo de la auditoría obligatoria revierte la operación ----------
     const plane4 = await newPlane(); const t4 = atLocal(addDays(D0, 12), '10:00');
     const F4 = (await ok('/flights/operational', { method: 'POST', token: ops.token, body: { tipoVueloCode: 'REGRESO_BASE', motivoVuelo: 'Atomicidad ' + MARK, aircraftId: plane4.id, comandanteId: cmd.cmdC.id, destinoId: airports[1].id, salida: fmt(new Date(t4)), llegada: fmt(new Date(t4 + 2 * HOUR)) } })).id;
-    await call(`/flights/${F4}/commander-assignment/response`, { method: 'POST', token: cmd.cmdC.token, body: { aceptar: true } }); assert.equal(stateOf(F4), 'PLANIFICADO');
+    await call(`/flights/${F4}/commander-assignment/response`, { method: 'POST', token: cmd.cmdC.token, body: { aceptar: true } }); assert.equal(stateOf(F4), 'PLANIFICADO'); await approveRoute(F4, cmd.cmdC.token, ops.token);
     const snap = () => [stateOf(F4), count(`SELECT COUNT(*) FROM eventos_auditoria WHERE id_vuelos=${F4}`), count(`SELECT COUNT(*) FROM bitacora_vuelos WHERE id_vuelos=${F4}`), count(`SELECT COUNT(*) FROM vuelos WHERE id_vuelos=${F4} AND fecha_salida_real IS NOT NULL`)].join('|');
     const before = snap(); const trig = 'e2e_audit_query_failure_' + F4;
     sql(`EXEC(N'CREATE TRIGGER dbo.${trig} ON dbo.eventos_auditoria AFTER INSERT AS BEGIN IF EXISTS (SELECT 1 FROM inserted WHERE id_vuelos=${F4} AND operacion=N''START'') THROW 51000, N''Fallo de prueba'', 1; END');`);

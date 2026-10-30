@@ -7,7 +7,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const HOUR = 3600000, DAY = 86400000, TZ = -3 * HOUR;
 const civilDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
@@ -39,12 +39,13 @@ async function provisionRole(admin, user, roleCode) {
   const info = JSON.parse(require('node:child_process').spawnSync('docker', ['inspect', BACKEND], { encoding: 'utf8' }).stdout)[0];
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
   assert.ok(env.DB_URL.includes(`databaseName=${DB_NAME};`) && env.SPRING_PROFILES_ACTIVE.includes('e2e'), 'el E2E sólo corre contra la base aislada');
-  assert.equal(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL'), '47', 'migraciones hasta V46 aplicadas en la base aislada');
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 47, 'migraciones hasta V46 aplicadas en la base aislada');
   assert.equal(one("SELECT CAST(success AS int) FROM flyway_schema_history WHERE version='45'"), '1');
   const tablesBefore = count("SELECT COUNT(*) FROM sys.tables WHERE name NOT IN ('flyway_schema_history')");
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, ''); } }
   await waitHealthy();
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
+  await ensureCredentialPolicies(admin);
   const adminName = dotenv.BOOTSTRAP_ADMIN_USERNAME;
 
   // ---------- Fixtures ----------
@@ -136,7 +137,7 @@ async function provisionRole(admin, user, roleCode) {
   assert.equal(capacity.status, 409); assert.equal(capacity.data.code, 'AIRCRAFT_CAPACITY_CONFLICT'); assert.equal(one(`SELECT capacidad_tripulacion FROM aeronaves WHERE id_aeronaves=${planeB.id}`), '3');
   await ok(`/catalogs/aircraft/${planeB.id}`, { method: 'PUT', token: admin, body: { matricula: planeB.matricula, modelo: 'E2E editado', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 3, equipamientoMedico: 'Camilla' } });
   await accept(f1, cmd.C); assert.equal(stateOf(f1), 'PLANIFICADO');
-  assert.equal((await raw(`/flights/${f1}/start`, { method: 'POST', token: cmd.C.token })).status, 403); await ok(`/flights/${f1}/start`, { method: 'POST', token: ops.token }); assert.equal(stateOf(f1), 'EN_CURSO');
+  assert.equal((await raw(`/flights/${f1}/start`, { method: 'POST', token: cmd.C.token })).status, 403); await approveRoute(f1, cmd.C.token, ops.token); await ok(`/flights/${f1}/start`, { method: 'POST', token: ops.token }); assert.equal(stateOf(f1), 'EN_CURSO');
   assert.equal((await raw(`/catalogs/aircraft/${planeB.id}/active`, { method: 'POST', token: admin, body: { activo: false } })).data.code, 'AIRCRAFT_IN_FLIGHT');
   assert.equal((await raw(`/catalogs/aircraft/${planeB.id}`, { method: 'PUT', token: admin, body: { matricula: planeB.matricula, modelo: 'Otro', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 3 } })).data.code, 'AIRCRAFT_IN_FLIGHT');
   assert.equal((await raw(`/catalogs/aircraft/${planeB.id}/location`, { method: 'POST', token: admin, body: { locationId: A2.id } })).data.code, 'AIRCRAFT_IN_FLIGHT'); assert.equal((await aircraftView(planeB.id)).estadoOperativo, 'EN_VUELO');
@@ -158,7 +159,7 @@ async function provisionRole(admin, user, roleCode) {
   const s2 = slot(); const f2 = await opFlight(p2, cmd.D, A1, s2, at(s2, 2)); await accept(f2, cmd.D); assert.equal(stateOf(f2), 'PLANIFICADO');
   const busy = await opFlight(p6, cmd.E, A1, at(s2, 1), at(s2, 3)); // p6 ocupada durante el horario de f2
   const routeBody = { recorrido: 'TUC - AEP directo', version: 0, alternativoId: null, altitudPies: 9000, distanciaNm: 100, tiempoEstimadoMinutos: 90, observaciones: 'E2E' };
-  await ok(`/flights/${f2}/route`, { method: 'PUT', token: cmd.D.token, body: routeBody }); assert.equal((await ok(`/flights/${f2}/route`, { token: ops.token })).estado, 'COMPLETA');
+  await ok(`/flights/${f2}/route`, { method: 'PUT', token: cmd.D.token, body: routeBody }); assert.equal((await ok(`/flights/${f2}/route`, { token: ops.token })).estado, 'BORRADOR'); await approveRoute(f2, cmd.D.token, ops.token); assert.equal((await ok(`/flights/${f2}/route`, { token: ops.token })).estado, 'APROBADA');
   await ok(`/flights/${f2}/hangar`, { method: 'PUT', token: ops.token, body: { version: 0, requiereHangar: false, preparacionCompleta: false, observaciones: 'Sin hangar' } }); assert.equal((await ok(`/flights/${f2}/hangar`, { token: ops.token })).estado, 'NO_REQUERIDO');
   const candidates = await ok(`/flights/${f2}/aircraft-candidates`, { token: ops.token }); const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   assert.ok(!byId[p2.id], 'la aeronave actual no se ofrece'); assert.equal(byId[p4.id].disponible, true); assert.equal(byId[p3.id].disponible, true); assert.ok(!byId[pOther.id], 'otra provincia no es compatible'); assert.ok(!byId[pOff.id], 'una aeronave desactivada no es candidata');
@@ -212,16 +213,17 @@ async function provisionRole(admin, user, roleCode) {
   // ---------- E: tripulación adicional ----------
   const planeE = await newPlane(A0, { capacidadTripulacion: 4 }); const sE = slot(); const f4 = await opFlight(planeE, cmd.G, A1, sE, at(sE, 4)); await accept(f4, cmd.G);
   const cand = await ok(`/flights/${f4}/crew/candidates?role=MEDICO`, { token: ops.token }); const candIds = cand.map((c) => c.userId);
-  assert.ok(candIds.includes(med1.id) && candIds.includes(med2.id)); assert.ok(!candIds.includes(unclassified.id) && !candIds.includes(inactiveMed.id) && !candIds.includes(cmd.G.id), 'sólo personal clasificado, verificado y activo'); assert.ok(cand.filter((c) => [med1.id, med2.id].includes(c.userId)).every((c) => c.disponible), 'los dos candidatos sintéticos libres se ofrecen disponibles');
+  assert.ok(candIds.includes(med1.id) && candIds.includes(med2.id)); assert.ok(!candIds.includes(unclassified.id) && !candIds.includes(cmd.G.id), 'sólo personal con clasificación para la función aparece como candidato'); assert.ok(cand.filter((c) => [med1.id, med2.id].includes(c.userId)).every((c) => c.disponible), 'los dos candidatos sintéticos libres se ofrecen disponibles');
+  const inactiveCandidate=cand.find((c)=>c.userId===inactiveMed.id);assert.ok(inactiveCandidate&&!inactiveCandidate.disponible&&/cuenta.*activa/i.test(inactiveCandidate.motivoNoDisponible),'el personal clasificado inactivo queda visible para revisión, pero no seleccionable');
   assert.equal((await raw(`/flights/${f4}/crew/candidates?role=COMANDANTE`, { token: ops.token })).status, 400);
   await addCrew(f4, med1, 'MEDICO'); assert.equal(activeCrew(f4), 2); assert.equal(notif('CREW_ASSIGNED', med1, f4), 1); assert.equal(flightAudit(f4, 'FLIGHT_CREW', 'CREATE'), 2); // comandante + médico
   assert.equal((await addCrew(f4, med1, 'MEDICO', ops.token, [409])).status, 409, 'misma persona dos veces en el mismo vuelo'); assert.equal(activeCrew(f4), 2);
-  assert.equal((await addCrew(f4, med1, 'ENFERMERO', ops.token, [400])).status, 400, 'la misma persona con otra función no clasificada'); assert.equal(activeCrew(f4), 2);
-  assert.equal((await addCrew(f4, med2, 'ENFERMERO', ops.token, [400])).status, 400, 'sin clasificación para esa función'); assert.equal((await addCrew(f4, unclassified, 'MEDICO', ops.token, [400])).status, 400); assert.equal((await addCrew(f4, inactiveMed, 'MEDICO', ops.token, [400])).status, 400, 'un usuario desactivado no es recurso operativo');
-  assert.equal((await addCrew(f4, cmd.G, 'MEDICO', ops.token, [400])).status, 400, 'el comandante no se agrega como tripulante adicional'); assert.equal((await addCrew(f4, med2, 'COMANDANTE', ops.token, [400])).status, 400); assert.equal((await raw(`/flights/${f4}/crew`, { method: 'POST', token: ops.token, body: { userId: med2.id } })).status, 400); assert.equal((await addCrew(f4, { id: 999999999 }, 'MEDICO', ops.token, [400])).status, 400);
+  assert.equal((await addCrew(f4, med1, 'ENFERMERO', ops.token, [409])).status, 409, 'la misma persona con otra función no clasificada'); assert.equal(activeCrew(f4), 2);
+  assert.equal((await addCrew(f4, med2, 'ENFERMERO', ops.token, [409])).status, 409, 'sin clasificación para esa función'); assert.equal((await addCrew(f4, unclassified, 'MEDICO', ops.token, [409])).status, 409); assert.equal((await addCrew(f4, inactiveMed, 'MEDICO', ops.token, [409])).status, 409, 'un usuario desactivado no es recurso operativo');
+  assert.equal((await addCrew(f4, cmd.G, 'MEDICO', ops.token, [409])).status, 409, 'el comandante no se agrega como tripulante adicional'); assert.equal((await addCrew(f4, med2, 'COMANDANTE', ops.token, [400])).status, 400); assert.equal((await raw(`/flights/${f4}/crew`, { method: 'POST', token: ops.token, body: { userId: med2.id } })).status, 400); assert.equal((await addCrew(f4, { id: 999999999 }, 'MEDICO', ops.token, [400])).status, 400);
   // conflictos de horario
   const planeE2 = await newPlane(A0); const fOverlap = await opFlight(planeE2, cmd.H, A1, at(sE, 1), at(sE, 3)); await accept(fOverlap, cmd.H);
-  const overlapAttempt = await addCrew(fOverlap, med1, 'MEDICO', ops.token, [409]); assert.equal(overlapAttempt.status, 409); assert.match(overlapAttempt.data.error, /compromiso incompatible/); assert.equal(activeCrew(fOverlap), 1);
+  const overlapAttempt = await addCrew(fOverlap, med1, 'MEDICO', ops.token, [409]); assert.equal(overlapAttempt.status, 409); assert.match(overlapAttempt.data.error, /comprometid[oa].*incompatible/); assert.equal(activeCrew(fOverlap), 1);
   const overlapCand = (await ok(`/flights/${fOverlap}/crew/candidates?role=MEDICO`, { token: ops.token })).find((c) => c.userId === med1.id); assert.equal(overlapCand.disponible, false); assert.match(overlapCand.motivoNoDisponible, new RegExp(one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${f4}`)));
   assert.equal((await ok(`/flights/${fOverlap}/crew/available?role=MEDICO`, { token: ops.token })).some((c) => c.userId === med1.id), false);
   const planeE3 = await newPlane(A0); const fLater = await opFlight(planeE3, cmd.I, A1, at(sE, 4), at(sE, 6)); await accept(fLater, cmd.I); await addCrew(fLater, med1, 'MEDICO'); assert.equal(activeCrew(fLater), 2, 'vuelos consecutivos no se superponen');

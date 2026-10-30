@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.*.example
 data/
 uploads/
 *.key
@@ -32,3 +33,6 @@ mssql-jdbc_auth*.dll
 
 .atl/
 __pycache__/
+
+# Logs de corridas de la suite E2E (scripts/e2e-suite-completa.cjs)
+scripts/e2e-logs/

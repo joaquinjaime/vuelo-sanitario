@@ -1,0 +1,50 @@
+# Superposición de PRODUCCIÓN. No se usa en el stack habitual de desarrollo ni en el E2E aislado.
+#
+#   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml --profile antimalware config -q     (validar)
+#   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml --profile antimalware up -d          (levantar, dentro de la ventana aprobada)
+#
+# Qué cambia respecto del compose base:
+#   - APP_ENVIRONMENT=produccion: el antivirus exige una base de firmas completa y reciente; con una base mínima o antigua los documentos quedan en cuarentena.
+#   - ClamAV obligatorio (el backend no arranca antes de que clamd responda) con la base completa mantenida por freshclam.
+#   - SQL Server sólo en 127.0.0.1, límites de memoria y rotación de logs.
+#   - Sin credenciales de arranque del administrador en el entorno (retirar BOOTSTRAP_ADMIN_* después del primer inicio).
+# Los límites de memoria son PUNTO DE PARTIDA y dependen del equipo de producción; no se aplican a esta máquina de desarrollo.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  sqlserver:
+    mem_limit: ${PROD_SQLSERVER_MEM_LIMIT:-3g}
+    environment:
+      MSSQL_MEMORY_LIMIT_MB: ${PROD_SQLSERVER_MEMORY_LIMIT_MB:-2048}
+    ports: !override ["127.0.0.1:14330:1433"]
+    logging: *logging
+
+  backend:
+    mem_limit: ${PROD_BACKEND_MEM_LIMIT:-768m}
+    environment:
+      APP_ENVIRONMENT: produccion
+      # El backend de producción no recibe las credenciales de migración: sólo opera con la cuenta de datos (db_datareader/db_datawriter).
+      MIGRATION_DB_USERNAME: !reset null
+      MIGRATION_DB_PASSWORD: !reset null
+      # Las migraciones NO se aplican al arrancar: sólo el procedimiento controlado (respaldo previo + ayudante invoke-prepared-flyway-v60.ps1) las ejecuta. Con el esquema por debajo de la versión del código,
+      # Hibernate (ddl validate) impide el arranque en lugar de migrar sin respaldo (columnas o tablas ausentes). validate no detecta un esquema POSTERIOR al código: la versión aplicada se informa en la lista de preparación.
+      SPRING_FLYWAY_ENABLED: "false"
+      APP_ANTIMALWARE_ENABLED: "true"
+      APP_ANTIMALWARE_HOST: ${APP_ANTIMALWARE_HOST:-clamav}
+      APP_ANTIMALWARE_REQUIRE_FULL_DATABASE: "true"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError
+    depends_on:
+      clamav:
+        condition: service_healthy
+    logging: *logging
+
+  # Con ClamAV en otro equipo, no use este servicio: apunte APP_ANTIMALWARE_HOST al otro equipo (puerto 3310 sólo en una red privada y filtrado por firewall)
+  # y elimine la dependencia; el estado «Base de firmas no acreditada» de la lista de preparación sigue aplicando.
+  clamav:
+    mem_limit: ${PROD_CLAMAV_MEM_LIMIT:-3g}
+    logging: *logging
+
+  frontend:
+    logging: *logging

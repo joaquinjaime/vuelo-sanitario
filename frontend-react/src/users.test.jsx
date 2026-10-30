@@ -60,7 +60,7 @@ test("la edición administrativa envía el formulario, no permite editar el DNI 
   render(<UserDirectory active notify={notify} />);
   fireEvent.click((await screen.findAllByRole("button", { name: "Detalle" }))[0]);
   const form = await screen.findByRole("form", { name: "Edición administrativa" });
-  expect(within(form).queryByLabelText("DNI")).toBeNull(); expect(screen.getByText(/no se modifica desde aquí/)).toBeInTheDocument();
+  expect(within(form).queryByLabelText("DNI")).toBeNull(); expect(screen.getByText(/se corrige únicamente con "Rectificar DNI"/)).toBeInTheDocument();
   fireEvent.change(within(form).getByLabelText("Nombre"), { target: { value: "Ana María" } });
   fireEvent.click(within(form).getByLabelText("Centro de Operaciones"));
   const save = within(form).getByRole("button", { name: "Guardar cambios" }); fireEvent.click(save); fireEvent.submit(form);
@@ -145,4 +145,99 @@ test("el alta con una persona ya registrada sin cuenta pide confirmación expres
   render(<AdminUsers users={[]} reload={reload} notify={notify} showList={false} createOpen onCreateOpenChange={vi.fn()} />);
   fill(); window.confirm = vi.fn(() => true); fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
   await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining("nombre distinto"), true)); expect(window.confirm).not.toHaveBeenCalled(); expect(posts).toHaveLength(2);
+});
+
+// ---- Rectificación del DNI desde el detalle de usuario (mismo formulario y reglas que la ficha de paciente) ----
+const openDetail = async () => { fireEvent.click((await screen.findAllByRole("button", { name: "Detalle" }))[0]); await screen.findByRole("form", { name: "Edición administrativa" }); };
+const fillRectification = (dni = "30.222.333", reason = "Error de digitación al crear la cuenta") => {
+  fireEvent.change(screen.getByLabelText("DNI nuevo"), { target: { value: dni } });
+  fireEvent.change(screen.getByLabelText("Motivo de la rectificación"), { target: { value: reason } });
+  fireEvent.click(screen.getByLabelText(/Declaro que cotejé la identidad/));
+};
+
+test("el detalle del usuario rectifica el DNI con motivo, cotejo y confirmación de la cuenta, y refresca la cuenta", async () => {
+  let dni = "30111", saved; const notify = vi.fn();
+  backend({ det: () => detail(1, { dni, versionIdentidad: 4, pacienteId: null }), onPost: (path, opts) => { if (path === "/auth/users/1/dni" && opts.method === "PUT") { saved = JSON.parse(opts.body); dni = "30222333"; return Promise.resolve({}); } } });
+  render(<UserDirectory active notify={notify} />);
+  await openDetail();
+  fireEvent.click(screen.getByRole("button", { name: "Rectificar DNI" }));
+  expect(screen.getAllByRole("note").map((n) => n.textContent).join(" ")).toMatch(/identidad compartida \(cuenta de usuario\).*nunca fusiona identidades.*no modifica su contraseña, roles, estado ni sesiones/);
+  const confirm = screen.getByRole("button", { name: "Confirmar rectificación" });
+  fillRectification(); expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(/Confirmo que el cambio de DNI no altera/)); expect(confirm).toBeEnabled();
+  fireEvent.submit(confirm.closest("form"));
+  await waitFor(() => expect(saved).toBeTruthy());
+  expect(saved).toEqual({ dniNuevo: "30.222.333", version: 4, motivo: "Error de digitación al crear la cuenta", cotejoDocumental: true, confirmaCuenta: true });
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("DNI rectificado"));
+  expect(await screen.findByText("30222333")).toBeInTheDocument();
+  expect(screen.queryByLabelText("DNI nuevo")).toBeNull();
+});
+
+test("una cuenta pendiente de activación advierte que se activa con el DNI corregido y una cuenta con ficha de paciente lo indica", async () => {
+  backend({ det: detail(1, { estado: "PENDIENTE_ACTIVACION", username: null, versionIdentidad: 2, pacienteId: 55 }) });
+  render(<UserDirectory active notify={vi.fn()} />);
+  await openDetail(); fireEvent.click(screen.getByRole("button", { name: "Rectificar DNI" }));
+  const notes = screen.getAllByRole("note").map((n) => n.textContent).join(" ");
+  expect(notes).toMatch(/cuenta de usuario y ficha de paciente/); expect(notes).toMatch(/deberá activarla con el DNI corregido; el código de activación vigente no se regenera/);
+  await waitFor(() => expect(calls.some(([p]) => p.startsWith("/audit?entityType=PATIENT_IDENTITY&entityId=55"))).toBe(true));
+});
+
+test("una cuenta desactivada ofrece la rectificación sin tocar su estado", async () => {
+  let body; backend({ det: detail(1, { estado: "DESACTIVADO", activo: false, fechaBaja: "2026-10-10T10:00:00", bajaPor: "Admin", motivoBaja: "Baja", versionIdentidad: 1, pacienteId: null }), onPost: (path, opts) => { if (path === "/auth/users/1/dni") { body = JSON.parse(opts.body); return Promise.resolve({}); } } });
+  render(<UserDirectory active notify={vi.fn()} />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "Detalle" }))[0]); await screen.findByRole("form", { name: "Reactivar cuenta" });
+  fireEvent.click(screen.getByRole("button", { name: "Rectificar DNI" })); expect(screen.getAllByRole("note").map((n) => n.textContent).join(" ")).toMatch(/cuenta de usuario \(desactivado\)/);
+  fillRectification(); fireEvent.click(screen.getByLabelText(/Confirmo que el cambio de DNI no altera/)); fireEvent.submit(screen.getByRole("button", { name: "Confirmar rectificación" }).closest("form"));
+  await waitFor(() => expect(body.confirmaCuenta).toBe(true));
+  expect(calls.some(([p, o]) => /\/auth\/users\/1\/(reactivate|deactivate)/.test(p) && o?.method)).toBe(false);
+});
+
+test("un DNI ocupado o una versión vencida se informan y la versión vencida ofrece recargar la cuenta", async () => {
+  let version = 4, mode = "dup";
+  backend({ det: () => detail(1, { versionIdentidad: version, pacienteId: null }), onPost: (path, opts) => { if (path === "/auth/users/1/dni") return Promise.reject(Object.assign(new Error(mode === "dup" ? "Ese DNI ya está registrado para otra persona. No se fusionan identidades" : "La identidad cambió; vuelva a cargar la ficha"), { code: mode === "dup" ? "DNI_ALREADY_REGISTERED" : "PATIENT_STALE_IDENTITY" })); } });
+  render(<UserDirectory active notify={vi.fn()} />);
+  await openDetail(); fireEvent.click(screen.getByRole("button", { name: "Rectificar DNI" })); fillRectification(); fireEvent.click(screen.getByLabelText(/Confirmo que el cambio de DNI no altera/));
+  fireEvent.submit(screen.getByRole("button", { name: "Confirmar rectificación" }).closest("form"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se fusionan identidades"); expect(screen.getByLabelText("DNI nuevo")).toHaveValue("30.222.333");
+  expect(screen.queryByRole("button", { name: "Volver a cargar la cuenta" })).toBeNull();
+  mode = "stale"; fireEvent.submit(screen.getByRole("button", { name: "Confirmar rectificación" }).closest("form"));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("vuelva a cargar la ficha"));
+  version = 6; fireEvent.click(screen.getByRole("button", { name: "Volver a cargar la cuenta" }));
+  await waitFor(() => expect(screen.queryByLabelText("DNI nuevo")).toBeNull()); await screen.findByRole("button", { name: "Rectificar DNI" });
+});
+
+test("el doble envío de la rectificación del usuario genera una sola petición", async () => {
+  let release, calls2 = 0; const pending = new Promise((resolve) => { release = resolve; });
+  backend({ det: detail(1, { versionIdentidad: 4, pacienteId: null }), onPost: (path) => { if (path === "/auth/users/1/dni") { calls2 += 1; return pending; } } });
+  render(<UserDirectory active notify={vi.fn()} />);
+  await openDetail(); fireEvent.click(screen.getByRole("button", { name: "Rectificar DNI" })); fillRectification(); fireEvent.click(screen.getByLabelText(/Confirmo que el cambio de DNI no altera/));
+  const form = screen.getByRole("button", { name: "Confirmar rectificación" }).closest("form"); fireEvent.submit(form); fireEvent.submit(form);
+  expect(calls2).toBe(1); expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+  release({}); await waitFor(() => expect(screen.queryByLabelText("DNI nuevo")).toBeNull());
+});
+
+test("el alta administrativa valida el contacto antes de enviar y envía el país del teléfono", async () => {
+  const { AdminUsers } = await import("./main.jsx");
+  const posts = []; const notify = vi.fn();
+  vi.mocked(api).mockImplementation((path, opts) => { if (path === "/auth/users" && opts?.method === "POST") { posts.push(JSON.parse(opts.body)); return Promise.resolve({ codigo: "CODIGO-ALTA", expiraEn: "24 horas" }); } return Promise.resolve([]); });
+  render(<AdminUsers users={[]} reload={vi.fn()} notify={notify} showList={false} createOpen onCreateOpenChange={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana" } }); fireEvent.change(screen.getByLabelText("Apellido"), { target: { value: "Paz" } }); fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30111222" } });
+  fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana@example.test" } });
+  const phone = screen.getByLabelText("Teléfono principal"), country = screen.getByLabelText("País del teléfono");
+  expect(country).toHaveValue("AR");   // Argentina sólo como sugerencia: puede cambiarse
+  fireEvent.change(phone, { target: { value: "12345" } });
+  fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringMatching(/muy pocos dígitos|incompleto/), true));
+  expect(posts).toHaveLength(0);
+  fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana@example.123" } });
+  fireEvent.change(phone, { target: { value: "0381 15 555-1234" } });
+  fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringMatching(/dominio/), true));
+  expect(posts).toHaveLength(0);
+  fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana@example.test" } });
+  fireEvent.change(country, { target: { value: "CL" } }); fireEvent.change(phone, { target: { value: "9 8765 4321" } });
+  fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
+  await waitFor(() => expect(posts).toHaveLength(1));
+  expect(posts[0].telefonos).toEqual([{ numero: "9 8765 4321", pais: "CL", tipo: "PERSONAL" }]);
+  expect(posts[0].correos).toEqual([{ direccion: "ana@example.test", tipo: "PERSONAL" }]);
 });

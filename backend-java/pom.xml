@@ -20,6 +20,8 @@
     <properties>
         <!-- Ajustar a 25 si el JDK local es esa version; 21 es la LTS soportada por Spring Boot 3.4.x -->
         <java.version>21</java.version>
+        <!-- Compilación reproducible: la misma fuente produce el mismo JAR byte a byte (marcas de tiempo fijas en el JAR). -->
+        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <dependencies>
@@ -76,6 +78,26 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <!-- Validación y normalización internacional de teléfonos (metadatos de numeración de Google) -->
+        <dependency>
+            <groupId>com.googlecode.libphonenumber</groupId>
+            <artifactId>libphonenumber</artifactId>
+            <version>9.0.42</version>
+        </dependency>
+
+        <!-- Análisis estructural de PDF (estructura, cifrado y contenido activo) antes de aceptar documentación de habilitaciones -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+
+        <!-- Envío de correo saliente (verificación de correos); sólo se activa con app.mail.enabled=true -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
         <!-- Driver JDBC de SQL Server -->

@@ -5,7 +5,7 @@ services:
   sqlserver:
     environment:
       MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
-    ports: !reset ["14331:1433"]
+    ports: !reset ["127.0.0.1:14331:1433"]
     # El primer arranque de SQL Server en un volumen vacío puede tardar más de
     # cinco segundos en responder a sqlcmd en equipos con recursos compartidos.
     healthcheck:
@@ -18,11 +18,18 @@ services:
       MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
       DB_NAME: vuelos_sanitarios_e2e
 
+  db-grants:
+    environment:
+      MSSQL_SA_PASSWORD: ${E2E_MSSQL_SA_PASSWORD:?Configure the isolated E2E admin secret in .env.e2e}
+      DB_NAME: vuelos_sanitarios_e2e
+
   backend:
     environment:
+      CORS_ALLOWED_ORIGIN: http://127.0.0.1:18081
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=vuelos_sanitarios_e2e;encrypt=true;trustServerCertificate=true
-      # Sólo en E2E: permite verificar recuperación de leases vencidos sin esperas largas.
-      DOCUMENT_LOCK_SECONDS: 1
+      # Los leases documentales conservan su duración real (300 s) para poder editar con calma; el vencimiento y la
+      # recuperación se provocan adelantando el reloj ajustable (/api/e2e/clock), nunca modificando filas SQL.
+      DOCUMENT_LOCK_SECONDS: 300
       # Sólo en E2E: reloj ajustable y barrido a demanda (/api/e2e, requiere ADMINISTRADOR). El barrido periódico queda
       # prácticamente desactivado para que las pruebas controlen cuándo corre y verifiquen el bloqueo sin él.
       SPRING_PROFILES_ACTIVE: docker,e2e
@@ -30,8 +37,66 @@ services:
       APP_AUDIT_DIAGNOSTICS_ENABLED: ${APP_AUDIT_DIAGNOSTICS_ENABLED:-false}
       FINAL_REPORT_SWEEP_MS: 3600000
       FINAL_REPORT_SWEEP_INITIAL_MS: 3600000
+      APP_CREW_ELIGIBILITY_SWEEP_MS: 3600000
+      APP_CREW_ELIGIBILITY_SWEEP_INITIAL_MS: 3600000
+      # La base E2E acumula miles de vuelos abiertos de corridas anteriores: la revisión global tras cada cambio de política tardaría minutos. Las pruebas piden la revisión de cada vuelo con /api/e2e/crew-eligibility/sweep/{id}.
+      APP_CREW_ELIGIBILITY_POLICY_REVIEW_ENABLED: "false"
+      # Bandeja de pruebas (Mailpit): un servidor SMTP real que no entrega a nadie, sólo retiene los mensajes. Es un transporte controlado:
+      # permite comprobar el envío y el consumo del código, no la entrega a un proveedor externo.
+      MAIL_ENABLED: "true"
+      MAIL_HOST: mailbox
+      MAIL_PORT: 1025
+      MAIL_STARTTLS: "false"
+      MAIL_FROM: no-reply@vuelos-e2e.test
+      APP_PUBLIC_URL: http://localhost:18081
+      # Plazos cortos sólo para las pruebas: el intervalo de reenvío real es de 60 s; el límite por correo (5 por día) se conserva para probarlo.
+      EMAIL_VERIFICATION_RESEND_SECONDS: 2
+      EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
+      APP_ENVIRONMENT: pruebas
+      # Vacío: la base mínima de E2E es válida. true reproduce la exigencia de producción (la base mínima debe dejar los documentos en cuarentena).
+      APP_ANTIMALWARE_REQUIRE_FULL_DATABASE: ${E2E_ANTIMALWARE_REQUIRE_FULL_DATABASE:-}
+      APP_ANTIMALWARE_ENABLED: ${E2E_ANTIMALWARE_ENABLED:-false}
+      APP_ANTIMALWARE_HOST: clamav
+      APP_ANTIMALWARE_TIMEOUT_MS: 15000
+      APP_ANTIMALWARE_RETRY_MS: 3600000
+      APP_ANTIMALWARE_RETRY_INITIAL_MS: 3600000
+      APP_ANTIMALWARE_RETRY_AFTER_SECONDS: 1
+      APP_CREDENTIAL_EXPIRY_SWEEP_MS: 3600000
+      APP_CREDENTIAL_EXPIRY_SWEEP_INITIAL_MS: 3600000
+    depends_on:
+      mailbox:
+        condition: service_started
     ports:
       - "18080:8080"
 
+  # Analizador antimalware REAL (motor ClamAV/clamd) para las pruebas de documentación de habilitaciones. Perfil opcional.
+  # Usa una base de firmas mínima (sólo EICAR): prueba la integración con poca memoria y sin descargas, no la cobertura antimalware.
+  # Se levanta con `--profile antimalware` y se activa en el backend con E2E_ANTIMALWARE_ENABLED=true.
+  clamav:
+    profiles: ["antimalware"]
+    image: clamav/clamav:1.4.6_base
+    entrypoint: ["clamd", "--foreground", "--config-file=/etc/clamav-e2e/clamd.conf"]
+    mem_limit: ${E2E_CLAMAV_MEM_LIMIT:-384m}
+    volumes:
+      - ./docker/clamav/e2e:/etc/clamav-e2e:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 3 127.0.0.1 3310 | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [internal]
+    restart: unless-stopped
+
+  mailbox:
+    image: axllent/mailpit:latest
+    environment:
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks: [internal]
+    restart: unless-stopped
+
   frontend:
     profiles: ["ui"]
+    ports: !override ["18081:80"]

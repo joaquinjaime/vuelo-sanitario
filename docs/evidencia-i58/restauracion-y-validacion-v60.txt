@@ -1,0 +1,25 @@
+== CHECKDB origen
+Changed database context to 'vuelos_sanitarios_ensayo_v47'.
+== CHECKCONSTRAINTS
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ |
+-|-
+fk_no_confiables|0
+ |
+-|-
+check_no_confiables|0
+ |
+-|-
+triggers_inmutabilidad|tr_consultas_externas_inmutable,tr_decisiones_habilitacion_inmutable,tr_documentos_habilitacion_integridad,tr_eventos_auditoria_inmutable,tr_politicas_habilitacion_proteccion
+Changed database context to 'master'.
+The backup set on file 1 is valid.
+== CHECKDB restaurada
+ |
+-|-
+tablas_con_conteo_distinto|0
+ |
+-|-
+version_restaurada|60
+ |
+-|-
+filas_restauradas|5257

@@ -1,0 +1,7 @@
+# Repository content is stored with LF. Working trees use LF as well, independent of core.autocrlf,
+# so Docker build contexts, shell scripts run inside Linux containers and Flyway sources are identical on every machine.
+* text=auto eol=lf
+*.sh text eol=lf
+*.cjs text eol=lf
+*.sql text eol=lf
+*.csv text eol=lf

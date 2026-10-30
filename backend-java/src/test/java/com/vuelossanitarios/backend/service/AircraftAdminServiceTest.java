@@ -33,7 +33,7 @@ class AircraftAdminServiceTest {
  private final AuditEventRepository events=mock(AuditEventRepository.class);
  private final AuditService audit=mock(AuditService.class);
  private final Clock clock=Clock.fixed(Instant.parse("2030-01-01T12:00:00Z"),ZoneId.of("UTC"));
- private final AircraftAdminService service=new AircraftAdminService(aircraft,airports,flights,crews,medical,users,events,audit,clock);
+ private final AircraftAdminService service=new AircraftAdminService(aircraft,airports,mock(AirportLocks.class),flights,crews,medical,users,events,audit,clock);
  private User admin; private Airport tuc,aep,inactiveAirport; private Aircraft plane;
 
  private static Airport airport(long id,String name,long provinceId,boolean active){Airport a=new Airport();a.setId(id);a.setNombre(name);a.setActivo(active);Province p=new Province();p.setId(provinceId);p.setNombre("P"+provinceId);a.setProvinciaReferencial(p);return a;}

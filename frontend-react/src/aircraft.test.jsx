@@ -195,7 +195,7 @@ test("la asignación lista a quienes no están disponibles con el vuelo en confl
   });
   render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={msg} />);
   await screen.findByText(/Luis Médico/); fireEvent.change(screen.getByLabelText("Función de tripulación"), { target: { value: "MEDICO" } });
-  await screen.findByRole("option", { name: "Pablo Médico (pablo)" }); expect(screen.getByText(/No disponibles por conflicto \(1\)/)).toBeInTheDocument(); expect(screen.getByText(/Rosa Médica: Tiene el vuelo V-9/)).toBeInTheDocument();
+  await screen.findByRole("option", { name: "Pablo Médico (pablo)" }); expect(screen.getByText(/Personal que requiere revisión \(1\)/)).toBeInTheDocument(); expect(screen.getByText(/Rosa Médica: Tiene el vuelo V-9/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Personal disponible"), { target: { value: "13" } });
   const assign = screen.getByRole("button", { name: "Asignar tripulante" }); fireEvent.click(assign); fireEvent.click(assign);
   expect(await screen.findByRole("alert")).toHaveTextContent("V-9"); expect(msg).not.toHaveBeenCalled(); expect(attempts).toBe(1);
@@ -211,6 +211,14 @@ test("sin personal disponible se informa el estado vacío y las funciones salen 
   fireEvent.change(screen.getByLabelText("Función de tripulación"), { target: { value: "TECNICO" } });
   expect(await screen.findByText("No hay personal disponible con esa función para el horario del vuelo.")).toBeInTheDocument();
 });
+test("Operaciones ve la revocación y el estado actualizado después de regularizar", async () => {
+  let revoked=true;
+  vi.mocked(api).mockImplementation(path=>Promise.resolve(path==="/flights/7/crew"?crewRows.map(r=>r.userId===11?{...r,elegibilidadCodigo:revoked?"HABILITACION_REVOCADA":"ELEGIBLE",elegibilidadMotivo:revoked?"La verificación fue revocada":"Vigente"}:r):[]));
+  render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()}/>);
+  expect(await screen.findByText(/Requiere revisión: La verificación fue revocada/)).toBeInTheDocument();
+  revoked=false;fireEvent.click(screen.getByRole("button",{name:"Actualizar elegibilidad"}));
+  expect(await screen.findByText(/Apto/)).toBeInTheDocument();
+ });
 test("un vuelo iniciado o finalizado no ofrece modificar la tripulación", async () => {
   vi.mocked(api).mockResolvedValue(crewRows);
   render(<FlightCrew flightId={7} state="EN_CURSO" canManage msg={vi.fn()} />);

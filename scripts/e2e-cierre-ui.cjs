@@ -3,7 +3,7 @@
  * Requiere el paquete `playwright` resoluble (NODE_PATH) y Chrome (E2E_CHROME opcional). Sólo crea datos marcados. */
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { PDF, ROOT, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { PDF, ROOT, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
@@ -23,7 +23,8 @@ const obligation = (id) => one(`SELECT estado_obligacion FROM obligaciones_infor
   let seq = 0; const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'U' + (++seq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const planned = async () => { const p = await plane(), w = futureSlot(); const f = await ok('/flights/operational', { method: 'POST', token: ops.token, body: { tipoVueloCode: 'REGRESO_BASE', motivoVuelo: 'UI cierre ' + MARK, aircraftId: p.id, comandanteId: cmd.id, destinoId: airports[1].id, salida: fmt(w), llegada: fmt(new Date(w.getTime() + 7200000)) } }); await call(`/flights/${f.id}/commander-assignment/response`, { method: 'POST', token: cmd.token, body: { aceptar: true } }); return f; };
   const flight = await planned(); const second = await planned(); const third = await planned();
-  await call(`/flights/${second.id}/start`, { method: 'POST', token: ops.token }); await call(`/flights/${second.id}/finish`, { method: 'POST', token: ops.token });
+  await approveRoute(flight.id, cmd.token, ops.token); // el inicio desde la interfaz exige la ruta aprobada (I-4)
+  await approveRoute(second.id, cmd.token, ops.token); await call(`/flights/${second.id}/start`, { method: 'POST', token: ops.token }); await call(`/flights/${second.id}/finish`, { method: 'POST', token: ops.token });
 
   const browser = await chromium.launch({ headless: true, executablePath: process.env.E2E_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
   const shotDir = process.env.E2E_SHOT_DIR;
@@ -39,7 +40,7 @@ const obligation = (id) => one(`SELECT estado_obligacion FROM obligaciones_infor
     assert.equal(stateOf(flight.id), 'FINALIZADO'); assert.equal(obligation(flight.id), 'PENDIENTE');
     await coPage.getByText('Informe final pendiente de presentación').first().waitFor(); await snap(coPage, '01-co-finalizado');
     assert.equal(await coPage.getByRole('button', { name: 'Finalizar vuelo' }).count(), 0, 'no se puede finalizar dos veces');
-    await coPage.getByRole('button', { name: 'Actualizar' }).click();
+    await coPage.getByRole('button', { name: 'Actualizar', exact: true }).click();
     await coPage.getByText(/V-[A-Z0-9]+ · .* · Pendiente de presentación/).first().waitFor({ timeout: 5000 }).catch(() => {});
     await coPage.reload(); const flightCode = one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${flight.id}`); const tableRow = coPage.locator('table tbody tr', { hasText: flightCode }); await tableRow.waitFor();
     const rowText = await tableRow.textContent(); assert.ok(!rowText.includes('undefined'), 'trayecto sin undefined: ' + rowText); assert.match(rowText, /[^\s,]+, [^\s→]+.* → \S+/, 'trayecto con aeropuerto y provincia: ' + rowText);

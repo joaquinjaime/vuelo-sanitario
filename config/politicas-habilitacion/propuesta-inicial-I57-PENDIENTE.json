@@ -1,0 +1,47 @@
+{
+  "name": "Propuesta inicial I-5.7 — SIN reglas de negocio cargadas (plantilla pendiente de decisión)",
+  "roles": ["COMANDANTE", "COPILOTO", "MEDICO", "ENFERMERO"],
+  "policies": [],
+  "pendingDecisions": [
+    {
+      "roleCode": "COMANDANTE",
+      "topic": "Tipo(s) de habilitación aeronáutica suficientes y categoría de aeronave a la que aplican",
+      "question": "Decisión de negocio con revisión normativa: qué habilitación(es) emitida(s) por la autoridad aeronáutica acredita(n) la función de comandante y para qué aeronaves de la flota. El sistema no trae requisitos propios ni establece equivalencias."
+    },
+    {
+      "roleCode": "COMANDANTE",
+      "topic": "Distinción entre vuelo sanitario y vuelos operativos",
+      "question": "¿Se exige lo mismo para SANITARIO que para TRASLADO_OPERATIVO, REPOSICIONAMIENTO, REGRESO_BASE, ENTRENAMIENTO y OTRO? Si no, cargar una política por tipo de vuelo."
+    },
+    {
+      "roleCode": "COMANDANTE",
+      "topic": "Consulta externa obligatoria",
+      "question": "¿La política exige una consulta manual registrada a la fuente oficial con resultado COINCIDE (requiresExternalCheck)? Es una declaración del administrador, no una validación emitida por el organismo."
+    },
+    {
+      "roleCode": "COPILOTO",
+      "topic": "Tipo(s) de habilitación aeronáutica suficientes para copiloto y categoría de aeronave",
+      "question": "Decisión de negocio con revisión normativa; ver COMANDANTE. Aclarar además si el copiloto es obligatorio en alguna operación (el sistema hoy permite asignarlo opcionalmente)."
+    },
+    {
+      "roleCode": "MEDICO",
+      "topic": "Matrícula o habilitación profesional suficiente y jurisdicción",
+      "question": "¿Qué matrícula acredita al médico y su jurisdicción debe constar (requiresJurisdiction)? ¿Se exige consulta externa REFEPS/SISA coincidente? Decisión de la dirección médica con revisión normativa; el sistema no establece equivalencias entre matrículas provinciales y nacionales."
+    },
+    {
+      "roleCode": "MEDICO",
+      "topic": "Aptitud específica para transporte aeromédico y vuelos no sanitarios",
+      "question": "¿Existe una acreditación adicional (capacitación, aptitud psicofísica) que deba modelarse como otro tipo de habilitación? ¿Puede un médico integrar vuelos operativos no sanitarios?"
+    },
+    {
+      "roleCode": "ENFERMERO",
+      "topic": "Matrícula o título suficiente y jurisdicción",
+      "question": "Mismas decisiones que MEDICO para el personal de enfermería (matrícula, jurisdicción, consulta externa, aptitud específica, vuelos no sanitarios)."
+    },
+    {
+      "roleCode": null,
+      "topic": "Categorías de aeronave",
+      "question": "El «tipo» de cada aeronave es texto libre (hoy: PRUEBA, CAT-A, Turbohélice…). Antes de cargar políticas por categoría, normalizar con Operaciones los valores en uso: una política por categoría sólo se aplica si coincide (sin tildes ni mayúsculas) con ese valor."
+    }
+  ]
+}
