@@ -8,6 +8,24 @@ Ejecutar en el entorno habitual publicado, con cuentas de prueba preexistentes d
 
 Precondiciones comunes: frontend disponible, backend sano, sesión iniciada con el rol indicado y catálogos mínimos existentes. Para los casos que modifiquen una entidad, usar un identificador de prueba único y revertir sólo los datos creados por la prueba mediante las funciones normales de la aplicación.
 
+### Preparación de datos de campaña
+
+La persona Administradora debe crear exclusivamente desde el panel administrativo, y con datos ficticios, las cuentas DTS, Centro de Operaciones y Comandante. Usar identificadores de campaña únicos, correos bajo un dominio de prueba y contraseñas aleatorias fuertes almacenadas fuera del repositorio; no anotarlas en este documento, capturas, tickets ni datos de prueba. No crear usuarios mediante SQL ni reutilizar identidades de pacientes reales.
+
+Antes del escenario integral, el Administrador debe confirmar en pantalla que existen dos aeropuertos activos, sus provincias/localidades activas, tipos de vuelo/prioridades, una aeronave ficticia activa con ubicación y un Comandante ficticio activo cuyo perfil sea compatible con esa ubicación. Si falta alguno, crearlo o configurarlo desde la interfaz administrativa y registrar su identificador sintético.
+
+## Escenario integral de punta a punta
+
+### MAN-E2E-01 — Vuelo sanitario completo de prueba
+
+- Roles: Administrador, DTS, Centro de Operaciones y Comandante.
+- Funcionalidad: ciclo completo desde altas ficticias hasta auditoría de cierre.
+- Precondiciones: datos de campaña creados por la interfaz; paciente ficticio existente o creado por el flujo permitido; aeronave y comandante disponibles; ningún dato real seleccionado.
+- Pasos: 1. El Administrador da de alta y verifica los tres usuarios de prueba y sus roles. 2. El DTS crea una solicitud sanitaria para el paciente ficticio. 3. Operaciones negocia el horario y la aprueba. 4. Operaciones asigna la aeronave, el comandante y la tripulación ficticios. 5. El Comandante planifica y presenta la ruta. 6. Operaciones aprueba la ruta. 7. Operaciones inicia y finaliza el vuelo por las transiciones permitidas. 8. El Comandante presenta el informe final dentro del flujo. 9. Operaciones revisa y aprueba el informe. 10. Se consulta el cierre del vuelo y la auditoría filtrada por el identificador de campaña.
+- Resultado esperado: cada transición se habilita sólo después de su predecesora, conserva responsable/fecha/motivo y es visible para el rol autorizado; no hay asignaciones incompatibles, accesos entre roles ni eventos faltantes en auditoría; el vuelo e informe terminan en los estados de cierre aprobados por el sistema.
+- Prioridad: Crítica.
+- Estado: NO EJECUTADA.
+
 ## Casos DTS
 
 ### MAN-DTS-01 — Inicio de sesión y sesión
