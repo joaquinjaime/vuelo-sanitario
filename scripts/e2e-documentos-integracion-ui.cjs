@@ -147,7 +147,7 @@ const storedSha = (key) => spawnSync('docker', ['exec', BACKEND, 'sha256sum', '/
     const UINAME = 'Retirable UI ' + MARK, uipdf = pdfWith('% ui retire ' + MARK);
     await field(docs, 'Tipo documental', 'select').selectOption({ label: 'Otro documento' }); await field(docs, 'Nombre del documento', 'input').fill(UINAME); await field(docs, 'Archivo PDF', 'input').setInputFiles(file('retirable.pdf', uipdf));
     await docs.getByRole('button', { name: 'Registrar documento', exact: true }).click(); await docs.getByRole('heading', { name: UINAME }).waitFor();
-    const idRet = docId(S, UINAME); 
+    const idRet = docId(S, UINAME);
     await docs.getByRole('button', { name: 'Retirar documento' }).click();
     await docs.getByRole('note').filter({ hasText: /no se puede deshacer/ }).waitFor();
     const confirmRetire = docs.getByRole('button', { name: 'Confirmar retiro' }); assert.equal(await confirmRetire.isDisabled(), true, 'sin motivo no se puede confirmar');
