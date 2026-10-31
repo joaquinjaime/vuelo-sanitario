@@ -246,6 +246,26 @@ test("consecutive pending creations keep each code modal independent from the re
  expect(screen.getByText("codigo-dos")).toBeInTheDocument();
  expect(vi.mocked(api).mock.calls.filter(([path, options]) => path === "/auth/users" && options?.method === "POST")).toHaveLength(2);
 });
+test("el alta bloquea un segundo envío mientras la creación está en curso", async () => {
+ const { AdminUsers } = await import("./main.jsx");
+ let resolveCreation;
+ vi.mocked(api).mockImplementation((path, options) => path==="/auth/users"&&options?.method==="POST" ? new Promise(resolve=>{resolveCreation=resolve;}) : Promise.resolve([]));
+ render(<AdminUsers users={[]} reload={vi.fn()} notify={vi.fn()} />);
+ fireEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+ fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana" } });
+ fireEvent.change(screen.getByLabelText("Apellido"), { target: { value: "Pérez" } });
+ fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30999111" } });
+ fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana.bloqueada@example.test" } });
+ fireEvent.change(screen.getByLabelText("Teléfono principal"), { target: { value: "3815555555" } });
+ fireEvent.click(screen.getByLabelText("CENTRO_OPERACIONES"));
+ fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
+ expect(screen.getByRole("button", { name: "Creando cuenta…" })).toBeDisabled();
+ expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+ fireEvent.click(screen.getByRole("button", { name: "Creando cuenta…" }));
+ expect(vi.mocked(api).mock.calls.filter(([path, options]) => path==="/auth/users"&&options?.method==="POST")).toHaveLength(1);
+ resolveCreation({ codigo: "codigo-unico" });
+ expect(await screen.findByText("codigo-unico")).toBeInTheDocument();
+});
 test("regeneration displays its one-time response and can be dismissed", async () => {
  const { AdminUsers } = await import("./main.jsx");
  const pending={id:"user-pending",nombre:"Ana",apellido:"Pérez",dni:"47355303",username:null,estado:"PENDIENTE_ACTIVACION",roles:["DTS"],correos:[]};

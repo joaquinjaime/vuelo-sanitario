@@ -21,5 +21,10 @@ test("devuelve el JSON, envía el token y conserva los campos del error del back
   vi.stubGlobal("fetch", vi.fn(() => reply(409, JSON.stringify({ error: "Conflicto", code: "USER_HAS_OPERATIONAL_ASSIGNMENTS", impedimentos: [{ vueloCodigo: "V-1" }] }))));
   await expect(api("/x", { method: "PATCH" })).rejects.toMatchObject({ message: "Conflicto", code: "USER_HAS_OPERATIONAL_ASSIGNMENTS", impedimentos: [{ vueloCodigo: "V-1" }] });
   vi.stubGlobal("fetch", vi.fn(() => reply(500, "no es json")));
-  await expect(api("/x")).rejects.toThrow("No se pudo completar la operación");
+  await expect(api("/x")).rejects.toMatchObject({ message: "No se pudo completar la operación (HTTP 500).", status: 500 });
+});
+
+test("una respuesta de sesión vencida sin JSON sigue siendo accionable", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => reply(401, "")));
+  await expect(api("/auth/users")).rejects.toMatchObject({ message: "La sesión venció. Volvé a ingresar.", status: 401 });
 });

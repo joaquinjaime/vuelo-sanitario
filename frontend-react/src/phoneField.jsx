@@ -24,16 +24,21 @@ export function PhoneField({ value, onChange, label = "Teléfono", idPrefix = "t
   const typeNumber = (raw) => { setTyped(true); const next = normalizeTyped(raw, value.pais); onChange({ ...value, pais: next.country, numero: next.number }); };
 
   return <div className="phone-field">
-    <label className="phone-country-search">Buscar país
-      <input type="search" aria-label="Buscar país" value={query} placeholder="Nombre, código o prefijo" disabled={disabled} onChange={(e) => setQuery(e.target.value)} /></label>
-    <label className="phone-country">País
-      <select aria-label="País del teléfono" value={value.pais} disabled={disabled} onChange={(e) => change({ pais: e.target.value })}>
-        <option value="">Seleccione el país</option>
-        {options.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.prefix})</option>)}
-      </select></label>
-    <span className="phone-prefix" aria-label="Prefijo internacional">{value.pais ? callingPrefix(value.pais) : "+"}</span>
-    <input id={`${idPrefix}-numero`} type="tel" inputMode="tel" autoComplete="tel-national" required aria-label={label} disabled={disabled} value={value.numero} maxLength={30}
-      placeholder={value.pais ? "Número sin el prefijo" : "Elija primero el país"} onChange={(e) => typeNumber(e.target.value)} />
+    <div className="phone-country-controls">
+      <label className="phone-country-search">Buscar país
+        <input type="search" aria-label="Buscar país" value={query} placeholder="Nombre, código o prefijo" disabled={disabled} onChange={(e) => setQuery(e.target.value)} /></label>
+      <label className="phone-country">País
+        <select aria-label="País del teléfono" value={value.pais} disabled={disabled} onChange={(e) => change({ pais: e.target.value })}>
+          <option value="">Seleccione el país</option>
+          {options.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.prefix})</option>)}
+        </select></label>
+    </div>
+    <label className="phone-number-control"><span>{label}</span>
+      <span className="phone-number-input"><span className="phone-prefix" aria-label="Prefijo internacional">{value.pais ? callingPrefix(value.pais) : "+"}</span>
+        <input id={`${idPrefix}-numero`} type="tel" inputMode="tel" autoComplete="tel-national" required aria-label={label} disabled={disabled} value={value.numero} maxLength={30}
+          placeholder={value.pais ? "Número sin el prefijo" : "Elija primero el país"} onChange={(e) => typeNumber(e.target.value)} />
+      </span>
+    </label>
     {showHint && !value.pais && <small className="error phone-error">Seleccione el país del teléfono</small>}
     {showHint && problem && <small className="error phone-error">{problem}</small>}
     {final && <small className="hint phone-final">Se guardará como {final} ({toE164(value.numero, value.pais)}). El formato es válido para {countryName(value.pais)}; el número no se verifica por SMS.</small>}

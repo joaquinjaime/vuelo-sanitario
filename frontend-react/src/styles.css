@@ -321,6 +321,20 @@ button {
 .activation-modal { max-height: calc(100vh - 2rem); overflow-y: auto; width: min(100%, 34rem); display: grid; gap: 1rem; padding: 1.5rem; border-radius: 12px; background: var(--card); color: var(--ink); box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .3); }
 .activation-modal h2, .activation-modal p { margin: 0; }
 .activation-modal code { overflow-wrap: anywhere; padding: .85rem; border-radius: 8px; background: var(--soft); color: var(--ink); font-size: 1.05rem; }
+.activation-modal.user-create-modal { width: min(100%, 48rem); gap: 1rem; }
+.user-create-heading { display: grid; gap: .35rem; align-items: start; }
+.user-create-heading h2 { margin: .1rem 0 0; }
+.user-create-heading > p { color: var(--muted); }
+.user-create-section { display: grid; gap: .8rem; min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; }
+.user-create-section h3 { margin: 0; font-size: 1rem; }
+.user-create-fields { gap: .8rem; }
+.user-create-fields label, .user-create-section > label { min-width: 0; }
+.user-create-fields input, .user-create-fields select, .user-create-section > label input { width: 100%; min-width: 0; }
+.user-create-roles { display: flex; flex-wrap: wrap; gap: .7rem 1rem; margin: 0; padding: .75rem; border: 1px solid var(--line); border-radius: .55rem; }
+.user-create-roles legend { padding: 0 .35rem; font-weight: 700; }
+.user-create-roles .check { min-width: max-content; }
+.form-actions { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
+.form-actions button:disabled { cursor: wait; opacity: .72; }
 .form-panel { border-top: 1px solid var(--line); padding-top: 1rem; }
 .patient-search { border-top: 1px solid var(--line); padding-top: 1rem; }
 .patient-search-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -347,6 +361,16 @@ body[data-theme="dark"] .link-button { color: #8fc8ff; }
 .autocomplete::-webkit-scrollbar-thumb { background: var(--autocomplete-scrollbar); border: 2px solid var(--autocomplete-surface); border-radius: 999px; }
 .locality-picker .success { display: block; margin-top: .25rem; }
 @media (max-width: 760px) { .filters, .account-columns, .locality-picker { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .activation-modal-backdrop { align-items: start; padding: .5rem; overflow-y: auto; }
+  .activation-modal.user-create-modal { width: 100%; max-height: none; margin: .5rem 0; padding: 1rem; }
+  .user-create-section { padding: .8rem; }
+  .user-create-fields { grid-template-columns: 1fr; }
+  .phone-country-controls { grid-template-columns: 1fr; }
+  .user-create-roles { display: grid; grid-template-columns: 1fr; }
+  .form-actions { display: grid; grid-template-columns: 1fr; }
+  .form-actions button { width: 100%; }
+}
 
 /* Cierre de vuelos: informes finales, historial y notificaciones */
 .report-overdue { border-left: 4px solid #b42318; padding-left: .75rem; }
@@ -391,10 +415,17 @@ body[data-theme="dark"] .link-button { color: #8fc8ff; }
 .crew-contact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
 .crew-contact-values { margin: .15rem 0; }
 
-.phone-field { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 2fr) auto minmax(10rem, 2fr); gap: .5rem; align-items: end; width: 100%; }
+.phone-field { display: grid; gap: .65rem; width: 100%; min-width: 0; }
+.phone-country-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.phone-country-controls label, .phone-number-control { display: grid; gap: .4rem; min-width: 0; }
+.phone-country-controls input, .phone-country-controls select { width: 100%; min-width: 0; }
+.phone-number-input { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; min-width: 0; }
+.phone-number-input input { width: 100%; min-width: 0; border-radius: 0 8px 8px 0; }
 .phone-field > small { grid-column: 1 / -1; }
-.phone-prefix { font-weight: 600; padding: .55rem .25rem; white-space: nowrap; }
+.phone-prefix { display: grid; place-items: center; min-width: 3.35rem; padding: .55rem .65rem; font-weight: 600; white-space: nowrap; border: 1px solid #b7c5d8; border-right: 0; border-radius: 8px 0 0 8px; background: color-mix(in srgb, var(--surface) 70%, var(--card)); }
 .phone-final { color: inherit; }
+/* Va después de la regla base para que el buscador y selector no queden comprimidos en teléfonos. */
+@media (max-width: 760px) { .phone-country-controls { grid-template-columns: 1fr; } }
 .verification { margin: 0 .35rem; padding: .05rem .4rem; border-radius: .5rem; border: 1px solid currentColor; }
 .verification-VERIFICADO, .verification-VALIDADO { color: #1b6b32; }
 .verification-PENDIENTE { color: #8a5a00; }
