@@ -59,11 +59,11 @@ const MAILBOX_CONTAINER = process.env.E2E_MAILBOX_CONTAINER || 'vuelos-sanitario
   assert.equal(created.envio, 'ENVIADO'); assert.equal(created.verificacion, 'PENDIENTE'); assert.equal(created.principal, false);
   assert.equal(verified(created.id), false, 'registrar no verifica');
   const t1 = tok(created.id); assert.equal(t1.length, 1); assert.ok(t1[0].open && t1[0].sent && t1[0].attempts === 0);
-  assert.equal(count(`SELECT COUNT(*) FROM verificaciones_correo WHERE id_correos_electronicos=${created.id} AND LEN(codigo_hash)=64 AND DATEDIFF(MINUTE,fecha_creacion,fecha_vencimiento)=30 AND direccion_normalizada=N'${addr}'`), 1);
+  assert.equal(count(`SELECT COUNT(*) FROM verificaciones_correo WHERE id_correos_electronicos=${created.id} AND LEN(codigo_hash)=64 AND DATEDIFF(MINUTE,fecha_creacion,fecha_vencimiento)=10 AND direccion_normalizada=N'${addr}'`), 1);
   const mail1 = await mailboxCode(addr); secrets.push(mail1.code);
   assert.equal(mail1.count, 1);
-  assert.equal(mail1.message.From.Address, 'no-reply@vuelos-e2e.test'); assert.match(mail1.message.Subject, /Código para verificar su correo/);
-  assert.match(mail1.message.Text, /Vence en 30 minutos y sólo puede usarse una vez/);
+  assert.equal(mail1.message.From.Address, 'no-reply@vuelos-e2e.test'); assert.match(mail1.message.Subject, /Verificación de correo electrónico/);
+  assert.match(mail1.message.Text, /Este código vence en 10 minutos y solo puede utilizarse una vez/);
   assert.ok(!/DNI|contrase|usuario/i.test(mail1.message.Text.replace('Vuelos Sanitarios', '')), 'el mensaje no lleva datos personales');
   assert.equal(count(`SELECT COUNT(*) FROM verificaciones_correo WHERE codigo_hash LIKE N'%${mail1.code.replace('-', '')}%'`), 0, 'el código no se guarda en claro');
   assert.equal(audits(created.id, 'VERIFY_REQUEST'), 1);
@@ -75,7 +75,7 @@ const MAILBOX_CONTAINER = process.env.E2E_MAILBOX_CONTAINER || 'vuelos-sanitario
   }
   assert.equal((await call(`/auth/me/correos/${created.id}/verificacion`, { method: 'POST', token: u2.token, expect: [404] })).status, 404);
   assert.equal(verified(created.id), false); assert.equal(tok(created.id)[0].attempts, 0);
-  const wrong = await confirm(u1, created.id, 'AAAA-AAAA', [400]); assert.equal(wrong.data.code, 'VERIFICATION_CODE_INVALID'); assert.equal(wrong.data.intentosRestantes, 4);
+  const wrong = await confirm(u1, created.id, '111111', [400]); assert.equal(wrong.data.code, 'VERIFICATION_CODE_INVALID'); assert.equal(wrong.data.intentosRestantes, 4);
   assert.equal(tok(created.id)[0].attempts, 1, 'el intento fallido queda persistido aunque la respuesta sea un error');
   assert.equal((await call(`/auth/me/correos/${created.id}/verificacion/confirmar`, { method: 'POST', token: u1.token, body: { codigo: mail1.code, verificado: true }, expect: [400] })).status, 400, 'campos desconocidos rechazados');
   const done = await confirm(u1, created.id, mail1.code.toLowerCase().replace('-', ' '));
@@ -90,8 +90,8 @@ const MAILBOX_CONTAINER = process.env.E2E_MAILBOX_CONTAINER || 'vuelos-sanitario
   // ---------- C. Intentos agotados ----------
   const lockAddr = `bloqueo.${MARK}@example.test`; const lockMail = await addMail(u1, lockAddr);
   const lockCode = await codeOf(lockAddr);
-  for (let i = 0; i < 4; i++) assert.equal((await confirm(u1, lockMail.id, 'BBBB-BBBB', [400])).data.intentosRestantes, 4 - i);
-  const locked = await confirm(u1, lockMail.id, 'BBBB-BBBB', [429]); assert.equal(locked.data.code, 'VERIFICATION_LOCKED');
+  for (let i = 0; i < 4; i++) assert.equal((await confirm(u1, lockMail.id, '222222', [400])).data.intentosRestantes, 4 - i);
+  const locked = await confirm(u1, lockMail.id, '222222', [429]); assert.equal(locked.data.code, 'VERIFICATION_LOCKED');
   assert.equal(tok(lockMail.id)[0].reason, 'AGOTADO'); assert.equal(tok(lockMail.id)[0].attempts, 5); assert.equal(audits(lockMail.id, 'VERIFY_LOCKED'), 1);
   assert.equal((await confirm(u1, lockMail.id, lockCode, [409])).data.code, 'VERIFICATION_NOT_REQUESTED', 'ni siquiera el código correcto del token agotado');
   assert.equal(verified(lockMail.id), false);

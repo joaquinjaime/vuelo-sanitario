@@ -41,7 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * confirman contactos de otra persona ni se revela si una dirección pertenece a otra cuenta.
  *
  * <ul>
- * <li>Código de 8 caracteres de un alfabeto sin ambigüedades (≈ 39,6 bits) generado con {@link SecureRandom}. En la base sólo se guarda su
+ * <li>Código decimal de exactamente seis dígitos (incluidos los ceros iniciales) generado con {@link SecureRandom}. En la base sólo se guarda su
  *     HMAC-SHA256 con una clave derivada del secreto del servidor, ligado al correo y a la dirección normalizada: si la dirección cambia, el
  *     código ya no sirve. Nunca se registra en logs ni en auditoría.</li>
  * <li>Vence ({@code app.verification.code-minutes}), se usa una sola vez, admite {@code max-attempts} errores y se reemplaza al reenviar
@@ -57,21 +57,21 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service public class EmailVerificationService {
  private static final Logger log=LoggerFactory.getLogger(EmailVerificationService.class);
  private static final ObjectMapper JSON=new ObjectMapper();
- private static final String ALPHABET="ABCDEFGHJKMNPQRSTUVWXYZ23456789";
- static final int CODE_LENGTH=8;
+ static final int CODE_LENGTH=6;
  public static final String VERIFIED="VERIFICADO",PENDING="PENDIENTE",EXPIRED="EXPIRADO",UNVERIFIED="SIN_VERIFICAR";
  public static final String SENT="ENVIADO",NOT_CONFIGURED="NO_CONFIGURADO",FAILED="FALLIDO",RATE_LIMITED="LIMITE_ALCANZADO";
  private final EmailVerificationRepository verifications; private final EmailContactRepository emails; private final PersonRepository persons; private final UserRepository users;
  private final AuditService audit; private final Clock clock; private final MailTransport mail; private final TransactionTemplate tx;
  private final SecureRandom random=new SecureRandom(); private final byte[] key;
- private final long codeMinutes,resendSeconds; private final int maxAttempts,maxPerEmail,maxPerUser; private final String publicUrl;
+ private final long codeMinutes,resendSeconds; private final int maxAttempts,maxPerEmail,maxPerUser,maxPerOrigin; private final String publicUrl;
 
  public EmailVerificationService(EmailVerificationRepository v,EmailContactRepository e,PersonRepository p,UserRepository u,AuditService a,Clock c,MailTransport m,PlatformTransactionManager txm,
-   @Value("${app.jwt.secret}") String secret,@Value("${app.verification.code-minutes:30}") long codeMinutes,@Value("${app.verification.resend-seconds:60}") long resendSeconds,
-   @Value("${app.verification.max-attempts:5}") int maxAttempts,@Value("${app.verification.max-per-email-per-day:5}") int maxPerEmail,@Value("${app.verification.max-per-user-per-day:10}") int maxPerUser,
+   @Value("${app.jwt.secret}") String secret,@Value("${app.verification.code-minutes:10}") long codeMinutes,@Value("${app.verification.resend-seconds:60}") long resendSeconds,
+   @Value("${app.verification.max-attempts:5}") int maxAttempts,@Value("${app.verification.max-per-email-per-day:5}") int maxPerEmail,@Value("${app.verification.max-per-user-per-day:10}") int maxPerUser,@Value("${app.verification.max-per-origin-per-day:50}") int maxPerOrigin,
    @Value("${app.mail.public-url:}") String publicUrl){
   verifications=v;emails=e;persons=p;users=u;audit=a;clock=c;mail=m;tx=new TransactionTemplate(txm);
-  this.codeMinutes=codeMinutes;this.resendSeconds=resendSeconds;this.maxAttempts=maxAttempts;this.maxPerEmail=maxPerEmail;this.maxPerUser=maxPerUser;this.publicUrl=publicUrl==null?"":publicUrl.trim();
+  if(codeMinutes!=10||maxAttempts!=5||resendSeconds<60||maxPerOrigin<1)throw new IllegalStateException("La verificación de correo exige códigos de 10 minutos, cinco intentos, al menos 60 segundos entre reenvíos y un límite de origen positivo");
+  this.codeMinutes=codeMinutes;this.resendSeconds=resendSeconds;this.maxAttempts=maxAttempts;this.maxPerEmail=maxPerEmail;this.maxPerUser=maxPerUser;this.maxPerOrigin=maxPerOrigin;this.publicUrl=publicUrl==null?"":publicUrl.trim();
   key=hmac(secret.getBytes(StandardCharsets.UTF_8),"vuelos-sanitarios:email-verification:v1".getBytes(StandardCharsets.UTF_8));
  }
 
@@ -102,19 +102,19 @@ import org.springframework.transaction.support.TransactionTemplate;
 
  // ---- emisión (alta, solicitud y reenvío) ----
  /** Emite y envía un código al correo del propio usuario. No es transaccional: el envío SMTP ocurre fuera de toda transacción de base de datos. */
- public Issued issue(Long userId,Long emailId,boolean resendOperation){
-  Phase phase=tx.execute(s->prepare(userId,emailId,resendOperation));
+ public Issued issue(Long userId,Long emailId,boolean resendOperation,String directRemoteAddress){
+  Phase phase=tx.execute(s->prepare(userId,emailId,resendOperation,originFingerprint(directRemoteAddress)));
   if(!"OK".equals(phase.status()))return new Issued(phase.status(),phase.retryAfterSeconds());
   Pending p=phase.pending();String result=SENT;
   try{
-   mail.send(p.address(),"Código para verificar su correo — Vuelos Sanitarios",body(p.code()));
+   mail.send(p.address(),"Verificación de correo electrónico — Vuelos Sanitarios",body(p.code()));
   }catch(RuntimeException e){result=FAILED;log.warn("Verificación {}: el envío falló ({})",p.verificationId(),e.getClass().getSimpleName());}
   String finalResult=result;
   tx.executeWithoutResult(s->settle(userId,emailId,p.verificationId(),finalResult));
   return new Issued(result,0);
  }
 
- private Phase prepare(Long userId,Long emailId,boolean resend){
+ private Phase prepare(Long userId,Long emailId,boolean resend,String origin){
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
   persons.lockById(u.getPerson().getId());
   EmailContact e=emails.findActiveByIdAndPersonId(emailId,u.getPerson().getId()).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Correo inexistente"));
@@ -122,7 +122,7 @@ import org.springframework.transaction.support.TransactionTemplate;
   if(!mail.configured())return new Phase(NOT_CONFIGURED,null,0);
   LocalDateTime now=now();
   long wait=verifications.lastIssuedAt(emailId).map(last->Math.max(0,resendSeconds-Duration.between(last,now).getSeconds())).orElse(0L);
-  boolean limited=wait>0||verifications.countIssuedSince(emailId,now.minusHours(24))>=maxPerEmail||verifications.countIssuedByUserSince(userId,now.minusHours(24))>=maxPerUser;
+  boolean limited=wait>0||verifications.countIssuedSince(emailId,now.minusHours(24))>=maxPerEmail||verifications.countIssuedByUserSince(userId,now.minusHours(24))>=maxPerUser||verifications.countIssuedByOriginSince(origin,now.minusHours(24))>=maxPerOrigin;
   if(limited){
    audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_RATE_LIMITED",null,json("valor",ContactNormalizer.maskEmail(e.getDireccion())));
    return new Phase(RATE_LIMITED,null,wait>0?wait:resendSeconds);
@@ -131,7 +131,7 @@ import org.springframework.transaction.support.TransactionTemplate;
   EmailVerification open=verifications.findOpenByEmailId(emailId).orElse(null);
   if(open!=null){open.invalidar(now,EmailVerification.REPLACED);verifications.saveAndFlush(open);replaced=true;}
   String code=newCode();
-  EmailVerification v=new EmailVerification();v.setEmail(e);v.setSolicitante(u);v.setDireccionNormalizada(e.getDireccionNormalizada());v.setCodigoHash(hash(emailId,e.getDireccionNormalizada(),code));v.setCreadaEn(now);v.setVenceEn(now.plusMinutes(codeMinutes));
+  EmailVerification v=new EmailVerification();v.setEmail(e);v.setSolicitante(u);v.setDireccionNormalizada(e.getDireccionNormalizada());v.setOrigenHuella(origin);v.setCodigoHash(hash(emailId,e.getDireccionNormalizada(),code));v.setCreadaEn(now);v.setVenceEn(now.plusMinutes(codeMinutes));
   v=verifications.saveAndFlush(v);
   audit.record(null,u,"PERSON_EMAIL",emailId,(resend||replaced)?"VERIFY_RESEND":"VERIFY_REQUEST",null,json("valor",ContactNormalizer.maskEmail(e.getDireccion())));
   return new Phase("OK",new Pending(v.getId(),e.getDireccion(),code),0);
@@ -197,14 +197,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
  // ---- apoyo ----
  private LocalDateTime now(){return LocalDateTime.now(clock);}
- static String normalizeCode(String raw){return raw==null?"":raw.replaceAll("[\\s-]","").toUpperCase(Locale.ROOT);}
- private String newCode(){StringBuilder b=new StringBuilder(CODE_LENGTH);for(int i=0;i<CODE_LENGTH;i++)b.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));return b.toString();}
+ static String normalizeCode(String raw){return raw==null?"":raw;}
+ private String newCode(){return String.format(Locale.ROOT,"%06d",random.nextInt(1_000_000));}
  private String hash(Long emailId,String address,String code){return HexFormat.of().formatHex(hmac(key,(emailId+":"+address+":"+code).getBytes(StandardCharsets.UTF_8)));}
+ private String originFingerprint(String directRemoteAddress){return HexFormat.of().formatHex(hmac(key,("origin:"+(directRemoteAddress==null?"":directRemoteAddress)).getBytes(StandardCharsets.UTF_8)));}
  private static byte[] hmac(byte[] k,byte[] message){try{Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(k,"HmacSHA256"));return mac.doFinal(message);}catch(GeneralSecurityException ex){throw new IllegalStateException(ex);}}
  private String body(String code){
-  String shown=code.substring(0,4)+"-"+code.substring(4);
-  return "Su código para verificar este correo en Vuelos Sanitarios es:\n\n    "+shown+"\n\nVence en "+codeMinutes+" minutos y sólo puede usarse una vez. Ingréselo en \"Mi cuenta\""+(publicUrl.isEmpty()?"":" ("+publicUrl+")")+
-   ".\n\nSi usted no lo solicitó, ignore este mensaje: el correo no se verificará sin este código.";
+  return "Para verificar su dirección de correo electrónico, ingresá el siguiente código en la aplicación:\n\n    "+code+"\n\nEste código vence en 10 minutos y solo puede utilizarse una vez. Ingresalo en \"Mi cuenta\""+(publicUrl.isEmpty()?"":" ("+publicUrl+")")+
+   ".\n\nSi no solicitaste esta verificación, ignorá este mensaje.";
  }
  private String json(Object... pairs){Map<String,Object> m=new LinkedHashMap<>();for(int i=0;i<pairs.length;i+=2)m.put(String.valueOf(pairs[i]),pairs[i+1]);try{return JSON.writeValueAsString(m);}catch(JsonProcessingException e){throw new IllegalStateException(e);}}
 }

@@ -7,6 +7,7 @@ import com.vuelossanitarios.backend.service.PersonContactService;
 import com.vuelossanitarios.backend.service.PersonIdentityService;
 import com.vuelossanitarios.backend.api.dto.PatientDtos.RectifyDni;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
@@ -20,15 +21,15 @@ import java.util.*;
  @PostMapping("/me/password") public void password(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ChangePasswordRequest r){service.changePassword(u.id(),r);}
  // Contactos de la propia persona del usuario autenticado; no existe ninguna ruta que reciba el identificador de otra persona.
  /** Registra el correo (sin verificar) y envía el código a esa dirección; si el envío no es posible el correo queda registrado y la respuesta lo informa en {@code envio}. */
- @PostMapping("/me/correos") public ContactView email(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ContactRequest r){
+ @PostMapping("/me/correos") public ContactView email(@AuthenticationPrincipal CurrentUser u,@Valid @RequestBody ContactRequest r,HttpServletRequest request){
   ContactView created=contacts.addEmail(u.id(),r);
-  EmailVerificationService.Issued issued=verification.issue(u.id(),created.id(),false);
+  EmailVerificationService.Issued issued=verification.issue(u.id(),created.id(),false,request.getRemoteAddr());
   ContactView current=contacts.emailContact(u.id(),created.id());
   return new ContactView(current.id(),current.valor(),current.tipo(),current.principal(),current.version(),null,current.verificacion(),issued.status());
  }
  /** Solicita o reenvía el código de verificación de un correo propio. */
- @PostMapping("/me/correos/{id}/verificacion") public ContactView requestVerification(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id){
-  EmailVerificationService.Issued issued=verification.issue(u.id(),id,true);
+ @PostMapping("/me/correos/{id}/verificacion") public ContactView requestVerification(@AuthenticationPrincipal CurrentUser u,@PathVariable Long id,HttpServletRequest request){
+  EmailVerificationService.Issued issued=verification.issue(u.id(),id,true,request.getRemoteAddr());
   switch(issued.status()){
    case EmailVerificationService.NOT_CONFIGURED->throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,"MAIL_NOT_CONFIGURED","El servicio de correo no está configurado: no se puede enviar el código. Contacte al administrador",Map.of());
    case EmailVerificationService.RATE_LIMITED->throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,"VERIFICATION_RATE_LIMIT","Ya se envió un código recientemente o se alcanzó el límite diario. Espere "+issued.retryAfterSeconds()+" segundos e intente de nuevo",Map.of("reintentoEnSegundos",issued.retryAfterSeconds()));

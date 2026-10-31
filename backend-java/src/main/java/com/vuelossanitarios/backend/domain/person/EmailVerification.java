@@ -17,6 +17,8 @@ public class EmailVerification {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "id_correos_electronicos") private EmailContact email;
     @Column(name = "direccion_normalizada", nullable = false, length = 150) private String direccionNormalizada;
     @Column(name = "codigo_hash", nullable = false, length = 64) private String codigoHash;
+    /** Huella HMAC del origen de red directo; permite limitar abuso sin persistir una IP en claro. */
+    @Column(name = "origen_huella", nullable = false, length = 64) private String origenHuella;
     @Column(name = "intentos_fallidos", nullable = false) private Byte intentosFallidos = 0;
     @Column(name = "fecha_creacion", nullable = false) private LocalDateTime creadaEn;
     @Column(name = "fecha_vencimiento", nullable = false) private LocalDateTime venceEn;
@@ -30,6 +32,7 @@ public class EmailVerification {
     public EmailContact getEmail() { return email; } public void setEmail(EmailContact v) { email = v; }
     public String getDireccionNormalizada() { return direccionNormalizada; } public void setDireccionNormalizada(String v) { direccionNormalizada = v; }
     public String getCodigoHash() { return codigoHash; } public void setCodigoHash(String v) { codigoHash = v; }
+    public String getOrigenHuella() { return origenHuella; } public void setOrigenHuella(String v) { origenHuella = v; }
     public int getIntentosFallidos() { return intentosFallidos; } public void registrarIntentoFallido() { intentosFallidos = (byte) (intentosFallidos + 1); }
     public LocalDateTime getCreadaEn() { return creadaEn; } public void setCreadaEn(LocalDateTime v) { creadaEn = v; }
     public LocalDateTime getVenceEn() { return venceEn; } public void setVenceEn(LocalDateTime v) { venceEn = v; }

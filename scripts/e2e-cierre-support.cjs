@@ -112,7 +112,7 @@ async function provision(admin, user) {
 
 // ---- Bandeja de pruebas (Mailpit) del stack aislado: un servidor SMTP real que retiene los mensajes y no los entrega a nadie. ----
 const MAILBOX = process.env.E2E_MAILBOX || 'http://127.0.0.1:18025';
-const CODE_PATTERN = /([A-Z2-9]{4}-[A-Z2-9]{4})/;
+const CODE_PATTERN = /\b(\d{6})\b/;
 async function mailboxMessages(address) {
   const res = await fetch(MAILBOX + '/api/v1/search?query=' + encodeURIComponent('to:"' + address + '"'));
   if (!res.ok) throw new Error('La bandeja de pruebas no responde (' + res.status + ')');

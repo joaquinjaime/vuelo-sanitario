@@ -34,7 +34,7 @@ El mecanismo ya existe y no requiere código nuevo; faltan los datos del proveed
 2. Recrear sólo el backend con la misma imagen release (`up -d --no-build --pull never --no-deps backend`). El cliente se crea únicamente si `MAIL_ENABLED=true` **y** hay servidor; sin `MAIL_FROM` el servicio sigue informando "no configurado".
 3. Probar con una cuenta de prueba: pedir el código, recibirlo en esa dirección y confirmarlo. El éxito del servidor SMTP significa "aceptado", no "entregado": el correo sólo queda verificado cuando alguien devuelve el código.
 
-Salvaguardas que se mantienen: el código (8 caracteres, ≈39,6 bits) se guarda sólo como HMAC-SHA256 ligado al correo y a la dirección; vence a los 30 minutos, se usa una vez, admite 5 intentos, se reemplaza al reenviar; límites de 1 envío por 60 s, 5 por correo y 10 por usuario al día; el rechazo por abuso se audita; nada del código ni la dirección completa se registra. Con un certificado/relé propio (por ejemplo, un relé SMTP interno de la organización) se aplican las mismas reglas.
+Desde V61 el código es un OTP decimal de seis dígitos, generado con `SecureRandom` y guardado sólo como HMAC-SHA256 ligado al correo y a la dirección; vence a los 10 minutos, se usa una vez, admite 5 intentos y se reemplaza al reenviar. Los límites persistentes son de 1 envío por 60 s, 5 por correo, 10 por usuario y 50 por origen de red directo al día; el origen se guarda como huella HMAC y no se confía en cabeceras reenviadas. El rechazo por abuso se audita; nada del código ni la dirección completa se registra. Con un certificado/relé propio (por ejemplo, un relé SMTP interno de la organización) se aplican las mismas reglas.
 
 ### Alternativas que no debilitan la verificación
 

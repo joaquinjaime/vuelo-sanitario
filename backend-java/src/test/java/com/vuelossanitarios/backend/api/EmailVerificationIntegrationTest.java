@@ -95,8 +95,8 @@ class EmailVerificationIntegrationTest {
   // todavía no es un medio confirmado
   call("GET","/api/auth/me",ana.token,null).andExpect(jsonPath("$.correos[0].verificacion").value("PENDIENTE"));
   call("POST","/api/auth/me/correos/"+id+"/principal",ana.token,null).andExpect(status().isOk());   // es el único correo: ya era principal (sin cambio)
-  // confirmar con el código (con o sin guion y en minúsculas)
-  confirm(ana,id,code.toLowerCase().replace("-"," ")).andExpect(status().isOk()).andExpect(jsonPath("$.verificacion").value("VERIFICADO"));
+  assertTrue(code.matches("\\d{6}"),"el OTP tiene exactamente seis dígitos");
+  confirm(ana,id,code).andExpect(status().isOk()).andExpect(jsonPath("$.verificacion").value("VERIFICADO"));
   assertNotNull(email(id).getFechaVerificacion());
   assertNotNull(tokens(id).get(0).getUsadaEn());
   call("GET","/api/auth/me",ana.token,null).andExpect(jsonPath("$.correos[0].verificacion").value("VERIFICADO"));
@@ -112,10 +112,10 @@ class EmailVerificationIntegrationTest {
 
  @Test void wrongCodesAreCountedThenLockedAndOnlyANewCodeRecovers() throws Exception {
   Account luis=account("Luis","DTS");long id=add(luis,"luis@example.test");String code=mail.lastCodeFor("luis@example.test");
-  confirm(luis,id,"AAAA-AAAA").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID")).andExpect(jsonPath("$.intentosRestantes").value(4));
-  confirm(luis,id,"corto").andExpect(status().isBadRequest()).andExpect(jsonPath("$.intentosRestantes").value(3));
-  confirm(luis,id,"BBBBBBBB").andExpect(status().isBadRequest());confirm(luis,id,"CCCC-CCCC").andExpect(status().isBadRequest());
-  confirm(luis,id,"DDDD-DDDD").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
+  confirm(luis,id,"111111").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID")).andExpect(jsonPath("$.intentosRestantes").value(4));
+  confirm(luis,id,"222222").andExpect(status().isBadRequest()).andExpect(jsonPath("$.intentosRestantes").value(3));
+  confirm(luis,id,"333333").andExpect(status().isBadRequest());confirm(luis,id,"444444").andExpect(status().isBadRequest());
+  confirm(luis,id,"555555").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
   assertEquals(EmailVerification.EXHAUSTED,tokens(id).get(0).getMotivoInvalidacion());
   confirm(luis,id,code).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERIFICATION_NOT_REQUESTED"));   // ni siquiera el código correcto del token agotado
   assertNull(email(id).getFechaVerificacion());
@@ -128,7 +128,7 @@ class EmailVerificationIntegrationTest {
 
  @Test void anExpiredCodeIsRejectedAndRecordedAndCanBeReplaced() throws Exception {
   Account eva=account("Eva","DTS");long id=add(eva,"eva@example.test");String code=mail.lastCodeFor("eva@example.test");
-  age(id,31);
+  age(id,11);
   call("GET","/api/auth/me",eva.token,null).andExpect(jsonPath("$.correos[0].verificacion").value("EXPIRADO"));
   confirm(eva,id,code).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERIFICATION_EXPIRED"));
   assertNull(email(id).getFechaVerificacion());assertEquals(EmailVerification.EXPIRED,tokens(id).get(0).getMotivoInvalidacion());assertTrue(ops(id).contains("VERIFY_EXPIRED"));
@@ -165,7 +165,7 @@ class EmailVerificationIntegrationTest {
   long id=((Number)JsonPath.read(created,"$.id")).longValue();
   request(pia,id).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("MAIL_NOT_CONFIGURED"));
   assertTrue(mail.sent.isEmpty());assertTrue(tokens(id).isEmpty(),"sin servicio de correo no se emite ningún código");assertNull(email(id).getFechaVerificacion());
-  confirm(pia,id,"AAAA-AAAA").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERIFICATION_NOT_REQUESTED"));
+  confirm(pia,id,"111111").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERIFICATION_NOT_REQUESTED"));
   mail.configured=true;request(pia,id).andExpect(status().isOk());confirm(pia,id,mail.lastCodeFor("pia@example.test")).andExpect(status().isOk());
  }
 

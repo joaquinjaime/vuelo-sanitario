@@ -101,13 +101,14 @@ app:
     from: ${MAIL_FROM:}
     # Dirección pública de la aplicación, que se menciona en el mensaje ("ingrese en Mi cuenta de ...").
     public-url: ${APP_PUBLIC_URL:}
-  # Verificación de correos: código de un solo uso, vencimiento, intentos y límites de envío.
+  # Verificación de correos: OTP decimal de seis dígitos, de un solo uso; los valores de seguridad no son configurables a la baja.
   verification:
-    code-minutes: ${EMAIL_VERIFICATION_CODE_MINUTES:30}
+    code-minutes: ${EMAIL_VERIFICATION_CODE_MINUTES:10}
     max-attempts: ${EMAIL_VERIFICATION_MAX_ATTEMPTS:5}
     resend-seconds: ${EMAIL_VERIFICATION_RESEND_SECONDS:60}
     max-per-email-per-day: ${EMAIL_VERIFICATION_MAX_PER_EMAIL_PER_DAY:5}
     max-per-user-per-day: ${EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY:10}
+    max-per-origin-per-day: ${EMAIL_VERIFICATION_MAX_PER_ORIGIN_PER_DAY:50}
 
 management:
   endpoints:
