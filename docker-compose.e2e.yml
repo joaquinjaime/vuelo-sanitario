@@ -49,8 +49,9 @@ services:
       MAIL_STARTTLS: "false"
       MAIL_FROM: no-reply@vuelos-e2e.test
       APP_PUBLIC_URL: http://localhost:18081
-      # Plazos cortos sólo para las pruebas: el intervalo de reenvío real es de 60 s; el límite por correo (5 por día) se conserva para probarlo.
-      EMAIL_VERIFICATION_RESEND_SECONDS: 2
+      # La política de verificación no admite rebajar el intervalo de reenvío. Las pruebas que necesitan avanzar el tiempo
+      # usan el reloj ajustable E2E en vez de acortar este control de seguridad.
+      EMAIL_VERIFICATION_RESEND_SECONDS: 60
       EMAIL_VERIFICATION_MAX_PER_USER_PER_DAY: 500
       APP_ENVIRONMENT: pruebas
       # Vacío: la base mínima de E2E es válida. true reproduce la exigencia de producción (la base mínima debe dejar los documentos en cuarentena).
