@@ -71,7 +71,7 @@ test("agrega un correo validando el formato antes de enviar y avisa que se envi�
   expect(await screen.findByText("nuevo+vuelos@example.test")).toBeInTheDocument();
   expect(body()).toEqual({ direccion: "nuevo+vuelos@example.test", tipo: "LABORAL" });
   expect(notify).toHaveBeenCalledWith("Contacto agregado");
-  expect(await screen.findByText(/Enviamos un código a nuevo\+vuelos@example.test/)).toBeInTheDocument();
+  expect(await screen.findByText(/Enviamos un código de 6 dígitos a nuevo\+vuelos@example.test/)).toBeInTheDocument();
   expect(within(row("nuevo+vuelos@example.test")).getByText("Pendiente de verificación")).toBeInTheDocument();
   expect(within(form).getByLabelText("Nuevo correo electrónico")).toHaveValue("");
 });
@@ -95,28 +95,28 @@ test("solicita el código, lo confirma y el correo pasa a verificado; un código
   backend({ onWrite: (path, o) => {
     if (path === "/auth/me/correos/12/verificacion" && o.method === "POST") { state.correos[1].verificacion = "PENDIENTE"; return Promise.resolve({ id: 12, envio: "ENVIADO" }); }
     if (path === "/auth/me/correos/12/verificacion/confirmar") {
-      if (JSON.parse(o.body).codigo === "MALO-MALO") { const e = new Error("El código no es correcto. Intentos restantes: 4"); e.code = "VERIFICATION_CODE_INVALID"; return Promise.reject(e); }
+      if (JSON.parse(o.body).codigo === "111111") { const e = new Error("El código no es correcto. Intentos restantes: 4"); e.code = "VERIFICATION_CODE_INVALID"; return Promise.reject(e); }
       state.correos[1].verificacion = "VERIFICADO"; return Promise.resolve({ id: 12 });
     }
   } });
   render(<MyContacts notify={notify} />);
   await screen.findByText("ana.trabajo@example.test");
   fireEvent.click(within(row("ana.trabajo@example.test")).getByRole("button", { name: "Enviar código" }));
-  expect(await screen.findByText(/Enviamos un código a ana.trabajo@example.test/)).toBeInTheDocument();
+  expect(await screen.findByText(/Enviamos un código de 6 dígitos a ana.trabajo@example.test/)).toBeInTheDocument();
   expect(writes()[0]).toEqual(["/auth/me/correos/12/verificacion", { method: "POST" }]);
   expect(within(row("ana.trabajo@example.test")).getByText("Pendiente de verificación")).toBeInTheDocument();
   const box = screen.getByLabelText("Código de verificación de ana.trabajo@example.test");
   fireEvent.click(within(row("ana.trabajo@example.test")).getByRole("button", { name: "Confirmar código" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Ingrese el código");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Ingrese los 6 dígitos");
   expect(writes()).toHaveLength(1);
-  fireEvent.change(box, { target: { value: "MALO-MALO" } });
+  fireEvent.change(box, { target: { value: "111111" } });
   fireEvent.click(within(row("ana.trabajo@example.test")).getByRole("button", { name: "Confirmar código" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Intentos restantes: 4");
   expect(within(row("ana.trabajo@example.test")).getByText("Pendiente de verificación")).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Código de verificación de ana.trabajo@example.test"), { target: { value: "abcd-efgh" } });
+  fireEvent.change(screen.getByLabelText("Código de verificación de ana.trabajo@example.test"), { target: { value: "012345" } });
   fireEvent.click(within(row("ana.trabajo@example.test")).getByRole("button", { name: "Confirmar código" }));
   await waitFor(() => expect(within(row("ana.trabajo@example.test")).getByText("Verificado")).toBeInTheDocument());
-  expect(writes()[2]).toEqual(["/auth/me/correos/12/verificacion/confirmar", { method: "POST", body: JSON.stringify({ codigo: "abcd-efgh" }) }]);
+  expect(writes()[2]).toEqual(["/auth/me/correos/12/verificacion/confirmar", { method: "POST", body: JSON.stringify({ codigo: "012345" }) }]);
   expect(notify).toHaveBeenCalledWith("Correo verificado");
   expect(within(row("ana.trabajo@example.test")).queryByRole("button", { name: "Confirmar código" })).not.toBeInTheDocument();
 });

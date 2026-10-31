@@ -400,6 +400,7 @@ body[data-theme="dark"] .link-button { color: #8fc8ff; }
 .verification-PENDIENTE { color: #8a5a00; }
 .verification-EXPIRADO, .verification-SIN_VERIFICAR, .verification-SIN_VALIDAR { color: #8b2d2d; }
 .email-verification { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .35rem; }
+.email-verification input[autocomplete="one-time-code"] { width: 8.5rem; letter-spacing: .42em; font-variant-numeric: tabular-nums; }
 
 /* Revisión de rutas (I-4): un color por estado de la versión y las observaciones de Operaciones bien visibles. */
 .status-ruta-borrador, .status-ruta-sin_revision, .status-ruta-sin_planificar { background: #e6e9ee; color: #40536a; }

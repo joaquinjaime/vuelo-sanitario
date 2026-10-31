@@ -54,7 +54,7 @@ function ContactList({ kind, items, refresh, notify, busy, setBusy }) {
   };
   const describeSend = (result, address) => {
     if (!result || typeof result !== "object" || !isEmail) return;
-    if (result.envio === "ENVIADO") setNotice(`Enviamos un código a ${address}. Ingréselo abajo para verificar el correo; vence en pocos minutos.`);
+    if (result.envio === "ENVIADO") setNotice(`Enviamos un código de 6 dígitos a ${address}. Ingréselo abajo para verificar el correo; vence en 10 minutos.`);
     else if (SEND_NOTICE[result.envio]) setNotice(SEND_NOTICE[result.envio]);
   };
   const problemOf = (form) => cfg.check(form.valor, form);
@@ -88,8 +88,8 @@ function ContactList({ kind, items, refresh, notify, busy, setBusy }) {
     if (result) describeSend(result, x.valor);
   };
   const confirmCode = async (x) => {
-    const code = (codes[x.id] || "").trim();
-    if (!code) { setError("Ingrese el código que recibió por correo"); return; }
+    const code = codes[x.id] || "";
+    if (!/^\d{6}$/.test(code)) { setError("Ingrese los 6 dígitos del código que recibió por correo"); return; }
     setNotice("");
     if (await run(`${cfg.base}/${x.id}/verificacion/confirmar`, { method: "POST", body: JSON.stringify({ codigo: code }) }, "Correo verificado")) setCodes((c) => ({ ...c, [x.id]: "" }));
   };
@@ -124,9 +124,9 @@ function ContactList({ kind, items, refresh, notify, busy, setBusy }) {
               {items.length > 1 && <button disabled={busy} onClick={() => remove(x)}>Quitar</button>}
               {isEmail && x.verificacion !== "VERIFICADO" && <div className="email-verification" role="group" aria-label={`Verificar ${x.valor}`}>
                 <button type="button" disabled={busy} onClick={() => sendCode(x)}>{x.verificacion === "PENDIENTE" ? "Reenviar código" : "Enviar código"}</button>
-                <input aria-label={`Código de verificación de ${x.valor}`} autoComplete="one-time-code" maxLength={16} placeholder="ABCD-EFGH" value={codes[x.id] || ""} onChange={(e) => setCodes((c) => ({ ...c, [x.id]: e.target.value }))} />
+                <input aria-label={`Código de verificación de ${x.valor}`} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={codes[x.id] || ""} onChange={(e) => setCodes((c) => ({ ...c, [x.id]: e.target.value.replace(/\D/g, "").slice(0, 6) }))} />
                 <button type="button" disabled={busy} onClick={() => confirmCode(x)}>Confirmar código</button>
-                <small className="hint">{x.verificacion === "EXPIRADO" ? "El código venció o se agotaron los intentos: solicite uno nuevo." : "Hasta confirmarlo, este correo no se usa como medio de contacto verificado (Operaciones no lo ve)."}</small>
+                <small className="hint">{x.verificacion === "EXPIRADO" ? "El código venció o se agotaron los intentos: solicite uno nuevo." : "Código de 6 dígitos, válido por 10 minutos y de un solo uso. Hasta confirmarlo, Operaciones no lo ve."}</small>
               </div>}
             </>}
       </li>)}

@@ -12,8 +12,8 @@ public final class AuthDtos { private AuthDtos(){}
  @StrictJson public record PhoneRequest(@NotBlank @Size(max=30) String numero,@Size(max=2) String pais,@Size(max=30) String tipo) {}
  @StrictJson public record ContactUpdateRequest(@NotBlank @Size(max=150) String direccion,@Size(max=30) String tipo,@NotNull Long version) {}
  @StrictJson public record PhoneUpdateRequest(@NotBlank @Size(max=30) String numero,@Size(max=2) String pais,@Size(max=30) String tipo,@NotNull Long version) {}
- /** Código recibido por correo; admite espacios y guion ("ABCD-EFGH"). */
- @StrictJson public record ConfirmEmailRequest(@NotBlank @Size(max=32) String codigo) {}
+ /** Código OTP decimal recibido por correo: exactamente seis dígitos, incluidos los ceros iniciales. */
+ @StrictJson public record ConfirmEmailRequest(@NotBlank @Pattern(regexp="\\d{6}") String codigo) {}
  /** {@code personaExistenteId} confirma, de forma explícita, que la cuenta se asocia a una persona ya registrada con ese DNI (sin cuenta); nunca se fusionan identidades por coincidencia. */
  public record CreatePendingUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido,@NotBlank @Size(max=20) String dni, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles,@NotEmpty List<@Valid ContactRequest> correos,@NotEmpty List<@Valid PhoneRequest> telefonos,Long personaExistenteId) {
   public CreatePendingUserRequest(String nombre,String apellido,String dni,LocalDate fechaNacimiento,String licenciaAeronautica,Set<String> roles,List<ContactRequest> correos,List<PhoneRequest> telefonos){this(nombre,apellido,dni,fechaNacimiento,licenciaAeronautica,roles,correos,telefonos,null);}

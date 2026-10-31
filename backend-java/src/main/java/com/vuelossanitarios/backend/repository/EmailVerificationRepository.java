@@ -20,6 +20,9 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
  @Query("select count(v) from EmailVerification v where v.solicitante.id=:userId and v.creadaEn>=:since")
  long countIssuedByUserSince(@Param("userId") Long userId,@Param("since") LocalDateTime since);
 
+ @Query("select count(v) from EmailVerification v where v.origenHuella=:origin and v.creadaEn>=:since")
+ long countIssuedByOriginSince(@Param("origin") String origin,@Param("since") LocalDateTime since);
+
  @Query("select max(v.creadaEn) from EmailVerification v where v.email.id=:emailId")
  Optional<LocalDateTime> lastIssuedAt(@Param("emailId") Long emailId);
 

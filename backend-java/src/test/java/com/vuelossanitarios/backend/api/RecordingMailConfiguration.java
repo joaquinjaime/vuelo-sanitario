@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Primary;
 public class RecordingMailConfiguration {
     public static class RecordingMailTransport implements MailTransport {
         public record Sent(String to, String subject, String body) {}
-        private static final Pattern CODE = Pattern.compile("\\b([A-Z2-9]{4}-[A-Z2-9]{4})\\b");
+        private static final Pattern CODE = Pattern.compile("\\b(\\d{6})\\b");
         public final List<Sent> sent = new CopyOnWriteArrayList<>();
         public volatile boolean configured = true;
         public volatile boolean failNext = false;

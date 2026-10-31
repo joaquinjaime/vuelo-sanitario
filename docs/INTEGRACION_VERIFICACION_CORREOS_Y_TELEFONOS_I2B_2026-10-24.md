@@ -40,9 +40,9 @@ Conceptos que **no se confunden**: *personal* (privado, nunca se muestra a Opera
 
 | Aspecto | Decisión |
 |---|---|
-| Generación | `SecureRandom`, 8 caracteres de un alfabeto sin ambigüedades (sin I, L, O, 0, 1): 31⁸ ≈ 8,5·10¹¹ (≈ 39,6 bits), mostrados `ABCD-EFGH`. Entropía acotada por el límite de intentos (5) y los de envío. |
+| Generación | Desde V61, `SecureRandom` genera un OTP decimal de seis caracteres (`000000` a `999999`), conservado como texto para no perder ceros iniciales. La entropía se compensa con cinco intentos, vencimiento breve y límites persistentes de envío. |
 | Almacenamiento | **Sólo HMAC-SHA256** (clave derivada del secreto JWT con una etiqueta propia) de `idCorreo:dirección-normalizada:código`: ligado al contacto y a la dirección; si la dirección cambia, el código no sirve. Nunca el código en SQL, auditoría ni logs (comprobado con todos los códigos de la corrida E2E). Comparación en tiempo constante. |
-| Vencimiento / un solo uso | 30 minutos (`EMAIL_VERIFICATION_CODE_MINUTES`); `fecha_uso` o `fecha_invalidacion` + motivo (`REEMPLAZADO`, `VENCIDO`, `AGOTADO`, `CORREO_MODIFICADO`, `CORREO_RETIRADO`, `ENVIO_FALLIDO`). |
+| Vencimiento / un solo uso | Desde V61, 10 minutos obligatorios; `fecha_uso` o `fecha_invalidacion` + motivo (`REEMPLAZADO`, `VENCIDO`, `AGOTADO`, `CORREO_MODIFICADO`, `CORREO_RETIRADO`, `ENVIO_FALLIDO`). Las solicitudes V54 aún abiertas se invalidan como reemplazadas, sin borrar historial, y se solicita un OTP nuevo. |
 | Una verificación abierta por correo | Índice único filtrado `uq_verificaciones_correo_abierta`; reenviar reemplaza. SQL rechaza dos abiertas, motivos inventados, vigencias imposibles y estados contradictorios. |
 | Intentos | 5 por código; el quinto error lo bloquea (`AGOTADO`, HTTP 429). El contador y la auditoría se confirman en su propia transacción: no se pierden con la respuesta de error. |
 | Límites de envío | 1 mensaje cada 60 s por correo, 5 por correo y día, 10 por usuario y día (variables `EMAIL_VERIFICATION_*`). El rechazo se audita (`VERIFY_RATE_LIMITED`). |
