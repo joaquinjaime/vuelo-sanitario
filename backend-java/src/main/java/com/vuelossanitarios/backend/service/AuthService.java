@@ -14,6 +14,8 @@ import java.time.*;
 import java.util.*;
 
 @Service public class AuthService {
+ static final int ACTIVATION_CODE_LENGTH=6, ACTIVATION_CODE_SPACE=1_000_000, ACTIVATION_CODE_MAX_ATTEMPTS=5;
+ static final long ACTIVATION_CODE_MINUTES=10;
  /** Sólo para informar al administrador si la cuenta también es ficha de paciente (historial y rectificación compartidos); se inyecta por setter para no alterar los constructores. */
  private PatientRepository patients;
  @org.springframework.beans.factory.annotation.Autowired public void setPatients(PatientRepository patients){this.patients=patients;}
@@ -44,12 +46,13 @@ import java.util.*;
   User u=new User();u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("PENDIENTE_ACTIVACION");users.save(u); assignRoles(u,requestedRoles); ensureCommanderProfile(p,requestedRoles,r.licenciaAeronautica(),actorId); saveContacts(p,r.correos(),r.telefonos(),linked!=null);
   flushUnique(()->users.flush(),"La persona ya tiene una cuenta (alta simultánea)","USER_DNI_ALREADY_EXISTS");
   audit(actorId,"USER",u.getId(),"USUARIO_CREADO",null,"{\"roles\":"+jsonList(requestedRoles)+",\"personaExistente\":"+(linked!=null)+"}");
-  return new ActivationCodeResponse(newActivation(u,actorId),"24 horas");
+  return new ActivationCodeResponse(newActivation(u,actorId),"10 minutos");
  }
- @Transactional public ActivationCodeResponse regenerate(Long userId, Long actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(now())); activations.flush(); audit(actorId,"USER",u.getId(),"CODIGO_ACTIVACION_REGENERADO",null,null); return new ActivationCodeResponse(newActivation(u,actorId),"24 horas"); }
- @Transactional public void activate(ActivateAccountRequest r){
+ @Transactional public ActivationCodeResponse regenerate(Long userId, Long actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(now())); activations.flush(); audit(actorId,"USER",u.getId(),"CODIGO_ACTIVACION_REGENERADO",null,null); return new ActivationCodeResponse(newActivation(u,actorId),"10 minutos"); }
+ /** Los errores de código deben confirmar el contador y el bloqueo al quinto intento. */
+ @Transactional(noRollbackFor=ApiException.class) public void activate(ActivateAccountRequest r){
   if(!r.password().equals(r.confirmacionPassword()))throw new ApiException(HttpStatus.BAD_REQUEST,"Las contraseñas no coinciden");
-  String dni=canonicalDni(r.dni()); List<AccountActivation> candidates=activations.findOpenByDni(dni);
+  String dni=canonicalDni(r.dni()); List<AccountActivation> candidates=activations.findOpenByDniForActivation(dni);
   if(candidates.isEmpty()){
    User existing=users.findWithPersonByDni(dni).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"DNI inexistente"));
    if("ACTIVO".equals(existing.getEstadoCuenta()))throw new ApiException(HttpStatus.CONFLICT,"La cuenta ya está activada");
@@ -57,8 +60,12 @@ import java.util.*;
   }
   if(candidates.size()!=1)throw new ApiException(HttpStatus.BAD_REQUEST,"Código de activación inválido"); AccountActivation a=candidates.getFirst(); User u=a.getUser();
   if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta())||!Boolean.TRUE.equals(u.getActivo()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está disponible para activación");
-  if(a.getExpiresAt().isBefore(now()))throw new ApiException(HttpStatus.BAD_REQUEST,"El código de activación venció");
-  if(!encoder.matches(r.codigo(),a.getTokenHash()))throw new ApiException(HttpStatus.BAD_REQUEST,"El código de activación es incorrecto");
+  if(!a.getExpiresAt().isAfter(now())){a.setUsedAt(now());throw new ApiException(HttpStatus.BAD_REQUEST,"ACTIVATION_CODE_EXPIRED","El código de activación venció. Solicite uno nuevo.",Map.of());}
+  if(!encoder.matches(r.codigo(),a.getTokenHash())){
+   int attempts=a.getFailedAttempts()+1;a.setFailedAttempts(attempts);
+   if(attempts>=ACTIVATION_CODE_MAX_ATTEMPTS){a.setUsedAt(now());throw new ApiException(HttpStatus.BAD_REQUEST,"ACTIVATION_CODE_ATTEMPTS_EXHAUSTED","El código de activación agotó los intentos permitidos. Solicite uno nuevo.",Map.of());}
+   throw new ApiException(HttpStatus.BAD_REQUEST,"ACTIVATION_CODE_INVALID","El código de activación es incorrecto. Intentos restantes: "+(ACTIVATION_CODE_MAX_ATTEMPTS-attempts),Map.of());
+  }
   if(users.existsByUsername(r.username().trim()))throw new ApiException(HttpStatus.CONFLICT,"El nombre de usuario ya existe"); u.setUsername(r.username().trim());u.setPasswordHash(encoder.encode(r.password()));u.setEstadoCuenta("ACTIVO");u.setDebeCambiarContrasena(false);a.setUsedAt(now());
   flushUnique(()->users.flush(),"El nombre de usuario ya existe","USERNAME_ALREADY_EXISTS");
   audit.record(null,u,"USER",u.getId(),"USUARIO_ACTIVADO",null,null);
@@ -125,7 +132,9 @@ import java.util.*;
  /** Compatibility entry point used internally by older callers; administrative HTTP calls use the locked variant. */
  @Transactional public void setTemporaryPassword(Long id,TemporaryPasswordRequest r){User u=user(id);if(!Boolean.TRUE.equals(u.getActivo())||u.getUsername()==null)throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta debe estar activa antes de asignar una contraseña temporal");u.setPasswordHash(encoder.encode(r.password()));u.setDebeCambiarContrasena(true);u.invalidateCredentials();}
  @Transactional public void createBootstrapAdmin(String username,String password,String email){ if(users.findAllWithPersonAndRoles().stream().anyMatch(u->roleCodes(u).contains("ADMINISTRADOR")))return; Person p=new Person();p.setNombre("Administrador");p.setApellido("Inicial");persons.save(p);User u=new User();u.setPerson(p);u.setUsername(username);u.setPasswordHash(encoder.encode(password));u.setEstadoCuenta("ACTIVO");users.save(u);assignRoles(u,Set.of("ADMINISTRADOR"));EmailContact e=new EmailContact();e.setPerson(p);e.setDireccion(email);e.setPrincipal(true);emails.save(e); }
- private String newActivation(User u,Long actorId){byte[] bytes=new byte[24];random.nextBytes(bytes);String code=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);AccountActivation a=new AccountActivation();a.setUser(u);a.setTokenHash(encoder.encode(code));a.setCreatedAt(now());a.setExpiresAt(a.getCreatedAt().plusHours(24));if(actorId!=null)a.setCreatedBy(user(actorId));activations.save(a);return code;}
+ /** Mantiene los ceros iniciales: el OTP siempre es texto decimal de seis posiciones. */
+ static String decimalActivationCode(int value){return String.format(Locale.ROOT,"%0"+ACTIVATION_CODE_LENGTH+"d",value);}
+ private String newActivation(User u,Long actorId){String code=decimalActivationCode(random.nextInt(ACTIVATION_CODE_SPACE));AccountActivation a=new AccountActivation();a.setUser(u);a.setTokenHash(encoder.encode(code));a.setNumericCode(true);a.setFailedAttempts(0);a.setCreatedAt(now());a.setExpiresAt(a.getCreatedAt().plusMinutes(ACTIVATION_CODE_MINUTES));if(actorId!=null)a.setCreatedBy(user(actorId));activations.save(a);return code;}
  private void assignRoles(User u,Set<String> codes){for(String code:codes){Role role=roles.findByCodigo(code).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Rol inexistente: "+code));UserRole assignment=new UserRole(u,role);userRoles.save(assignment);u.getUserRoles().add(assignment);}}
  /** La consulta previa no basta ante dos altas simultáneas: el índice único de V57 es la garantía y su violación se informa como el mismo conflicto. */
  private void saveProfile(CommanderProfile profile){try{commanderProfiles.saveAndFlush(profile);}catch(org.springframework.dao.DataIntegrityViolationException e){throw new ApiException(HttpStatus.CONFLICT,"La licencia aeronáutica ya existe");}}

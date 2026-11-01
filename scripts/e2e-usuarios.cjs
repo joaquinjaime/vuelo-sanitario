@@ -282,13 +282,13 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   const setClock = (ms) => ok('/e2e/clock', { method: 'PUT', token: admin, body: ms === null ? { reset: true } : { instant: new Date(ms).toISOString() } });
   try {
     const dniE = dniSeq(), nameE = 'vence' + MARK; const codeE = (await call('/auth/users', { method: 'POST', token: admin, body: createBody('Vence', dniE, ['DTS']) })).data.codigo; const idE = Number(one(`SELECT u.id_usuarios FROM usuarios u JOIN personas p ON p.id_personas=u.id_personas WHERE p.dni=N'${dniE}'`));
-    await setClock(Date.now() + 25 * 3600000);
+    await setClock(Date.now() + 11 * 60000);
     const late = await activate(dniE, codeE, nameE); assert.equal(late.status, 400); assert.match(late.data.error, /venci/); assert.equal(userRow(idE)[1], 'PENDIENTE_ACTIVACION', 'un código vencido no activa la cuenta');
     const fresh = (await call(`/auth/users/${idE}/activation-code`, { method: 'POST', token: admin })).data.codigo; assert.notEqual(fresh, codeE);
     assert.equal((await activate(dniE, codeE, nameE)).status, 400, 'el código reemplazado deja de valer'); assert.equal((await activate(dniE, fresh, nameE)).status, 204);
     await setClock(null); await tokenOf(nameE, PASSWORD); assert.ok(auditOps(idE).includes('CODIGO_ACTIVACION_REGENERADO'));
   } finally { await setClock(null); }
-  pass('I activación: con el reloj de negocio adelantado 25 h el código vence (400) sin activar la cuenta, al regenerarlo el código anterior queda invalidado y el nuevo activa la cuenta; la regeneración queda auditada');
+  pass('I activación: con el reloj de negocio adelantado 11 min el OTP vence (400) sin activar la cuenta, al regenerarlo el código anterior queda invalidado y el nuevo activa la cuenta; la regeneración queda auditada');
 
   // ---------- G: historial, usuarios desactivados y regresión de acceso ----------
   const deactivatedActorEvents = await ok(`/audit?actorId=${cmdC.id}&size=100`, { token: admin }); assert.ok(deactivatedActorEvents.total >= 1 && deactivatedActorEvents.items.every((e) => e.actor.active === false), 'los eventos de una cuenta desactivada siguen mostrando a su responsable');

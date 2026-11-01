@@ -28,7 +28,8 @@ public final class AuthDtos { private AuthDtos(){}
  /** La contraseña temporal sólo viaja en esta respuesta; no se guarda en claro ni puede consultarse después. */
  public record CredentialResetResponse(String contrasenaTemporal) {}
  public record UpdateUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles,@NotNull Boolean activo) {}
- public record ActivateAccountRequest(@NotBlank @Size(max=20) String dni,@NotBlank String codigo,@NotBlank @Size(max=50) String username,@NotBlank @Size(min=12,max=100) String password,@NotBlank String confirmacionPassword) {}
+ /** Los códigos nuevos son OTP de 6 dígitos; se admite hasta 64 caracteres para que un código alfanumérico legado, vigente al migrar, no se invalide. */
+ public record ActivateAccountRequest(@NotBlank @Size(max=20) String dni,@NotBlank @Size(max=64) String codigo,@NotBlank @Size(max=50) String username,@NotBlank @Size(min=12,max=100) String password,@NotBlank String confirmacionPassword) {}
  public record TemporaryPasswordRequest(@NotBlank @Size(min=12,max=100) String password) {}
  public record DeactivateUserRequest(@Size(max=500) String motivo) {}
  public record ReactivateUserRequest(@NotBlank @Size(max=100) String nombre,@NotBlank @Size(max=100) String apellido, LocalDate fechaNacimiento,@Size(max=50) String licenciaAeronautica,@NotEmpty Set<String> roles) {}

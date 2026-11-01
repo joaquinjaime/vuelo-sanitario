@@ -62,12 +62,12 @@ class UserAdministrationServiceTest {
   doThrow(new DataIntegrityViolationException("uq_personas_dni")).when(persons).flush();
   ApiException e=thrown(()->service.createPending(create("Ana","Pérez","30111222",null),1L));assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("USER_DNI_ALREADY_EXISTS",e.code());
   reset(persons);when(persons.save(any())).thenAnswer(x->x.getArgument(0));doThrow(new DataIntegrityViolationException("uq_usuarios_nombre_usuario")).when(users).flush();
-  AccountActivation a=new AccountActivation();User pending=account("DTS");pending.setUsername(null);pending.setEstadoCuenta("PENDIENTE_ACTIVACION");a.setUser(pending);a.setTokenHash("h");a.setExpiresAt(LocalDateTime.now(clock).plusHours(1));when(activations.findOpenByDni("30111222")).thenReturn(List.of(a));when(encoder.matches("codigo","h")).thenReturn(true);
+  AccountActivation a=new AccountActivation();User pending=account("DTS");pending.setUsername(null);pending.setEstadoCuenta("PENDIENTE_ACTIVACION");a.setUser(pending);a.setTokenHash("h");a.setExpiresAt(LocalDateTime.now(clock).plusHours(1));when(activations.findOpenByDniForActivation("30111222")).thenReturn(List.of(a));when(encoder.matches("codigo","h")).thenReturn(true);
   ApiException dup=thrown(()->service.activate(new ActivateAccountRequest("30111222","codigo","ana","ClaveSegura-1234","ClaveSegura-1234")));assertEquals(HttpStatus.CONFLICT,dup.status());assertEquals("USERNAME_ALREADY_EXISTS",dup.code());
  }
  @Test void activationUsesTheBusinessClockAndRecordsTheAccountOwnerAsResponsible(){
   User pending=account("DTS");pending.setUsername(null);pending.setEstadoCuenta("PENDIENTE_ACTIVACION");AccountActivation a=new AccountActivation();a.setUser(pending);a.setTokenHash("h");
-  a.setExpiresAt(LocalDateTime.of(2026,10,22,12,0,1));when(activations.findOpenByDni("30111222")).thenReturn(List.of(a));when(encoder.matches("codigo","h")).thenReturn(true);   // vence un segundo después de las 12:00 locales
+  a.setExpiresAt(LocalDateTime.of(2026,10,22,12,0,1));when(activations.findOpenByDniForActivation("30111222")).thenReturn(List.of(a));when(encoder.matches("codigo","h")).thenReturn(true);   // vence un segundo después de las 12:00 locales
   service.activate(new ActivateAccountRequest("30111222","codigo","ana.nueva","ClaveSegura-1234","ClaveSegura-1234"));assertEquals("ACTIVO",pending.getEstadoCuenta());assertEquals(LocalDateTime.of(2026,10,22,12,0),a.getUsedAt());
   verify(audit).record(isNull(),same(pending),eq("USER"),eq(pending.getId()),eq("USUARIO_ACTIVADO"),isNull(),isNull());
  }

@@ -70,15 +70,18 @@ class AccountActivationIntegrationTest {
   String dni="47355303";
   String payload=json.writeValueAsString(new CreatePendingUserRequest("Ana","Pérez",dni,null,null,Set.of("OPERACIONES"),List.of(new ContactRequest("ana.http@example.test","PERSONAL")),List.of(new PhoneRequest("3815555555","AR","PERSONAL"))));
   var result=mvc.perform(post("/api/auth/users").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload))
-   .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").isNotEmpty()).andExpect(jsonPath("$.expiraEn").value("24 horas")).andReturn();
+   .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").value(org.hamcrest.Matchers.matchesPattern("\\d{6}"))).andExpect(jsonPath("$.expiraEn").value("10 minutos")).andReturn();
   String code=json.readTree(result.getResponse().getContentAsString()).get("codigo").asText();
   var activation=activations.findOpenByDni(dni).getFirst();
   assertNotEquals(code,activation.getTokenHash());
   assertTrue(encoder.matches(code,activation.getTokenHash()));
+  assertTrue(activation.isNumericCode());
+  assertEquals(0,activation.getFailedAttempts());
+  assertEquals(10,java.time.Duration.between(activation.getCreatedAt(),activation.getExpiresAt()).toMinutes());
 
   var user=users.findWithPersonByDni(dni).orElseThrow();
   var regenerated=mvc.perform(post("/api/auth/users/"+user.getId()+"/activation-code").header("Authorization","Bearer "+token))
-   .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").isNotEmpty()).andReturn();
+   .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").value(org.hamcrest.Matchers.matchesPattern("\\d{6}"))).andExpect(jsonPath("$.expiraEn").value("10 minutos")).andReturn();
   String nextCode=json.readTree(regenerated.getResponse().getContentAsString()).get("codigo").asText();
   var nextActivation=activations.findOpenByDni(dni).getFirst();
   assertNotEquals(code,nextCode);

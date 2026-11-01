@@ -121,25 +121,25 @@ test("el restablecimiento y la reactivación muestran la contraseña temporal un
 
 test("el historial administrativo de la cuenta se obtiene de la auditoría y las cuentas pendientes ofrecen regenerar el código", async () => {
   const notify = vi.fn();
-  backend({ det: detail(1, { estado: "PENDIENTE_ACTIVACION", username: null }), onPost: (path) => path.endsWith("/activation-code") ? Promise.resolve({ codigo: "CODIGO-UNICO-XYZ", expiraEn: "24 horas" }) : undefined });
+  backend({ det: detail(1, { estado: "PENDIENTE_ACTIVACION", username: null }), onPost: (path) => path.endsWith("/activation-code") ? Promise.resolve({ codigo: "083621", expiraEn: "10 minutos" }) : undefined });
   render(<UserDirectory active notify={notify} />);
   fireEvent.click((await screen.findAllByRole("button", { name: "Detalle" }))[0]);
   const historyBox = await screen.findByLabelText("Historial administrativo"); expect(await within(historyBox).findByText("Alta de cuenta")).toBeInTheDocument(); expect(within(historyBox).getByText(/Admin Inicial/)).toBeInTheDocument();
   expect(calls.some(([p]) => p === "/audit?entityType=USER&entityId=1&size=20")).toBe(true); expect(calls.some(([p]) => p === "/audit?entityType=USER_ROLE&entityId=1&size=20")).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Regenerar código de activación" }));
-  expect(await screen.findByText("CODIGO-UNICO-XYZ")).toBeInTheDocument();
+  expect(await screen.findByText("083621")).toBeInTheDocument();
 });
 
 test("el alta con una persona ya registrada sin cuenta pide confirmación expresa y reenvía el identificador; sin coincidencia de nombre no asocia", async () => {
   const { AdminUsers } = await import("./main.jsx"); const reload = vi.fn(async () => {}), notify = vi.fn(); const posts = [];
   vi.mocked(api).mockImplementation((path, opts) => {
-    if (path === "/auth/users" && opts?.method === "POST") { const body = JSON.parse(opts.body); posts.push(body); return body.personaExistenteId ? Promise.resolve({ codigo: "CODIGO-NUEVO", expiraEn: "24 horas" }) : Promise.reject(Object.assign(new Error("Ya existe una persona registrada con ese DNI que no tiene cuenta."), { code: "PERSON_EXISTS_WITHOUT_ACCOUNT", personaId: 7, coincideNombre: posts.length === 1 })); }
+    if (path === "/auth/users" && opts?.method === "POST") { const body = JSON.parse(opts.body); posts.push(body); return body.personaExistenteId ? Promise.resolve({ codigo: "083621", expiraEn: "10 minutos" }) : Promise.reject(Object.assign(new Error("Ya existe una persona registrada con ese DNI que no tiene cuenta."), { code: "PERSON_EXISTS_WITHOUT_ACCOUNT", personaId: 7, coincideNombre: posts.length === 1 })); }
     return Promise.resolve([]);
   });
   const fill = () => { fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana" } }); fireEvent.change(screen.getByLabelText("Apellido"), { target: { value: "Paz" } }); fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30111222" } }); fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana@example.test" } }); fireEvent.change(screen.getByLabelText("Teléfono principal"), { target: { value: "3815550000" } }); fireEvent.click(screen.getByLabelText("DTS")); };
   render(<AdminUsers users={[]} reload={reload} notify={notify} showList={false} createOpen onCreateOpenChange={vi.fn()} />);
   fill(); window.confirm = vi.fn(() => true); fireEvent.click(screen.getByRole("button", { name: "Crear cuenta pendiente" }));
-  expect(await screen.findByText("CODIGO-NUEVO")).toBeInTheDocument(); expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("No se creará una persona nueva"));
+  expect(await screen.findByText("083621")).toBeInTheDocument(); expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("No se creará una persona nueva"));
   expect(posts).toHaveLength(2); expect(posts[0].personaExistenteId).toBeUndefined(); expect(posts[1].personaExistenteId).toBe(7); expect(notify).toHaveBeenCalledWith(expect.stringContaining("asociada a la identidad existente"));
   cleanup(); posts.length = 0; posts.push({}); // el siguiente intento ya no coincide en nombre
   render(<AdminUsers users={[]} reload={reload} notify={notify} showList={false} createOpen onCreateOpenChange={vi.fn()} />);
@@ -219,7 +219,7 @@ test("el doble envío de la rectificación del usuario genera una sola petición
 test("el alta administrativa valida el contacto antes de enviar y envía el país del teléfono", async () => {
   const { AdminUsers } = await import("./main.jsx");
   const posts = []; const notify = vi.fn();
-  vi.mocked(api).mockImplementation((path, opts) => { if (path === "/auth/users" && opts?.method === "POST") { posts.push(JSON.parse(opts.body)); return Promise.resolve({ codigo: "CODIGO-ALTA", expiraEn: "24 horas" }); } return Promise.resolve([]); });
+  vi.mocked(api).mockImplementation((path, opts) => { if (path === "/auth/users" && opts?.method === "POST") { posts.push(JSON.parse(opts.body)); return Promise.resolve({ codigo: "083621", expiraEn: "10 minutos" }); } return Promise.resolve([]); });
   render(<AdminUsers users={[]} reload={vi.fn()} notify={notify} showList={false} createOpen onCreateOpenChange={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana" } }); fireEvent.change(screen.getByLabelText("Apellido"), { target: { value: "Paz" } }); fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30111222" } });
   fireEvent.change(screen.getByLabelText("Correo principal"), { target: { value: "ana@example.test" } });

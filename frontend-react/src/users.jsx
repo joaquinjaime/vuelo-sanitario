@@ -100,7 +100,7 @@ function Detail({ id, roleOptions, notify, onChanged, onClose }) {
     </section>}
     {pending && <div className="form-actions"><button type="button" disabled={busy} onClick={regenerate}>Regenerar código de activación</button></div>}
     <UserHistory userId={id} patientId={d.pacienteId} refresh={refresh} />
-    {secret && secret.kind === "activation" && <SecretNotice eyebrow="CÓDIGO DE ACTIVACIÓN" title="Código de activación" intro="Este código se mostrará una sola vez. Guardalo antes de cerrar este aviso." label="" secret={secret.secret} onClose={() => setSecret(null)} />}
+    {secret && secret.kind === "activation" && <SecretNotice eyebrow="CÓDIGO DE ACTIVACIÓN" title="Código de activación" intro="Código numérico de 6 dígitos, válido por 10 minutos y de un solo uso. Se muestra una sola vez: guardalo antes de cerrar este aviso." label="" secret={secret.secret} onClose={() => setSecret(null)} />}
     {secret && secret.kind !== "activation" && <SecretNotice eyebrow={secret.kind === "reset" ? "CREDENCIALES RESTABLECIDAS" : "USUARIO REACTIVADO"} title="Contraseña temporal" intro="Se muestra una única vez y no puede consultarse después. El usuario deberá cambiarla al iniciar sesión." label={<>Usuario: <strong>{secret.username}</strong></>} secret={secret.secret} onClose={() => setSecret(null)} />}
   </section>;
 }

@@ -12,8 +12,13 @@ public class AccountActivation extends BaseEntity {
  @Column(name="fecha_creacion",nullable=false) private LocalDateTime createdAt;
  @Column(name="fecha_expiracion",nullable=false) private LocalDateTime expiresAt;
  @Column(name="fecha_utilizacion") private LocalDateTime usedAt;
+ /** Los registros previos a V62 conservan el código alfanumérico y su plazo original. */
+ @Column(name="codigo_numerico",nullable=false) private boolean numericCode;
+ @Column(name="intentos_fallidos",nullable=false) private int failedAttempts;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_administrador_creador") private User createdBy;
  public User getUser(){return user;} public void setUser(User v){user=v;} public String getTokenHash(){return tokenHash;} public void setTokenHash(String v){tokenHash=v;}
  public LocalDateTime getCreatedAt(){return createdAt;} public void setCreatedAt(LocalDateTime v){createdAt=v;} public LocalDateTime getExpiresAt(){return expiresAt;} public void setExpiresAt(LocalDateTime v){expiresAt=v;}
  public LocalDateTime getUsedAt(){return usedAt;} public void setUsedAt(LocalDateTime v){usedAt=v;} public User getCreatedBy(){return createdBy;} public void setCreatedBy(User v){createdBy=v;}
+ public boolean isNumericCode(){return numericCode;} public void setNumericCode(boolean v){numericCode=v;}
+ public int getFailedAttempts(){return failedAttempts;} public void setFailedAttempts(int v){failedAttempts=v;}
 }

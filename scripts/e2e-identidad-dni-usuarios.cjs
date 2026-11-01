@@ -114,15 +114,15 @@ const REASON = 'Error de digitación al crear la cuenta ' + MARK;
     assert.equal(one(`SELECT estado_cuenta FROM usuarios WHERE id_usuarios=${u3.id}`), 'ACTIVO'); assert.equal(count(`SELECT COUNT(*) FROM activaciones_cuenta WHERE id_usuarios=${u3.id} AND fecha_utilizacion IS NULL`), 0); await ok('/auth/login', { method: 'POST', body: { username: u3.username, password: PASSWORD } });
     await call('/auth/activar-cuenta', { method: 'POST', body: activation(n3), expect: [409, 400] });
     assert.equal(count(`SELECT COUNT(*) FROM pacientes WHERE id_personas=${p3}`), 0);
-    // el vencimiento no se extiende ni se reinicia: con el reloj +25 h el código sigue vencido tras rectificar y se recupera con el procedimiento existente
+    // el vencimiento no se extiende ni se reinicia: con el reloj +11 min el OTP sigue vencido tras rectificar y se recupera con el procedimiento existente
     const u6 = await newAccount('seis'); const act6 = activationSnapshot(u6.id); const n6 = newDni(); await put(u6.id, n6);
     assert.equal(activationSnapshot(u6.id), act6, 'el vencimiento del código no cambia por rectificar');
-    await clock.set(Date.parse((await clock.get()).now) + 25 * 3600000);
+    await clock.set(Date.parse((await clock.get()).now) + 11 * 60000);
     const expired = await call('/auth/activar-cuenta', { method: 'POST', body: { dni: n6, codigo: u6.code, username: u6.username, password: PASSWORD, confirmacionPassword: PASSWORD }, expect: [400] }); assert.match(expired.data.error, /venci/i);
     await clock.reset();
     const fresh = await ok(`/auth/users/${u6.id}/activation-code`, { method: 'POST', token: admin });
     await call('/auth/activar-cuenta', { method: 'POST', body: { dni: n6, codigo: fresh.codigo, username: u6.username, password: PASSWORD, confirmacionPassword: PASSWORD }, expect: [204] });
-    pass('D cuenta pendiente: la cuenta y su código (hash, vencimiento, uso) quedan idénticos; el DNI anterior ya no activa (404 "DNI inexistente"), el DNI correcto no basta sin el código (incorrecto o vacío), con el corregido y el mismo código se activa una sola vez y se ingresa; el vencimiento a 24 h no se extiende (con el reloj +25 h sigue vencido) y se recupera con el procedimiento de regeneración existente');
+    pass('D cuenta pendiente: la cuenta y su OTP (hash, vencimiento, uso) quedan idénticos; el DNI anterior ya no activa (404 "DNI inexistente"), el DNI correcto no basta sin el código (incorrecto o vacío), con el corregido y el mismo código se activa una sola vez y se ingresa; el vencimiento a 10 min no se extiende (con el reloj +11 min sigue vencido) y se recupera con el procedimiento de regeneración existente');
 
     // ---------- E: cuenta desactivada ----------
     const before4 = snapshot(u4.id), p4 = personOf(u4.id), n4 = newDni();
