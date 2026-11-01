@@ -532,6 +532,22 @@ export function Cmd({ d, done, msg }) {
  const saveWeather=async()=>{try{await api(`/flights/${id}/weather`,{method:"POST",body:JSON.stringify(weather)});msg("Condiciones meteorológicas registradas");setWeather({condiciones:"",favorable:true,observaciones:""});setWeatherRevision(x=>x+1);}catch(e){msg(e.message,true);}};
  return <section className="card"><h2>Planificación operativa</h2><p className="hint">La salida definitiva proviene del flujo que corresponda y no es editable por el comandante.</p><div className="grid-form"><label>Vuelo<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar vuelo</option>{d.flights.map(x=><option key={x.id} value={x.id}>{x.codigo} — {x.estado}</option>)}</select></label>{f&&<><div className="wide detail-grid"><div><h4>Salida fijada</h4><p>{dt(f.salida)}</p></div><div><h4>Aeronave</h4><p>{detail.recursos?.aircraftMatricula||"Sin asignar"}</p>{detail.recursos?.aircraftMatricula&&<small>{[detail.recursos.aircraftModelo,detail.recursos.aircraftTipo].filter(Boolean).join(" · ")}{detail.recursos.aircraftUbicacion?` · Ubicación: ${detail.recursos.aircraftUbicacion}`:""}</small>}</div></div><Urgency flight={f} detail/><CancellationNote flight={f}/><FlightClosure flight={f} cierre={detail.cierre}/><CommanderAssignment flight={f} done={done} msg={msg} reload={reload}/>{f.estado==="PLANIFICADO"&&<>{f.datosSanitarios&&<><label>Aeropuerto de origen<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="">Seleccionar ({f.origen.provincia})</option>{originOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Aeropuerto de destino<select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Seleccionar ({f.destino.provincia})</option>{destinationOptions.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Llegada planificada<input type="datetime-local" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><button disabled={!origin||!destination||!arrival} onClick={save}>Guardar planificación</button></>}<fieldset className="wide"><legend>Condiciones meteorológicas</legend><label>Condiciones<textarea required value={weather.condiciones} onChange={e=>setWeather({...weather,condiciones:e.target.value})}/></label><label>¿Condiciones favorables?<select value={String(weather.favorable)} onChange={e=>setWeather({...weather,favorable:e.target.value==="true"})}><option value="true">Sí</option><option value="false">No</option></select></label><label>Observaciones<textarea value={weather.observaciones} onChange={e=>setWeather({...weather,observaciones:e.target.value})}/></label><button type="button" disabled={!weather.condiciones.trim()} onClick={saveWeather}>Registrar clima</button></fieldset></>}<HangarInfo key={`hangar-${id}`} flightId={id} msg={msg}/><AirportCoordinations key={`airport-${id}-${routeRevision}`} flightId={id} msg={msg}/><FlightDocuments key={`documents-${id}`} flightId={id} canEdit={documentsEditable(f.estado)} canViewRetired msg={msg}/><FlightLog key={`log-${id}`} flightId={id} msg={msg}/><AuditTimeline key={`audit-${id}-${routeRevision}`} flightId={id}/><FlightRoute key={`route-${id}-${routeRevision}-${f.estado}`} flightId={id} canEdit msg={msg}/><FlightCrew key={`crew-${id}`} flightId={id} state={f.estado} msg={msg}/><WeatherHistory key={`weather-${id}`} flightId={id} revision={weatherRevision}/><Negotiation events={detail.negociacion}/></>}</div></section>;
 }
+const ROLE_DASHBOARD = {
+  DTS: { label: "Dirección de Tránsito Sanitario", eyebrow: "SOLICITUDES SANITARIAS", title: "Seguimiento de traslados", action: "Nueva solicitud", description: "Cree solicitudes y responda las decisiones que requieren su confirmación.", attention: flight => ["PENDIENTE_RESPUESTA_DTS", "RECHAZADO"].includes(flight.estado), attentionLabel: "Solicitudes que requieren su respuesta" },
+  OPERACIONES: { label: "Centro de Operaciones", eyebrow: "GESTIÓN OPERATIVA", title: "Bandeja de operaciones", action: "Gestionar vuelos", description: "Priorice decisiones de planificación, asignación y revisión antes del seguimiento histórico.", attention: flight => ["SOLICITADO", "PENDIENTE_RESPUESTA_OPERACIONES", "PENDIENTE_REPLANIFICACION", "APROBADO"].includes(flight.estado), attentionLabel: "Vuelos que requieren una decisión" },
+  COMANDANTE: { label: "Comandante", eyebrow: "OPERACIÓN DE VUELO", title: "Mi operación", action: "Ver asignaciones", description: "Revise asignaciones, prepare rutas y complete las obligaciones de cada vuelo.", attention: flight => ["PENDIENTE_CONFIRMACION_COMANDANTE", "PLANIFICADO", "PENDIENTE_REPLANIFICACION"].includes(flight.estado), attentionLabel: "Asignaciones y preparaciones pendientes" },
+};
+const stateLabel = state => String(state || "SIN_ESTADO").replaceAll("_", " ");
+function AttentionQueue({ flights, title, onOpen }) {
+  return <section className="card work-queue" aria-labelledby="attention-title"><div className="section-title"><div><p className="eyebrow">ATENCIÓN</p><h2 id="attention-title">{title}</h2></div><button className="tertiary-action" onClick={onOpen}>Ver gestión</button></div>{flights.length ? <ul className="queue-list">{flights.slice(0, 5).map(flight => <li key={flight.id} className={flight.extremaUrgencia ? "queue-item is-urgent" : "queue-item"}><div><strong>{flight.codigo || "Sin código"}</strong><span>{locationLabel(flight.origen)} → {locationLabel(flight.destino)}</span></div><div><Urgency flight={flight}/><span className={s(flight.estado)}>{stateLabel(flight.estado)}</span></div></li>)}</ul> : <p className="empty compact-empty">No hay tareas pendientes con los estados disponibles.</p>}</section>;
+}
+function FlightList({ flights, title="Vuelos", onRefresh, compact=false }) {
+  return <section className="card flight-list-card"><div className="section-title"><div><p className="eyebrow">OPERACIÓN</p><h2>{title}</h2></div>{onRefresh && <button className="secondary-action" onClick={onRefresh}>Actualizar</button>}</div>{flights.length ? <div className="table-wrap"><table><thead><tr><th>Código</th><th>Trayecto</th><th>Fecha</th><th>Estado</th>{!compact && <th>Tipo</th>}</tr></thead><tbody>{flights.map(flight => <tr key={flight.id} className={flight.extremaUrgencia ? "urgent-row" : ""}><td><strong>{flight.codigo || "—"}</strong>{flight.extremaUrgencia && <Urgency flight={flight}/>}</td><td>{locationLabel(flight.origen)} → {locationLabel(flight.destino)}</td><td>{flight.solicitada ? dt(flight.solicitada) : "—"}</td><td><span className={s(flight.estado)}>{stateLabel(flight.estado)}</span></td>{!compact && <td>{flight.tipo?.nombre || flight.tipo?.codigo || "—"}</td>}</tr>)}</tbody></table></div> : <p className="empty">No hay vuelos para mostrar.</p>}</section>;
+}
+function OperationalDashboard({ workspace, data, openWork, openNotifications, refresh }) {
+  const config = ROLE_DASHBOARD[workspace] || ROLE_DASHBOARD.DTS, attention = data.flights.filter(config.attention), active = data.flights.filter(flight => !["FINALIZADO", "COMPLETADO", "CANCELADO", "RECHAZADO"].includes(flight.estado)), urgent = data.flights.filter(flight => flight.extremaUrgencia && !["FINALIZADO", "COMPLETADO", "CANCELADO", "RECHAZADO"].includes(flight.estado));
+  return <><section className="workspace-hero"><div><p className="eyebrow">{config.eyebrow}</p><h2>{config.title}</h2><p>{config.description}</p></div><div className="hero-actions"><button onClick={openWork}>{config.action}</button>{data.unread > 0 && <button className="secondary-action" onClick={openNotifications}>Ver {data.unread} aviso{data.unread === 1 ? "" : "s"}</button>}</div></section><section className="operational-summary" aria-label="Resumen operativo"><article><span>Pendientes</span><strong>{attention.length}</strong><small>requieren una acción</small></article><article><span>Vuelos activos</span><strong>{active.length}</strong><small>en seguimiento</small></article><article><span>Extrema urgencia</span><strong>{urgent.length}</strong><small>activos</small></article></section><div className="dashboard-columns"><AttentionQueue flights={attention} title={config.attentionLabel} onOpen={openWork}/><section className="card quick-links"><p className="eyebrow">ACCESOS RÁPIDOS</p><h2>Continuar trabajando</h2><button className="quick-link" onClick={openWork}><span aria-hidden="true">↗</span><span><strong>{workspace === "DTS" ? "Crear o consultar solicitudes" : workspace === "OPERACIONES" ? "Abrir planificación operativa" : "Abrir asignaciones y rutas"}</strong><small>Acceda a las herramientas y detalles disponibles.</small></span></button><button className="quick-link" onClick={openNotifications}><span aria-hidden="true">◉</span><span><strong>Notificaciones</strong><small>{data.unread ? `${data.unread} sin leer` : "No hay avisos sin leer"}</small></span></button></section></div></>;
+}
 export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace=()=>{} }) {
   const [session, setSession] = useState(() => {
       try {
@@ -550,9 +566,10 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
       unread: 0,
     }),
     [note, setNote] = useState(""),
-    [dark, setDark] = useState(false),
-    [view, setView] = useState(() => (location.hash === "#/mi-cuenta" ? "account" : "panel"));
-  const go = (target) => { setView(target); history.replaceState(null, "", target === "account" ? "#/mi-cuenta" : location.pathname + location.search); };
+    [dark, setDark] = useState(() => localStorage.getItem("vs-theme") === "dark"),
+    [menuOpen, setMenuOpen] = useState(false),
+    [view, setView] = useState(() => (location.hash === "#/mi-cuenta" ? "account" : location.hash === "#/vuelos" ? "work" : location.hash === "#/notificaciones" ? "notifications" : "panel"));
+  const go = (target) => { setView(target); setMenuOpen(false); history.replaceState(null, "", target === "account" ? "#/mi-cuenta" : target === "work" ? "#/vuelos" : target === "notifications" ? "#/notificaciones" : location.pathname + location.search); };
   const loadGeneration = useRef(0);
   let has = (x) => session?.roles.includes(x);
   let load = async () => {
@@ -576,12 +593,14 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
   }, [session]);
   useEffect(() => {
     document.body.dataset.theme = dark ? "dark" : "light";
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    localStorage.setItem("vs-theme", dark ? "dark" : "light");
   }, [dark]);
   if (!session) return <Login set={setSession} />;
   let msg = (x, bad) => setNote((bad ? "" : "✓ ") + x);
   return (
-    <div className="shell">
-      <aside>
+    <div className={`shell ${menuOpen ? "menu-open" : ""}`}>
+      <aside aria-label="Navegación lateral">
         <div className="brand">
           ✈{" "}
           <span>
@@ -590,11 +609,11 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
             Sanitarios
           </span>
         </div>
-        <nav>
-          <a className={view === "panel" ? "active" : ""} onClick={() => go("panel")}>{workspace === "DTS" ? "Dirección de Tránsito Sanitario" : workspace === "COMANDANTE" ? "Comandante" : "Centro de Operaciones"}</a>
-          <a>Vuelos</a>
-          <a>Notificaciones</a>
-          <a className={view === "account" ? "active" : ""} onClick={() => go("account")}>Mi cuenta</a>
+        <nav aria-label="Secciones de trabajo">
+          <button className={view === "panel" ? "active" : ""} aria-current={view === "panel" ? "page" : undefined} onClick={() => go("panel")}>Inicio <small className="nav-workspace-label">{ROLE_DASHBOARD[workspace]?.label}</small></button>
+          <button className={view === "work" ? "active" : ""} aria-current={view === "work" ? "page" : undefined} onClick={() => go("work")}>Gestión de vuelos</button>
+          <button className={view === "notifications" ? "active" : ""} aria-current={view === "notifications" ? "page" : undefined} onClick={() => go("notifications")}>Notificaciones{d.unread ? <span className="nav-count">{d.unread}</span> : null}</button>
+          <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => go("account")}>Mi cuenta</button>
         </nav>
         <button
           className="secondary"
@@ -607,43 +626,27 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
           Cerrar sesión
         </button>
       </aside>
-      <main className="content">
+      <main className="content" id="main-content">
         <header>
           <div>
             <p className="eyebrow">PANEL PRINCIPAL</p>
-            <h1>Hola, {session.username}</h1>
+            <h1>{view === "panel" ? `Hola, ${session.username}` : view === "work" ? "Gestión de vuelos" : view === "notifications" ? "Notificaciones" : "Mi cuenta"}</h1>
           </div>
           <div className="header-actions">
             {workspaces.length>1&&<button className="secondary-action" onClick={()=>changeWorkspace(null)}>Cambiar área</button>}
-            <button className="icon" onClick={() => setDark(!dark)}>
+            <button className="icon" onClick={() => setDark(!dark)} aria-label={dark ? "Usar tema claro" : "Usar tema oscuro"}>
               {dark ? "☀" : "◐"}
             </button>
-            <button className="icon">🔔 {d.unread}</button>
+            <button className="menu-toggle" aria-label="Abrir navegación" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>☰</button>
           </div>
         </header>
         {note && (
           <p className={note.startsWith("✓") ? "success" : "error"}>{note}</p>
         )}
         {view === "account" && <MyContacts notify={msg} />}
-        {view === "panel" && <>
-        <section className="metrics">
-          <article>
-            <span>Solicitudes</span>
-            <strong>{d.flights.length}</strong>
-          </article>
-          <article>
-            <span>Planificados</span>
-            <strong>
-              {d.flights.filter((x) => x.estado === "PLANIFICADO").length}
-            </strong>
-          </article>
-          <article>
-            <span>En curso</span>
-            <strong>
-              {d.flights.filter((x) => x.estado === "EN_CURSO").length}
-            </strong>
-          </article>
-        </section>
+        {view === "panel" && <OperationalDashboard workspace={workspace} data={d} openWork={() => go("work")} openNotifications={() => go("notifications")} refresh={load}/>}
+        {(view === "panel" || view === "work") && <>
+        <section className="work-intro"><p className="eyebrow">{ROLE_DASHBOARD[workspace]?.eyebrow}</p><h2>{ROLE_DASHBOARD[workspace]?.title}</h2><p className="hint">Las acciones y estados disponibles dependen de su rol y del estado real de cada vuelo.</p></section>
         {workspace==="DTS" && <><DTS d={d} done={load} msg={msg} /><DtsResponses d={d} done={load} msg={msg} /></>}{" "}
         {workspace==="OPERACIONES" && (
           <>
@@ -657,61 +660,9 @@ export function OperationalApp({ workspace="DTS", workspaces=[], changeWorkspace
             <Cmd d={d} done={load} msg={msg} />
           </>
         )}
-        <section className="card">
-          <div className="section-title">
-            <h2>Vuelos visibles</h2>
-            <button onClick={load}>Actualizar</button>
-          </div>
-          {d.flights.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Tipo</th>
-                  <th>Motivo</th>
-                  <th>Prioridad / fecha</th>
-                  <th>Trayecto</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.flights.map((x) => (
-                  <tr
-                    className={x.extremaUrgencia ? "urgent-row" : ""}
-                    key={x.id}
-                  >
-                    <td>{x.codigo}</td>
-                    <td>{x.tipo?.nombre || x.tipo?.codigo || "—"}</td>
-                    <td>{x.motivoVuelo}</td>
-                    <td>{x.datosSanitarios ? <><Urgency flight={x} /><small>{x.prioridad} · {dt(x.solicitada)}</small></> : "—"}</td>
-                    <td>
-                      {locationLabel(x.origen)} → {locationLabel(x.destino)}
-                    </td>
-                    <td>
-                      <span className={s(x.estado)}>{x.estado}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="empty">No hay vuelos para mostrar.</p>
-          )}
-        </section>
-        <NotificationsPanel items={d.notifications} unread={d.unread} msg={msg} reload={load} />
-        {d.notifications.some((n) => n.tipo.includes("EXTREME_URGENCY")) && (
-          <section className="card notifications">
-            <h2>Alertas de extrema urgencia</h2>
-            {d.notifications
-              .filter((n) => n.tipo.includes("EXTREME_URGENCY"))
-              .map((n) => (
-                <p className="urgency-detail" key={n.id}>
-                  ⚠ <strong>EXTREMA URGENCIA</strong> — {n.mensaje}
-                </p>
-              ))}
-          </section>
-        )}
         </>}
+        {(view === "panel" || view === "work") && <FlightList flights={d.flights} title="Vuelos visibles" onRefresh={load}/>}
+        {view === "notifications" && <><NotificationsPanel items={d.notifications} unread={d.unread} msg={msg} reload={load} />{d.notifications.some((n) => n.tipo.includes("EXTREME_URGENCY")) && <section className="card notifications"><h2>Alertas de extrema urgencia</h2>{d.notifications.filter((n) => n.tipo.includes("EXTREME_URGENCY")).map((n) => <p className="urgency-detail" key={n.id}>⚠ <strong>EXTREMA URGENCIA</strong> — {n.mensaje}</p>)}</section>}</>}
       </main>
     </div>
   );
@@ -773,10 +724,10 @@ export function AdminCrewQualifications({users:given,notify}) {
  const current=code=>rows.find(x=>x.crewRoleCode===code&&x.vigente), retired=rows.filter(x=>!x.vigente);
  return <section className="card"><h2>Clasificación administrativa de tripulación</h2><p>La clasificación indica qué función puede cumplir una persona dentro de un vuelo. Es independiente del rol de acceso (qué puede hacer en la aplicación) y de la habilitación profesional (la acredita una revisión manual de documentos, no una consulta oficial automática). Clasificar no concede permisos ni reemplaza la habilitación.</p>{!given&&<label>Buscar usuario<input value={term} placeholder="Nombre, apellido, DNI o usuario" onChange={e=>setTerm(e.target.value)}/></label>}<label>Usuario<select value={id} onChange={e=>setId(e.target.value)}><option value="">Seleccionar usuario</option>{users.map(u=><option key={u.id} value={u.id}>{u.nombre} {u.apellido} ({u.username||"cuenta pendiente"})</option>)}</select></label>{error&&<p role="alert">{error}</p>}{id&&roles.length===0&&!error&&<p className="hint">Cargando las funciones de tripulación…</p>}{id&&roles.map(role=>{const q=current(role.codigo);return <div className="wide detail-actions" key={role.codigo} data-testid={`rol-${role.codigo}`}><h4>{role.nombre} <small>({role.codigo})</small></h4><p className="hint">Exige: {REQUIREMENT_LABELS.filter(([key])=>role[key]).map(([,label])=>label).join(", ")||"sin requisitos adicionales"}. {role.asignacion==="RECURSOS"?"Se asigna junto con la aeronave.":"Se asigna desde la tripulación del vuelo."}</p>{q?<><p>Clasificado por {q.clasificadoPor||"—"} el {when(q.fechaClasificacion)}. {q.elegible?<strong>Elegible hoy{q.habilitacionVence?` (habilitación hasta ${q.habilitacionVence})`:""}.</strong>:<strong className="error">No elegible hoy: {q.elegibilidadMotivo||q.elegibilidadCodigo}.</strong>}</p><label>Motivo del retiro (opcional)<input maxLength={200} value={reasons[role.codigo]||""} onChange={e=>setReasons({...reasons,[role.codigo]:e.target.value})}/></label><button type="button" className="secondary-action" disabled={!!busy} onClick={()=>act(role.codigo,true)}>Retirar clasificación de {role.nombre}</button></>:<><p>Sin clasificación vigente.</p><button type="button" disabled={!!busy} onClick={()=>act(role.codigo,false)}>Clasificar como {role.nombre}</button></>}</div>;})}{id&&retired.length>0&&<details className="wide" data-testid="historial-clasificaciones"><summary>Historial de clasificaciones retiradas ({retired.length})</summary><ul>{retired.map((q,i)=><li key={i}>{q.crewRoleName}: clasificado por {q.clasificadoPor||"—"} el {when(q.fechaClasificacion)}; retirado por {q.retiradoPor||"—"} el {when(q.fechaBaja)}. Motivo: {q.motivoBaja}.</li>)}</ul></details>}{id&&<ProfessionalCredentials key={id} userId={id} notify={notify}/>}</section>;
 }
-function AdminDashboard({ users, counts, aircraft, onAddUser, onAddAircraft }) {
+function AdminDashboard({ users, counts, aircraft, onAddUser, onAddAircraft, onUsers }) {
  const userItems=Array.isArray(users)?users:[], aircraftItems=Array.isArray(aircraft)?aircraft:[];
- const activeUsers=counts?counts.activos+counts.pendientes:userItems.filter(x=>x.activo!==false).length, inactiveUsers=counts?counts.inactivos:userItems.filter(x=>x.activo===false).length, activeAircraft=aircraftItems.filter(x=>x.activo).length;
- return <><section className="card admin-welcome"><p className="eyebrow">ADMINISTRACIÓN</p><h2>Panel de administración</h2><p className="hint">Accesos rápidos y un resumen del estado operativo.</p><div className="quick-actions"><button className="quick-action" onClick={onAddUser}><span aria-hidden="true">＋</span><strong>Añadir usuario</strong><small>Crear una cuenta y emitir su código de activación.</small></button><button className="quick-action" onClick={onAddAircraft}><span aria-hidden="true">＋</span><strong>Añadir aeronave</strong><small>Registrar capacidad, ubicación y estado operativo.</small></button></div></section><section className="metrics admin-metrics"><article><span>Usuarios activos</span><strong>{activeUsers}</strong></article><article><span>Usuarios desactivados</span><strong>{inactiveUsers}</strong></article><article><span>Aeronaves activas</span><strong>{activeAircraft}</strong></article></section></>;
+ const activeUsers=counts?counts.activos:userItems.filter(x=>x.activo!==false).length, pendingUsers=counts?counts.pendientes:0, activeAircraft=aircraftItems.filter(x=>x.activo).length;
+ return <><section className="workspace-hero admin-hero"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Panel de administración</h2><p>Gestione cuentas y recursos activos. Las bajas e historial permanecen accesibles dentro de Usuarios.</p></div><div className="hero-actions"><button onClick={onAddUser}>Añadir usuario</button><button className="secondary-action" onClick={onAddAircraft}>Añadir aeronave</button></div></section><section className="operational-summary" aria-label="Resumen administrativo"><article><span>Cuentas activas</span><strong>{activeUsers}</strong><small>con acceso vigente</small></article><article><span>Activaciones pendientes</span><strong>{pendingUsers}</strong><small>requieren seguimiento</small></article><article><span>Aeronaves activas</span><strong>{activeAircraft}</strong><small>disponibles en catálogo</small></article></section><section className="card quick-links admin-links"><p className="eyebrow">ACCESOS RÁPIDOS</p><h2>Gestión frecuente</h2><div className="quick-action-grid"><button className="quick-link" onClick={onUsers}><span aria-hidden="true">⌕</span><span><strong>Buscar y administrar usuarios</strong><small>Incluye filtros y acceso a desactivados.</small></span></button><button className="quick-link" onClick={onAddAircraft}><span aria-hidden="true">✈</span><span><strong>Registrar aeronave</strong><small>Capacidad, ubicación y disponibilidad.</small></span></button></div></section></>;
 }
 export function WorkspaceSelector({workspaces,select}){return <main className="login"><section><p className="eyebrow">ÁREAS HABILITADAS</p><h1>Seleccione el área de trabajo</h1></section><div className="card">{workspaces.map(x=><button key={x.id} onClick={()=>select(x.id)}>{x.label}</button>)}</div></main>;}
 export function AdminApp() {
@@ -798,7 +749,7 @@ export function AdminApp() {
  if(!session)return <Login set={setSession}/>; if(session.debeCambiarContrasena)return <PasswordRequired setSession={setSession}/>; if(workspaces.length>1&&!active)return <WorkspaceSelector workspaces={workspaces} select={setWorkspace}/>; if(active!=="ADMIN")return <OperationalApp workspace={active} workspaces={workspaces} changeWorkspace={setWorkspace}/>;
  const nav=(target)=>{setPage(target);history.replaceState(null,"",target==="account"?"#/admin/mi-cuenta":target==="aircraft"?"#/admin/aeronaves":target==="geography"?"#/admin/geografia":target==="patients"?"#/admin/pacientes":target==="audit"?"#/admin/auditoria":target==="credentials"?"#/admin/habilitaciones":target==="users"?"#/admin/usuarios":target==="users-inactive"?"#/admin/usuarios/desactivados":"#/admin");}; const notify=(text,bad)=>setNote((bad?"":"✓ ")+text);
  const title=page==="users"?"Usuarios activos":page==="users-inactive"?"Usuarios desactivados":page==="aircraft"?"Aeronaves":page==="geography"?"Geografía":page==="patients"?"Pacientes":page==="audit"?"Auditoría":page==="credentials"?"Política de habilitaciones":page==="account"?"Mi cuenta":"Dashboard";
- return <div className="shell admin-shell"><aside><div className="brand">✈ <span>Vuelos<br/>Sanitarios</span></div><nav><a className={page==="dashboard"?"active":""} onClick={()=>nav("dashboard")}>Dashboard</a><a className={page==="users"||page==="users-inactive"?"active":""} onClick={()=>nav("users")}>Usuarios</a><a className={page==="aircraft"?"active":""} onClick={()=>nav("aircraft")}>Aeronaves</a><a className={page==="geography"?"active":""} onClick={()=>nav("geography")}>Geografía</a><a className={page==="patients"?"active":""} onClick={()=>nav("patients")}>Pacientes</a><a className={page==="audit"?"active":""} onClick={()=>nav("audit")}>Auditoría</a><a className={page==="credentials"?"active":""} onClick={()=>nav("credentials")}>Habilitaciones</a><a className={page==="account"?"active":""} onClick={()=>nav("account")}>Mi cuenta</a></nav><button className="secondary" onClick={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}>Cerrar sesión</button></aside><main className="content"><header><div><p className="eyebrow">PANEL ADMINISTRADOR</p><h1>{title}</h1></div>{workspaces.length>1&&<button className="secondary-action" onClick={()=>setWorkspace(null)}>Cambiar área</button>}<button className="icon" onClick={()=>setDark(!dark)} aria-label="Cambiar tema">{dark?"☀":"◐"}</button></header>{note&&<p className={note.startsWith("✓")?"success":"error"}>{note}</p>}{page==="credentials"&&<CredentialPolicies notify={notify}/>}{page==="dashboard"&&<><AdminDashboard counts={counts} aircraft={aircraft} onAddUser={()=>setUserCreateOpen(true)} onAddAircraft={()=>setAircraftCreateOpen(true)}/><AdminUsers users={[]} provinces={provinces} reload={load} notify={notify} showList={false} createOpen={userCreateOpen} onCreateOpenChange={setUserCreateOpen}/><AdminAircraft items={aircraft} airports={airports} reload={load} notify={notify} showList={false} createOpen={aircraftCreateOpen} onCreateOpenChange={setAircraftCreateOpen}/></>}{(page==="users"||page==="users-inactive")&&<><div className="user-tabs"><button className={page==="users"?"selected-tab":"secondary-action"} onClick={()=>nav("users")}>Usuarios activos</button><button className={page==="users-inactive"?"selected-tab":"secondary-action"} onClick={()=>nav("users-inactive")}>Usuarios desactivados</button></div><AdminUsers users={[]} provinces={provinces} reload={load} notify={notify} showList={false} createOpen={userCreateOpen} onCreateOpenChange={setUserCreateOpen}/><UserDirectory active={page==="users"} notify={notify} onChanged={load} onCreate={()=>setUserCreateOpen(true)} reloadToken={counts?`${counts.activos}-${counts.pendientes}-${counts.inactivos}`:0}/>{page==="users"&&<AdminCrewQualifications notify={notify}/>}</>} {page==="audit"&&<AdminAudit/>}{page==="patients"&&<PatientMaintenance notify={notify}/>} {page==="aircraft"&&<AdminAircraft items={aircraft} airports={airports} reload={load} notify={notify}/>} {page==="geography"&&<GeographicCatalog notify={notify}/>} {page==="account"&&me&&<MyAccount user={me} reload={load} notify={notify} onPasswordChanged={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}/>}</main></div>;
+ return <div className="shell admin-shell"><aside aria-label="Navegación lateral"><div className="brand">✈ <span>Vuelos<br/>Sanitarios</span></div><nav aria-label="Secciones de administración"><button className={page==="dashboard"?"active":""} aria-current={page==="dashboard"?"page":undefined} onClick={()=>nav("dashboard")}>Inicio</button><button className={page==="users"||page==="users-inactive"?"active":""} aria-current={page==="users"||page==="users-inactive"?"page":undefined} onClick={()=>nav("users")}>Usuarios</button><button className={page==="aircraft"?"active":""} aria-current={page==="aircraft"?"page":undefined} onClick={()=>nav("aircraft")}>Aeronaves</button><button className={page==="geography"?"active":""} aria-current={page==="geography"?"page":undefined} onClick={()=>nav("geography")}>Geografía</button><button className={page==="patients"?"active":""} aria-current={page==="patients"?"page":undefined} onClick={()=>nav("patients")}>Pacientes</button><button className={page==="audit"?"active":""} aria-current={page==="audit"?"page":undefined} onClick={()=>nav("audit")}>Auditoría</button><button className={page==="credentials"?"active":""} aria-current={page==="credentials"?"page":undefined} onClick={()=>nav("credentials")}>Habilitaciones</button><button className={page==="account"?"active":""} aria-current={page==="account"?"page":undefined} onClick={()=>nav("account")}>Mi cuenta</button></nav><button className="secondary" onClick={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}>Cerrar sesión</button></aside><main className="content"><header><div><p className="eyebrow">PANEL ADMINISTRADOR</p><h1>{title}</h1></div>{workspaces.length>1&&<button className="secondary-action" onClick={()=>setWorkspace(null)}>Cambiar área</button>}<button className="icon" onClick={()=>setDark(!dark)} aria-label="Cambiar tema">{dark?"☀":"◐"}</button></header>{note&&<p className={note.startsWith("✓")?"success":"error"}>{note}</p>}{page==="credentials"&&<CredentialPolicies notify={notify}/>}{page==="dashboard"&&<><AdminDashboard counts={counts} aircraft={aircraft} onAddUser={()=>setUserCreateOpen(true)} onAddAircraft={()=>setAircraftCreateOpen(true)} onUsers={()=>nav("users")}/><AdminUsers users={[]} provinces={provinces} reload={load} notify={notify} showList={false} createOpen={userCreateOpen} onCreateOpenChange={setUserCreateOpen}/><AdminAircraft items={aircraft} airports={airports} reload={load} notify={notify} showList={false} createOpen={aircraftCreateOpen} onCreateOpenChange={setAircraftCreateOpen}/></>}{(page==="users"||page==="users-inactive")&&<><div className="user-tabs"><button className={page==="users"?"selected-tab":"secondary-action"} onClick={()=>nav("users")}>Usuarios activos</button><button className={page==="users-inactive"?"selected-tab":"secondary-action"} onClick={()=>nav("users-inactive")}>Usuarios desactivados</button></div><AdminUsers users={[]} provinces={provinces} reload={load} notify={notify} showList={false} createOpen={userCreateOpen} onCreateOpenChange={setUserCreateOpen}/><UserDirectory active={page==="users"} notify={notify} onChanged={load} onCreate={()=>setUserCreateOpen(true)} reloadToken={counts?`${counts.activos}-${counts.pendientes}-${counts.inactivos}`:0}/>{page==="users"&&<AdminCrewQualifications notify={notify}/>}</>} {page==="audit"&&<AdminAudit/>}{page==="patients"&&<PatientMaintenance notify={notify}/>} {page==="aircraft"&&<AdminAircraft items={aircraft} airports={airports} reload={load} notify={notify}/>} {page==="geography"&&<GeographicCatalog notify={notify}/>} {page==="account"&&me&&<MyAccount user={me} reload={load} notify={notify} onPasswordChanged={()=>{localStorage.removeItem("vs-token");localStorage.removeItem("vs-session");setSession(null);}}/>}</main></div>;
 }
 const root=document.getElementById("root");
 if(root)createRoot(root).render(<AdminApp />);
