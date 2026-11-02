@@ -77,19 +77,43 @@ test("el DTS cancela su propia solicitud con motivo y la ficha se vuelve a leer 
  const detailCalls = vi.mocked(api).mock.calls.filter(([p, o]) => p === "/flights/7" && o?.method !== "POST").length; expect(detailCalls).toBeGreaterThanOrEqual(2);
 });
 
-test("Operaciones aprueba, propone otro horario, reemplaza una propuesta y rechaza con motivo según el estado", async () => {
- const { RequestEvaluation } = await import("./main.jsx"); const call = vi.fn();
- const { rerender } = render(<RequestEvaluation flight={{ id: 7, estado: "SOLICITADO", datosSanitarios: {} }} events={events({})} call={call} reasons={reasons} />);
- fireEvent.click(screen.getByRole("button", { name: "Aceptar horario DTS" })); expect(call).toHaveBeenCalledWith("/flights/7/schedule/accept", null, "Horario aceptado");
- const propose = screen.getByRole("button", { name: "Proponer otro horario" }); expect(propose).toBeDisabled();
- fireEvent.change(screen.getByLabelText("Nueva fecha y hora"), { target: { value: "2026-10-24T09:00" } }); fireEvent.change(screen.getByLabelText("Motivo de la propuesta"), { target: { value: "Sin aeronave" } }); fireEvent.click(propose);
- expect(call).toHaveBeenCalledWith("/flights/7/schedule/counterproposal", { salida: "2026-10-24T09:00", motivo: "Sin aeronave" }, "Propuesta enviada al DTS");
- const reject = screen.getByRole("button", { name: "Rechazar solicitud" }); expect(reject).toBeDisabled(); fireEvent.change(screen.getByLabelText("Motivo de cancelación"), { target: { value: "1" } }); fireEvent.click(reject);
- expect(call).toHaveBeenCalledWith("/flights/7/schedule/reject", { motivoCancelacionId: "1", motivoCancelacionPersonalizado: null }, "Solicitud rechazada");
- rerender(<RequestEvaluation flight={{ id: 7, estado: "PENDIENTE_RESPUESTA_DTS", datosSanitarios: {} }} events={events({}, { tipo: "CO_CONTRAPROPUESTA", respondeA: 1, fechaHoraPropuesta: "2026-10-24T09:00:00" })} call={call} reasons={reasons} />);
- expect(screen.getByText(/espera la respuesta del DTS/)).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Reemplazar propuesta" })).toBeInTheDocument(); expect(screen.queryByRole("button", { name: "Rechazar solicitud" })).toBeNull(); expect(screen.queryByRole("button", { name: "Aceptar horario DTS" })).toBeNull();
- rerender(<RequestEvaluation flight={{ id: 7, estado: "APROBADO", datosSanitarios: {} }} events={[]} call={call} reasons={reasons} />); expect(screen.queryByRole("heading", { name: "Evaluación de la solicitud" })).toBeNull();
- rerender(<RequestEvaluation flight={{ id: 8, estado: "SOLICITADO", datosSanitarios: null }} events={[]} call={call} reasons={reasons} />); expect(screen.queryByRole("heading", { name: "Evaluación de la solicitud" })).toBeNull();
+test("Operaciones acepta, propone otro horario, reemplaza una propuesta y rechaza con motivo: cada acción se despliega sola y cancelar no cambia nada", async () => {
+ const { NegotiationPanel } = await import("./negotiation.jsx"); const call = vi.fn().mockResolvedValue(true);
+ const { rerender } = render(<NegotiationPanel flight={{ id: 7, codigo: "V-7", estado: "SOLICITADO", datosSanitarios: {} }} events={events({})} call={call} reasons={reasons} />);
+ // al abrir sólo se ven las tres decisiones: ningún formulario
+ expect(screen.getByRole("button", { name: "Aceptar horario solicitado" })).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Proponer otro horario" })).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Rechazar solicitud" })).toBeInTheDocument();
+ expect(screen.queryByLabelText("Nueva fecha y hora")).toBeNull(); expect(screen.queryByLabelText("Motivo de cancelación")).toBeNull();
+ // aceptar pide confirmación; cancelar vuelve sin llamar
+ fireEvent.click(screen.getByRole("button", { name: "Aceptar horario solicitado" })); fireEvent.click(screen.getByRole("button", { name: "Cancelar" })); expect(call).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole("button", { name: "Aceptar horario solicitado" })); fireEvent.click(screen.getByRole("button", { name: "Confirmar horario" }));
+ await waitFor(() => expect(call).toHaveBeenCalledWith("/flights/7/schedule/accept", null, "Horario aceptado"));
+ // proponer abre su formulario y exige fecha y motivo
+ fireEvent.click(screen.getByRole("button", { name: "Proponer otro horario" })); expect(screen.queryByRole("button", { name: "Aceptar horario solicitado" })).toBeNull();
+ const send = screen.getByRole("button", { name: "Enviar propuesta" }); expect(send).toBeDisabled();
+ fireEvent.change(screen.getByLabelText("Nueva fecha y hora"), { target: { value: "2026-10-24T09:00" } }); fireEvent.change(screen.getByLabelText("Motivo de la propuesta"), { target: { value: "Sin aeronave" } }); fireEvent.click(send);
+ await waitFor(() => expect(call).toHaveBeenCalledWith("/flights/7/schedule/counterproposal", { salida: "2026-10-24T09:00", motivo: "Sin aeronave" }, "Propuesta enviada al DTS"));
+ // rechazar exige motivo del catálogo (y descripción para OTRO)
+ fireEvent.click(screen.getByRole("button", { name: "Rechazar solicitud" }));
+ const reject = screen.getByRole("button", { name: "Confirmar rechazo" }); expect(reject).toBeDisabled(); fireEvent.change(screen.getByLabelText("Motivo de cancelación"), { target: { value: "1" } }); fireEvent.click(reject);
+ await waitFor(() => expect(call).toHaveBeenCalledWith("/flights/7/schedule/reject", { motivoCancelacionId: "1", motivoCancelacionPersonalizado: null }, "Solicitud rechazada"));
+ // con una propuesta pendiente de respuesta del DTS sólo se puede reemplazar
+ rerender(<NegotiationPanel flight={{ id: 7, codigo: "V-7", estado: "PENDIENTE_RESPUESTA_DTS", datosSanitarios: {} }} events={events({}, { tipo: "CO_CONTRAPROPUESTA", respondeA: 1, fechaHoraPropuesta: "2026-10-24T09:00:00", motivo: "Sin aeronave" })} call={call} reasons={reasons} />);
+ expect(screen.getByText(/Esperando respuesta del DTS/)).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Reemplazar propuesta" })).toBeInTheDocument();
+ expect(screen.queryByRole("button", { name: "Rechazar solicitud" })).toBeNull(); expect(screen.queryByRole("button", { name: "Aceptar horario solicitado" })).toBeNull();
+ expect(screen.getByText("Última propuesta vigente").nextSibling).toHaveTextContent("2026-10-24 09:00 · Sin aeronave");
+ // acordado: sólo queda el resumen y el historial; no hay acciones de evaluación
+ rerender(<NegotiationPanel flight={{ id: 7, codigo: "V-7", estado: "APROBADO", salida: "2026-10-24T09:00:00", datosSanitarios: {} }} events={[]} call={call} reasons={reasons} />);
+ expect(screen.getByText(/Horario acordado:/)).toBeInTheDocument(); expect(screen.queryByRole("button", { name: /horario|propuesta|Rechazar/i })).toBeNull();
+ rerender(<NegotiationPanel flight={{ id: 8, codigo: "V-8", estado: "SOLICITADO", datosSanitarios: null }} events={[]} call={call} reasons={reasons} />); expect(screen.queryByRole("heading", { name: "Negociación del horario" })).toBeNull();
+});
+
+test("si la operación falla el formulario sigue abierto con lo escrito y la pantalla no queda rota", async () => {
+ const { NegotiationPanel } = await import("./negotiation.jsx"); const call = vi.fn().mockResolvedValue(false);
+ render(<NegotiationPanel flight={{ id: 7, codigo: "V-7", estado: "SOLICITADO", datosSanitarios: {} }} events={events({})} call={call} reasons={reasons} />);
+ fireEvent.click(screen.getByRole("button", { name: "Proponer otro horario" }));
+ fireEvent.change(screen.getByLabelText("Nueva fecha y hora"), { target: { value: "2026-10-24T09:00" } }); fireEvent.change(screen.getByLabelText("Motivo de la propuesta"), { target: { value: "Sin aeronave" } });
+ fireEvent.click(screen.getByRole("button", { name: "Enviar propuesta" })); await waitFor(() => expect(call).toHaveBeenCalled());
+ expect(screen.getByLabelText("Motivo de la propuesta")).toHaveValue("Sin aeronave");
 });
 
 test("la lista de Operaciones destaca las solicitudes de extrema urgencia en el selector", async () => {

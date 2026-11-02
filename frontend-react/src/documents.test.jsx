@@ -265,3 +265,66 @@ test("an empty retired list says so", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Ver documentos retirados" }));
   expect(await screen.findByText("Sin documentos retirados.")).toBeInTheDocument();
 });
+
+// --- Bloqueo documental hasta acordar el horario (el servidor es la autoridad; la pantalla sólo lo refleja) ---
+const LOCKED = { disponible: false, codigo: "DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED", mensaje: "bloqueado", estadoSolicitud: "SOLICITADO", pendientePor: "OPERACIONES" };
+const calls = () => vi.mocked(api).mock.calls.map(([path, options]) => `${options?.method || "GET"} ${path}`);
+
+test("without an agreed schedule the section explains the block and offers no document action nor request", async () => {
+  serve({ "GET /flights/7/documents/access": LOCKED });
+  render(<FlightDocuments flightId={7} canEdit canViewRetired msg={vi.fn()} />);
+  expect(await screen.findByText("Documentación no disponible")).toBeInTheDocument();
+  expect(screen.getByText("Para comenzar a gestionar los documentos de este vuelo, primero debe acordarse el horario de salida.")).toBeInTheDocument();
+  expect(screen.getByText(/La solicitud espera la evaluación de Operaciones/)).toBeInTheDocument();
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.queryByLabelText("Archivo PDF")).toBeNull();
+  expect(calls()).toEqual(["GET /flights/7/documents/access"]);
+});
+
+test("the explanation names who must answer a pending counterproposal and read-only roles see the same block", async () => {
+  serve({ "GET /flights/7/documents/access": { ...LOCKED, estadoSolicitud: "PENDIENTE_RESPUESTA_DTS", pendientePor: "DTS" } });
+  render(<FlightDocuments flightId={7} canEdit={false} msg={vi.fn()} />);
+  expect(await screen.findByText(/el DTS solicitante debe aceptarlo o rechazarlo/)).toBeInTheDocument();
+  expect(calls()).toEqual(["GET /flights/7/documents/access"]);
+});
+
+test("when the schedule gets agreed the documents are enabled on the next refresh without reloading", async () => {
+  let agreed = false;
+  serve({ "GET /flights/7/documents/access": () => Promise.resolve(agreed ? { disponible: true } : LOCKED) });
+  render(<FlightDocuments flightId={7} canEdit gateRefreshMs={20} msg={vi.fn()} />);
+  expect(await screen.findByText("Documentación no disponible")).toBeInTheDocument();
+  expect(calls().some((c) => c === "GET /flights/7/documents")).toBe(false);
+  agreed = true;
+  expect(await screen.findByRole("button", { name: /Plan de vuelo · Plan de vuelo · v2/ })).toBeInTheDocument();
+  expect(screen.queryByText("Documentación no disponible")).toBeNull();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Registrar documento" })).toBeInTheDocument());
+});
+
+test("an agreed schedule keeps the normal flow and a stale screen is corrected by the server's 409", async () => {
+  serve({ "GET /flights/7/documents/access": { disponible: true } });
+  vi.mocked(uploadFile).mockRejectedValue(Object.assign(new Error("Documentación no disponible"), { status: 409, code: "DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED", pendientePor: "DTS" }));
+  render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
+  const select = await screen.findByLabelText("Tipo documental");
+  await waitFor(() => expect(screen.getByRole("option", { name: "Autorización de vuelo" })).toBeInTheDocument());
+  fireEvent.change(select, { target: { value: "AUTORIZACION" } });
+  fireEvent.change(screen.getByLabelText("Nombre del documento"), { target: { value: "Autorización A" } });
+  fireEvent.change(screen.getByLabelText("Archivo PDF"), { target: { files: [pdf()] } });
+  fireEvent.click(screen.getByRole("button", { name: "Registrar documento" }));
+  expect(await screen.findByText("Documentación no disponible")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Registrar documento" })).toBeNull();
+});
+
+test("a list rejected with the lock code shows the block instead of an error", async () => {
+  serve({ "GET /flights/7/documents/access": { disponible: true }, "GET /flights/7/documents": () => Promise.reject(Object.assign(new Error("Documentación no disponible"), { status: 409, code: "DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED", pendientePor: "OPERACIONES" })) });
+  render(<FlightDocuments flightId={7} canEdit={false} msg={vi.fn()} />);
+  expect(await screen.findByText("Documentación no disponible")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("if the availability check itself fails the section falls through and the server decides each operation", async () => {
+  serve({ "GET /flights/7/documents/access": () => Promise.reject(new Error("sin red")) });
+  render(<FlightDocuments flightId={7} canEdit={false} msg={vi.fn()} />);
+  expect(await screen.findByRole("button", { name: /Plan de vuelo · Plan de vuelo · v2/ })).toBeInTheDocument();
+  expect(screen.queryByText("Documentación no disponible")).toBeNull();
+});

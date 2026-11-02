@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from "react";
 import {api} from "./api";
 const problem=e=>e?.message||"No se pudo completar la operación";
-const HISTORY={VUELOS_HISTORICOS:"vuelos finalizados o cancelados",VERSIONES_RUTA_HISTORICAS:"versiones de ruta anteriores",COORDINACIONES_HISTORICAS:"coordinaciones de vuelos cerrados",REGISTROS_HANGAR:"registros de hangar",AERONAVES_INACTIVAS:"aeronaves inactivas",AEROPUERTOS_INACTIVOS:"aeropuertos inactivos",LOCALIDADES_INACTIVAS:"localidades inactivas",PERFILES_COMANDANTE:"perfiles de comandante",SOLICITUDES_CERRADAS:"solicitudes sanitarias cerradas"};
+const HISTORY={VUELOS_HISTORICOS:"vuelos finalizados o cancelados",VERSIONES_RUTA_HISTORICAS:"versiones de ruta anteriores",COORDINACIONES_HISTORICAS:"coordinaciones de vuelos cerrados",REGISTROS_HANGAR:"registros de hangar",AERONAVES_INACTIVAS:"aeronaves inactivas",AEROPUERTOS_INACTIVOS:"aeropuertos inactivos",LOCALIDADES_INACTIVAS:"localidades inactivas",PERFILES_COMANDANTE:"perfiles de comandante",SOLICITUDES_CERRADAS:"solicitudes sanitarias cerradas",COMANDANTES_UBICADOS:"comandantes ubicados en la localidad"};
 /** Una baja bloqueada por una referencia vigente se distingue de la que sólo conserva historia (que no impide desactivar). */
 export const blockedBy=row=>row?.activo&&row.dependencias&&row.dependencias.puedeDesactivar===false?String(row.dependencias.motivoBloqueo||"").replace(/^No puede desactivarse: /,""):"";
 export const historyOf=row=>Object.entries(row?.dependencias?.historicas||{}).map(([key,count])=>count+" "+(HISTORY[key]||key)).join(", ");

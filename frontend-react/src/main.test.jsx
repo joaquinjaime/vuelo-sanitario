@@ -186,8 +186,9 @@ test("operations opens a pending request and accepts the DTS schedule", async ()
  vi.mocked(api).mockImplementation((path, options) => path==="/flights/flight-1"&&options?.method!=="POST" ? Promise.resolve(detail) : Promise.resolve(flight));
  render(<Ops d={{flights:[flight],aircraft:[],commanders:[]}} done={done} msg={msg} />);
  fireEvent.change(screen.getByLabelText("Solicitud"),{target:{value:"flight-1"}});
- expect(await screen.findByText("Propuesta DTS")).toBeInTheDocument();
- fireEvent.click(screen.getByRole("button", { name:"Aceptar horario DTS" }));
+ expect(await screen.findByRole("heading", { name: "Negociación del horario" })).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name:"Aceptar horario solicitado" }));
+ fireEvent.click(screen.getByRole("button", { name:"Confirmar horario" }));
  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/flight-1/schedule/accept", expect.objectContaining({ method:"POST" })));
  expect(msg).toHaveBeenCalledWith("Horario aceptado");
 });

@@ -98,7 +98,8 @@ test("operations center: the refresh that follows an action never reloads the fl
   const flights = [1, 2].map((id) => ({ id: String(id), codigo: `SAN-${id}`, estado: "SOLICITADO", extremaUrgencia: false }));
   render(<Ops d={{ flights }} done={vi.fn(() => slowDone.promise)} msg={vi.fn()} />);
   fireEvent.change(screen.getAllByLabelText("Solicitud")[0], { target: { value: "1" } });
-  fireEvent.click(await screen.findByRole("button", { name: "Aceptar horario DTS" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Aceptar horario solicitado" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar horario" }));
   await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/1/schedule/accept", expect.anything()));
   fireEvent.change(screen.getAllByLabelText("Solicitud")[0], { target: { value: "2" } });          // el usuario elige otra solicitud antes de que termine el refresco de la acción
   await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/2"));

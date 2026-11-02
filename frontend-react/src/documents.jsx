@@ -4,6 +4,14 @@ import { api, uploadFile, downloadFile } from "./api";
 /** Estados de sólo consulta documental: el servidor es la autoridad y rechaza cualquier escritura en ellos. */
 export const READ_ONLY_FLIGHT_STATES = ["FINALIZADO", "COMPLETADO", "CANCELADO", "RECHAZADO"];
 export const documentsEditable = (estado) => !READ_ONLY_FLIGHT_STATES.includes(estado);
+/** Código con que el servidor rechaza (409) toda operación documental de un vuelo sanitario cuyo horario todavía no se acordó. */
+export const DOCUMENTS_LOCKED_CODE = "DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED";
+/** Mientras la documentación está bloqueada se vuelve a consultar al servidor con esta frecuencia, al volver a la pestaña y al recuperar el foco. */
+export const GATE_REFRESH_MS = 15000;
+const PENDING_TEXT = {
+  OPERACIONES: "La solicitud espera la evaluación de Operaciones: deben aceptar el horario solicitado o proponer otro.",
+  DTS: "Operaciones propuso otro horario: el DTS solicitante debe aceptarlo o rechazarlo.",
+};
 
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.
 const dt = (v) => (v ? String(v).replace("T", " ").slice(0, 16) : "—");
@@ -19,7 +27,9 @@ export const apiRelative = (url) => String(url).replace(/^\/api(?=\/)/, "");
  * Qué tipos se ofrecen y quién puede retirar cada documento lo dicen el servidor (`/documents/types`, `puedeRetirar`).
  * El bloqueo temporal lo decide el servidor; aquí sólo se refleja y se vuelve a consultar cuando vence o falla un guardado.
  */
-export function FlightDocuments({ flightId, canEdit = false, canViewRetired = false, msg = () => {} }) {
+export function FlightDocuments({ flightId, canEdit = false, canViewRetired = false, msg = () => {}, gateRefreshMs = GATE_REFRESH_MS }) {
+  // null mientras se consulta; {disponible:false,...} con el horario sin acordar. El servidor es la autoridad: aquí sólo se refleja.
+  const [gate, setGate] = useState(null);
   const [documents, setDocuments] = useState(null), [types, setTypes] = useState(null), [selected, setSelected] = useState(null), [history, setHistory] = useState(null), [lock, setLock] = useState(null);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [retired, setRetired] = useState(null), [retiring, setRetiring] = useState(false), [reason, setReason] = useState("");
@@ -28,17 +38,24 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   current.current = { selected, lock, canEdit };
   const choice = useRef(0);
 
+  /** Un rechazo por horario sin acordar (p. ej. la pantalla quedó desactualizada) pasa a la vista bloqueada, sin error engañoso. */
+  const lockedBy = (e) => {
+    if (e?.code !== DOCUMENTS_LOCKED_CODE) return false;
+    setGate({ disponible: false, mensaje: e.error || e.message, estadoSolicitud: e.estadoSolicitud, pendientePor: e.pendientePor });
+    setSelected(null); setHistory(null); setLock(null); setError("");
+    return true;
+  };
   const load = async () => {
     try {
       const rows = await api(`/flights/${flightId}/documents`);
       if (!Array.isArray(rows)) throw Error("Respuesta documental inválida");
       setDocuments(rows); setError("");
       return rows;
-    } catch (e) { setDocuments(null); setError(e.message); return []; }
+    } catch (e) { setDocuments(null); if (lockedBy(e)) return []; setError(e.message); return []; }
   };
   const inspect = async (id) => {
     try { const x = await api(`/documents/${id}/lock`); if (current.current.selected?.id === id) setLock(x); return x; }
-    catch (e) { setError(e.message); return null; }
+    catch (e) { if (!lockedBy(e)) setError(e.message); return null; }
   };
   /** Libera sin esperar respuesta: si falla, el vencimiento del servidor sigue siendo la garantía. */
   const releaseQuietly = () => {
@@ -50,7 +67,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
       const rows = await api(`/flights/${flightId}/documents/retired`);
       if (!Array.isArray(rows)) throw Error("Respuesta de documentos retirados inválida");
       setRetired(rows);
-    } catch (e) { setError(e.message); }
+    } catch (e) { if (!lockedBy(e)) setError(e.message); }
   };
   const choose = async (item) => {
     if (current.current.selected && current.current.selected.id !== item.id) releaseQuietly();
@@ -62,15 +79,44 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
       if (mine !== choice.current) return;
       setHistory(h);
       if (current.current.canEdit && !item.fechaBaja) await inspect(item.id);
-    } catch (e) { if (mine === choice.current) setError(e.message); }
+    } catch (e) { if (mine === choice.current && !lockedBy(e)) setError(e.message); }
   };
 
-  useEffect(() => {
-    setSelected(null); setHistory(null); setLock(null); setDocuments(null); setTypes(null); setError(""); setRetired(null); setRetiring(false); setReason(""); choice.current++;
+  /** Consulta si el horario está acordado. Si la consulta falla se continúa: las operaciones reales las rechazará el servidor con el motivo exacto. */
+  const checkGate = async () => {
+    try {
+      const x = await api(`/flights/${flightId}/documents/access`);
+      const open = !x || x.disponible !== false;
+      setGate(open ? { disponible: true } : x);
+      return open;
+    } catch { setGate({ disponible: true }); return true; }
+  };
+  const start = () => {
     load();
-    if (canEdit) api(`/flights/${flightId}/documents/types`).then((x) => setTypes(Array.isArray(x) ? x : [])).catch((e) => { setTypes([]); setError(e.message); });
-    return releaseQuietly;
+    if (canEdit) api(`/flights/${flightId}/documents/types`).then((x) => setTypes(Array.isArray(x) ? x : [])).catch((e) => { setTypes([]); if (!lockedBy(e)) setError(e.message); });
+  };
+  const startRef = useRef(start); startRef.current = start;
+  useEffect(() => {
+    let alive = true;
+    setSelected(null); setHistory(null); setLock(null); setDocuments(null); setTypes(null); setError(""); setRetired(null); setRetiring(false); setReason(""); setGate(null); choice.current++;
+    checkGate().then((open) => { if (alive && open) startRef.current(); });
+    return () => { alive = false; releaseQuietly(); };
   }, [flightId, canEdit]);
+
+  // Con la documentación bloqueada se vuelve a consultar sola: al acordarse el horario se habilita sin cerrar sesión ni recargar.
+  const locked = gate?.disponible === false;
+  useEffect(() => {
+    if (!locked) return undefined;
+    let alive = true;
+    const tick = async () => {
+      if (document.visibilityState === "hidden") return;
+      const open = await checkGate();
+      if (alive && open) { setError(""); startRef.current(); }
+    };
+    const timer = setInterval(tick, gateRefreshMs);
+    window.addEventListener("focus", tick); document.addEventListener("visibilitychange", tick);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", tick); document.removeEventListener("visibilitychange", tick); };
+  }, [locked, flightId, gateRefreshMs]);
 
   // Un bloqueo vence solo: al llegar su hora se consulta de nuevo al servidor (que decide) en lugar de seguir mostrándolo.
   useEffect(() => {
@@ -84,7 +130,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
 
   const run = async (action) => {
     setBusy(true); setError("");
-    try { await action(); } catch (e) { setError(e.message); if (current.current.selected) await inspect(current.current.selected.id); } finally { setBusy(false); }
+    try { await action(); } catch (e) { if (!lockedBy(e)) { setError(e.message); if (current.current.selected) await inspect(current.current.selected.id); } } finally { setBusy(false); }
   };
   const create = () => {
     if (!createFile || !typeCode || !name.trim()) return;
@@ -114,6 +160,18 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
       a.href = url; a.download = version.nombreArchivoOriginal; a.click(); URL.revokeObjectURL(url);
     } catch (e) { setError(e.message); }
   };
+
+  if (locked) return (
+    <section className="wide detail-actions documents-locked" aria-labelledby={`documents-locked-${flightId}`}>
+      <h4 id={`documents-locked-${flightId}`}>Documentos del vuelo</h4>
+      <div className="locked-panel" role="status">
+        <strong>Documentación no disponible</strong>
+        <p>Para comenzar a gestionar los documentos de este vuelo, primero debe acordarse el horario de salida.</p>
+        {PENDING_TEXT[gate.pendientePor] && <p className="hint">{PENDING_TEXT[gate.pendientePor]}</p>}
+        <p className="hint">Esta sección se habilitará automáticamente cuando el horario quede acordado.</p>
+      </div>
+    </section>
+  );
 
   return (
     <section className="wide detail-actions">
