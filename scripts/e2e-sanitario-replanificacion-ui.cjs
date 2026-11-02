@@ -94,11 +94,18 @@ async function until(fn, what, ms = 45000) { const end = Date.now() + ms; let la
     pass('D2 Operaciones evalúa y acepta el horario, consulta disponibilidad y asigna aeronave y comandante válidos; el vuelo queda PLANIFICADO con tripulación, auditoría y aviso al comandante');
 
     const cmdPage = await login(cmd.name); const planning = await pick(cmdPage, 'Planificación operativa', F);
-    await planning.locator('label').filter({ hasText: /^Aeropuerto de origen/ }).locator('select').selectOption(String(airports[0].id), { timeout: 60000 });
-    await planning.locator('label').filter({ hasText: /^Aeropuerto de destino/ }).locator('select').selectOption(String(destA.id), { timeout: 60000 });
+    // El comandante elige y confirma los aeropuertos de salida y llegada (V64): se buscan por nombre en el selector de candidatos.
+    const chooseAirport = async (kind, airport) => {
+      await planning.getByRole('button', { name: 'Elegir otro aeropuerto de ' + kind }).click();
+      const picker = planning.locator('.airport-picker'); await picker.waitFor({ timeout: 60000 });
+      await picker.getByLabel('Buscar aeropuerto').fill(airport.nombre); await picker.getByRole('button', { name: 'Buscar' }).click();
+      const option = picker.locator('label.resource-option').filter({ has: cmdPage.locator('strong', { hasText: new RegExp('^' + airport.nombre.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&') + '$') }) }).first();
+      await option.waitFor({ timeout: 60000 }); await option.getByRole('radio').check();
+    };
+    await chooseAirport('salida', airports[0]); await chooseAirport('llegada', destA);
     const salidaMs = new Date(one(`SELECT CONVERT(varchar(19),fecha_planificada_salida,126) FROM vuelos WHERE id_vuelos=${F}`) + 'Z').getTime();
     await planning.getByLabel('Llegada planificada').fill(localInput(new Date(salidaMs + 3 * 3600000 + new Date().getTimezoneOffset() * 60000)));
-    await planning.getByRole('button', { name: 'Guardar planificación' }).click(); await cmdPage.getByText('Planificación operativa guardada').waitFor();
+    await planning.getByRole('button', { name: 'Confirmar aeropuertos y guardar planificación' }).click(); await cmdPage.getByText('Aeropuertos confirmados y planificación guardada').waitFor();
     assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_vuelos=${F} AND id_aeropuerto_origen=${airports[0].id} AND id_aeropuerto_destino=${destA.id} AND fecha_planificada_llegada IS NOT NULL`), 1);
     const panel = routePanel(cmdPage);
     await panel.getByLabel('Recorrido y puntos intermedios en orden').fill('Ruta sanitaria ' + MARK); await panel.getByLabel('Buscar aeropuerto alternativo').fill(alt1.nombre);

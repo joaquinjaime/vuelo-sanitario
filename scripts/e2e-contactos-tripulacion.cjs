@@ -220,7 +220,7 @@ async function provisionRole(admin, user, roleCode) {
   assert.equal(after.transfer, before.transfer, 'los contactos de coordinación del traslado no se usan ni se alteran');
   assert.deepEqual(after.identity, before.identity, 'cuentas, hashes, roles y versiones intactos');
   assert.equal(count("SELECT COUNT(*) FROM sys.tables WHERE name NOT IN ('flyway_schema_history')"), tablesBefore, 'sin tablas nuevas');
-  assert.equal(count("SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL AND CAST(version AS int)>63"), 0, 'sin migraciones nuevas de contactos (V55 rutas, V56 índices, V57 licencia única, V58 clasificaciones, V59 habilitaciones, V60 endurecimiento de políticas y documentos, V61/V62 formato del código OTP y V63 ubicación operativa del comandante no cambian los contactos laborales)');
+  assert.equal(count("SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL AND CAST(version AS int)>65"), 0, 'sin migraciones nuevas de contactos (V55 rutas, V56 índices, V57 licencia única, V58 clasificaciones, V59 habilitaciones, V60 endurecimiento de políticas y documentos, V61/V62 formato del código OTP, V63 ubicación operativa del comandante y V64/V65 jurisdicción provincial y aeropuertos no cambian los contactos laborales)');
   assert.equal(sql("DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS, NO_INFOMSGS").replace(/s/g, ''), '', 'DBCC CHECKCONSTRAINTS limpio');
   // los contactos sólo cambiaron por las acciones de sus titulares (fixtures y sección D), nunca por una consulta
   const c0 = snapshot().contacts; for (let i = 0; i < 3; i++) await contactsOf(f); assert.equal(snapshot().contacts, c0, 'consultar no modifica contactos');
