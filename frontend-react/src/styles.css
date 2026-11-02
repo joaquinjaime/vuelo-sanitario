@@ -698,3 +698,15 @@ body[data-theme="dark"] .resource-empty { background: #4a3a10; color: #ffe9a8; }
 .airport-facts .airport-slot { display: grid; grid-template-columns: minmax(8rem, 40%) 1fr; gap: .5rem; }
 body[data-theme="dark"] .airport-pending { background: #4a3a10; color: #ffe9a8; }
 @media (max-width: 800px) { .airport-facts .airport-slot { grid-template-columns: 1fr; } }
+
+/* Requisitos de tripulación (clasificación, habilitación…): cada requisito en su bloque, con su causa y procedimiento */
+.requirement-list { list-style: none; margin: .5rem 0; padding: 0; display: grid; gap: .5rem; }
+.requirement-list li { padding: .5rem .75rem; border-left: 4px solid #2f7d4f; background: rgba(47, 125, 79, .08); border-radius: 4px; }
+.requirement-list li.requirement-missing { border-left-color: #b3261e; background: rgba(179, 38, 30, .08); }
+.requirement-list small { display: block; margin-top: .15rem; }
+.requirement-list .requirement-how { font-weight: 600; }
+.requirement-state { text-transform: none; font-weight: 400; }
+.resource-unavailable-item { margin-bottom: .75rem; }
+.pending-commanders table { width: 100%; }
+.pending-commanders .inline-check { display: flex; align-items: center; gap: .5rem; }
+.pending-commanders .inline-check input { width: auto; }

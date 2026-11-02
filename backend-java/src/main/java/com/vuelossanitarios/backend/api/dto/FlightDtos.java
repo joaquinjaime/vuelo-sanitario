@@ -69,7 +69,7 @@ public final class FlightDtos { private FlightDtos(){}
   * jurisdicción o sin ubicación: requiere excepción justificada y autorizada) o NO_ELEGIBLE (no cumple una condición operativa; ninguna excepción geográfica lo habilita).
   * codigoUbicacion es MISMA_JURISDICCION o el tipo de excepción necesario; codigoOperativo/motivoOperativo, la causa si no es apto.
   */
- public record CommanderCandidateView(Long id,String username,String nombre,String apellido,String licencia,Long provinciaId,String provincia,LocalDateTime ubicacionActualizadaEn,String elegibilidad,String codigoUbicacion,String motivoUbicacion,String codigoOperativo,String motivoOperativo){}
+ public record CommanderCandidateView(Long id,String username,String nombre,String apellido,String licencia,Long provinciaId,String provincia,LocalDateTime ubicacionActualizadaEn,String elegibilidad,String codigoUbicacion,String motivoUbicacion,String codigoOperativo,String motivoOperativo,java.util.List<CrewRequirementDtos.RequirementView> requisitosFaltantes){}
  /** Jurisdicción contra la que se evalúa: fuente = AEROPUERTO_CONFIRMADO, AEROPUERTO_PROPUESTO o PROVINCIA_DEL_PACIENTE; preliminar si el aeropuerto de salida todavía no está confirmado. */
  public record DepartureView(Long provinciaId,String provincia,Long aeropuertoId,String aeropuerto,String fuente,boolean preliminar){}
  public record CommanderCandidates(DepartureView salida,Long comandanteAsignadoId,List<CommanderCandidateView> ordinarios,List<CommanderCandidateView> noElegiblesEnJurisdiccion,List<CommanderCandidateView> excepcionales,boolean excepcionalesIncompletos,Map<String,Long> fueraDeJurisdiccion,boolean puedeAutorizarExcepcion,String mensaje,String advertencia){}

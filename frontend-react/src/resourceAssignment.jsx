@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { api } from "./api";
+import { RequirementList } from "./crewRequirements";
 
 /**
  * Asignación de comandante y aeronave de una solicitud sanitaria con horario acordado (vista de Centro de Operaciones). Cada recurso tiene su
@@ -83,7 +84,7 @@ function CommanderCard({ flight, resources, plan, msg, onChanged, editable, bloc
           {data.ordinarios.map((c) => <label key={c.id} className="resource-option"><input type="radio" name="commander" checked={String(selected) === String(c.id)} onChange={() => setSelected(String(c.id))} disabled={busy}/> <span><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{place(c)}{c.ubicacionActualizadaEn ? ` · actualizada ${civil(c.ubicacionActualizadaEn)}` : ""}{c.id === data.comandanteAsignadoId ? " · asignado actualmente" : ""}</small></span></label>)}
         </fieldset>}
         {data.noElegiblesEnJurisdiccion.length > 0 && <fieldset className="resource-unavailable"><legend>En la jurisdicción, pero no disponibles</legend>
-          {data.noElegiblesEnJurisdiccion.map((c) => <p key={c.id}><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{c.motivoOperativo}</small></p>)}
+          {data.noElegiblesEnJurisdiccion.map((c) => <div key={c.id} className="resource-unavailable-item"><p><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{c.motivoOperativo}</small></p>{c.requisitosFaltantes?.length > 0 && <><small>Requisitos pendientes (los gestiona Administración; Centro de Operaciones no puede otorgarlos):</small><RequirementList items={c.requisitosFaltantes} onlyMissing/></>}</div>)}
         </fieldset>}
         <details className="resource-exceptions" open={data.ordinarios.length === 0 && data.excepcionales.length > 0}>
           <summary>Fuera de la jurisdicción de salida — asignación excepcional{data.excepcionales.length > 0 ? ` (${data.excepcionales.length}${data.excepcionalesIncompletos ? "+" : ""})` : ""}</summary>

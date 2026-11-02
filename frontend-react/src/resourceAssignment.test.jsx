@@ -162,3 +162,20 @@ test("sin horario definitivo las acciones se bloquean y se explica la causa junt
   expect(screen.queryByRole("button", { name: "Seleccionar comandante" })).toBeNull();
   expect(screen.getAllByText("Primero debe fijarse el horario definitivo.")).toHaveLength(2);
 });
+
+test("un comandante de la jurisdicción sin clasificación explica cada requisito pendiente, quién lo resuelve y el procedimiento", async () => {
+  const missing = [
+    { codigo: "CLASIFICACION", titulo: "Clasificación administrativa", cumplido: false, estado: "NO_REGISTRADA", mensaje: "No tiene registrada la clasificación administrativa para esta función; un administrador debe registrarla", resuelve: "ADMINISTRADOR", procedimiento: "Administración → Usuarios → «Clasificación administrativa de tripulación»: seleccionar al usuario y registrar la función." },
+    { codigo: "HABILITACION", titulo: "Habilitación profesional verificada y vigente", cumplido: false, estado: "HABILITACION_AUSENTE", mensaje: "No tiene habilitación profesional para esta función", resuelve: "ADMINISTRADOR", procedimiento: "Un administrador registra la habilitación en Administración → Habilitaciones." },
+  ];
+  vi.mocked(api).mockResolvedValue(candidates({ noElegiblesEnJurisdiccion: [candidate(3, { elegibilidad: "NO_ELEGIBLE", codigoOperativo: "CLASIFICACION_INCOMPATIBLE", motivoOperativo: missing[0].mensaje, requisitosFaltantes: missing })], mensaje: "No se encontraron comandantes disponibles en Tucumán" }));
+  setup();
+  fireEvent.click(screen.getByRole("button", { name: "Seleccionar comandante" }));
+  const group = (await screen.findByText("En la jurisdicción, pero no disponibles")).closest("fieldset");
+  expect(within(group).getByText(/Apellido3, Nombre3/)).toBeInTheDocument();
+  expect(within(group).getByText(/Clasificación administrativa/, { selector: "strong" })).toBeInTheDocument();
+  expect(within(group).getByText(/Habilitación profesional verificada y vigente/, { selector: "strong" })).toBeInTheDocument();
+  expect(within(group).getAllByText(/Lo resuelve: Administración\./)).toHaveLength(2);
+  expect(within(group).getByText(/registrar la función/)).toBeInTheDocument();
+  expect(screen.queryByRole("radio", { name: /Apellido3/ })).toBeNull();
+});

@@ -189,13 +189,13 @@ import org.springframework.transaction.annotation.*;
   List<CommanderCandidateView> ordinary=new ArrayList<>(),blocked=new ArrayList<>(),exceptional=new ArrayList<>();
   for(User u:users.findActiveCommandersInProvince(departure.provinceId())){
    var geo=CommanderGeography.assess(u.getPerson().getCommanderProfile(),departure);var result=crewManagement.evaluate(f,u,"COMANDANTE",true);
-   (result.eligible()?ordinary:blocked).add(candidate(u,geo,result.eligible()?"ORDINARIA":"NO_ELEGIBLE",result));
+   (result.eligible()?ordinary:blocked).add(candidate(f,u,geo,result.eligible()?"ORDINARIA":"NO_ELEGIBLE",result));
   }
   List<User> outside=users.findActiveCommandersOutsideProvince(departure.provinceId(),text,org.springframework.data.domain.PageRequest.of(0,EXCEPTION_CANDIDATES+1));
   boolean incomplete=outside.size()>EXCEPTION_CANDIDATES;
   for(User u:outside.stream().limit(EXCEPTION_CANDIDATES).toList()){
    var result=crewManagement.evaluate(f,u,"COMANDANTE",true);
-   if(result.eligible())exceptional.add(candidate(u,CommanderGeography.assess(u.getPerson().getCommanderProfile(),departure),"EXCEPCION",result));
+   if(result.eligible())exceptional.add(candidate(f,u,CommanderGeography.assess(u.getPerson().getCommanderProfile(),departure),"EXCEPCION",result));
   }
   Map<String,Long> outsideCounts=new LinkedHashMap<>();
   for(Object[] row:users.countActiveCommandersOutsideProvince(departure.provinceId())){
@@ -215,9 +215,9 @@ import org.springframework.transaction.annotation.*;
   if(exceptionsAvailable)m.append(canAuthorize?" Puede asignar uno de ellos como excepción geográfica, con una justificación.":" Asignar un comandante fuera de la jurisdicción requiere la autorización de Centro de Operaciones.");
   return m.toString();
  }
- private CommanderCandidateView candidate(User u,CommanderGeography.Assessment geo,String eligibility,CrewManagementService.Eligibility result){
+ private CommanderCandidateView candidate(Flight f,User u,CommanderGeography.Assessment geo,String eligibility,CrewManagementService.Eligibility result){
   CommanderProfile p=u.getPerson().getCommanderProfile();
-  return new CommanderCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),p.getLicenseNumber(),geo.provinceId(),geo.province(),p.getUbicacionActualizadaEn(),eligibility,geo.code(),geo.message(),result.eligible()?null:result.code(),result.eligible()?null:result.message());
+  return new CommanderCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),p.getLicenseNumber(),geo.provinceId(),geo.province(),p.getUbicacionActualizadaEn(),eligibility,geo.code(),geo.message(),result.eligible()?null:result.code(),result.eligible()?null:result.message(),result.eligible()?java.util.List.of():crewManagement.requirements(f,u,"COMANDANTE",f.getFechaPlanificadaSalida()==null?null:f.getFechaPlanificadaSalida().toLocalDate(),null).stream().filter(r->!r.cumplido()).toList());
  }
  /** Estado de la solicitud y del vuelo que admiten reservar o asignar recursos: solicitud aprobada con horario definitivo y vuelo aún sin iniciar (sin estado o PLANIFICADO). */
  private void requireAssignableSanitary(Flight f,SanitaryFlight s){

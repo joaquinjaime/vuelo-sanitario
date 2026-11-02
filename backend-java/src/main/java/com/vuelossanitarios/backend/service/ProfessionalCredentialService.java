@@ -88,6 +88,8 @@ public class ProfessionalCredentialService {
    org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){@Override public void afterCompletion(int status){org.springframework.transaction.support.TransactionSynchronizationManager.unbindResourceIfPossible(POLICY_CACHE);}});}
   return cache.computeIfAbsent(role,policies::findActiveByRole);
  }
+ /** ¿Existe alguna política de suficiencia activa para la función? Sin ella nadie es elegible (falla cerrado): es una decisión de la organización, no un dato de la persona. */
+ public boolean hasActivePolicy(String role){return !activePolicies(role).isEmpty();}
  public Assessment assess(User u,String role,LocalDate on){return assess(u,role,on,CredentialSufficiency.Context.ANY);}
  public Assessment assess(User u,String role,LocalDate on,CredentialSufficiency.Context context){return assess(u,role,on,context,null);}
  /** {@code rules} sustituye a las políticas activas para simular una configuración propuesta; null evalúa con las activas. No escribe nada. */

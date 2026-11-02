@@ -1,6 +1,7 @@
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;
+import com.vuelossanitarios.backend.api.dto.CrewRequirementDtos.*;
 import com.vuelossanitarios.backend.api.dto.FlightDtos.*;
 import com.vuelossanitarios.backend.domain.catalog.CrewRole;
 import com.vuelossanitarios.backend.domain.flight.*;
@@ -41,7 +42,7 @@ public class CrewManagementService {
  /** {@code aircraft} sustituye a la del vuelo cuando la operación que se evalúa la está cambiando (asignación de recursos, cambio de aeronave). */
  public Eligibility evaluateOn(Flight flight,User member,String code,java.time.LocalDate on,boolean availability,com.vuelossanitarios.backend.domain.catalog.Aircraft aircraft){
   if(!active(member))return denied("CUENTA_INACTIVA","La cuenta del tripulante no está activa");
-  if(!qualifications.existsByUserIdAndRoleCodigo(member.getId(),code))return denied("CLASIFICACION_INCOMPATIBLE","Falta la clasificación administrativa para esta función");
+  if(!qualifications.existsByUserIdAndRoleCodigo(member.getId(),code))return denied("CLASIFICACION_INCOMPATIBLE",classification(member,code).message());
   if("COMANDANTE".equals(code)){
    var profile=member.getPerson()==null?null:member.getPerson().getCommanderProfile();
    if(profile==null||profile.getLicenseNumber()==null||profile.getLicenseNumber().isBlank()||member.getUserRoles().stream().noneMatch(r->"COMANDANTE".equals(r.getRole().getCodigo())))return denied("PERFIL_COMANDANTE_INCOMPLETO","El comandante requiere rol de acceso y licencia registrada");
@@ -149,6 +150,88 @@ public class CrewManagementService {
   if(f.getComandante()!=null&&f.getComandante().getId().equals(member.getId()))throw conflict("El usuario ya integra la tripulación como comandante");
   if(f.getAircraft()!=null&&f.getAircraft().getCapacidadTripulacion()!=null&&crewSize(f,existing)+1>f.getAircraft().getCapacidadTripulacion())throw conflict("La aeronave "+f.getAircraft().getMatricula()+" admite como máximo "+f.getAircraft().getCapacidadTripulacion()+" tripulantes");
   Optional<Flight> clash=conflictingFlight(f,member);if(clash.isPresent())throw conflict("El tripulante tiene otro compromiso incompatible ("+clash.get().getCodigo()+")");
+ }
+ /** Estado de la clasificación administrativa de la persona para la función: vigente, retirada (se conserva el historial), registrada sólo para otras funciones o nunca registrada. */
+ record ClassificationState(boolean ok,String state,String message){}
+ ClassificationState classification(User member,String code){
+  List<CrewQualification> all=qualifications.findAllByUserId(member.getId());
+  if(all.stream().anyMatch(q->q.isVigente()&&code.equals(q.getRole().getCodigo())))return new ClassificationState(true,"VIGENTE","La clasificación administrativa está vigente");
+  Optional<CrewQualification> retired=all.stream().filter(q->!q.isVigente()&&code.equals(q.getRole().getCodigo())).findFirst();
+  if(retired.isPresent()){var q=retired.get();return new ClassificationState(false,"RETIRADA","La clasificación administrativa para esta función fue retirada el "+q.getRetiredAt().toLocalDate()+" ("+q.getRetireReason()+"); un administrador debe registrarla nuevamente");}
+  List<String> others=all.stream().filter(CrewQualification::isVigente).map(q->q.getRole().getNombre()).distinct().toList();
+  if(!others.isEmpty())return new ClassificationState(false,"OTRA_FUNCION","Está clasificado para "+String.join(", ",others)+", pero no para esta función; un administrador debe registrar la clasificación correspondiente");
+  return new ClassificationState(false,"NO_REGISTRADA","No tiene registrada la clasificación administrativa para esta función; un administrador debe registrarla");
+ }
+ private static RequirementView met(String code,String title,String message){return new RequirementView(code,title,true,"CUMPLIDO",message,null,null);}
+ private static RequirementView missing(String code,String title,String state,String message,String who,String procedure){return new RequirementView(code,title,false,state,message,who,procedure);}
+ private static String credentialProcedure(String state){
+  return switch(state){
+   case "HABILITACION_AUSENTE"->"Un administrador registra la habilitación de la persona en Administración → Habilitaciones, adjunta la documentación respaldatoria y la verifica.";
+   case "HABILITACION_NO_VERIFICADA","HABILITACION_CORRECCION_PENDIENTE"->"Un administrador debe revisar la habilitación registrada en Administración → Habilitaciones y verificarla, o resolver la corrección pendiente.";
+   case "POLITICA_HABILITACION_NO_CONFIGURADA"->"No hay una política de suficiencia para esta función u operación: la define la organización (Administración → Habilitaciones → Políticas); hasta entonces nadie es elegible.";
+   case "CONTEXTO_OPERATIVO_INCOMPLETO"->"Asignar primero la aeronave del vuelo: la política de suficiencia depende de su categoría.";
+   case "HABILITACION_NO_SUFICIENTE"->"La habilitación vigente no es de un tipo aceptado por la política: registrar y verificar una habilitación de un tipo aceptado, o revisar la política en Administración → Habilitaciones.";
+   case "HABILITACION_VENCIDA"->"Registrar la renovación en Administración → Habilitaciones y verificarla antes de la fecha de salida.";
+   case "HABILITACION_REVOCADA","HABILITACION_RECHAZADA"->"La verificación fue revocada o rechazada: un administrador debe registrar y verificar una habilitación válida en Administración → Habilitaciones.";
+   default->"Un administrador debe revisar la habilitación y las políticas de suficiencia en Administración → Habilitaciones.";
+  };
+ }
+ /**
+  * Todos los requisitos de la función, evaluados sin cortar en el primero que falta (la decisión de asignar sigue siendo {@link #evaluateOn}; esta lista explica cada causa y su procedimiento legítimo).
+  * Con vuelo se agrega la disponibilidad; la ubicación operativa se evalúa aparte contra el aeropuerto de salida. No escribe nada.
+  */
+ public List<RequirementView> requirements(Flight flight,User member,String code,java.time.LocalDate on,com.vuelossanitarios.backend.domain.catalog.Aircraft aircraft){
+  RoleRule rule=RULES.get(code);if(rule==null)throw bad("La función indicada no admite clasificación administrativa");
+  List<RequirementView> out=new ArrayList<>();
+  if(active(member))out.add(met("CUENTA_ACTIVA","Cuenta activa","La cuenta está activa"));
+  else out.add(missing("CUENTA_ACTIVA","Cuenta activa","CUENTA_INACTIVA","La cuenta del tripulante no está activa","ADMINISTRADOR","Administración → Usuarios: completar la activación de la cuenta o reactivarla."));
+  var profile=member.getPerson()==null?null:member.getPerson().getCommanderProfile();
+  if(rule.requiereRolAcceso()){
+   if(member.getUserRoles().stream().anyMatch(r->code.equals(r.getRole().getCodigo())))out.add(met("ROL_ACCESO","Rol de acceso "+code,"Tiene el rol de acceso "+code));
+   else out.add(missing("ROL_ACCESO","Rol de acceso "+code,"ROL_AUSENTE","La cuenta no tiene el rol de acceso "+code,"ADMINISTRADOR","Administración → Usuarios: asignar el rol "+code+" a la cuenta."));
+  }
+  if(rule.requiereLicencia()){
+   if(profile!=null&&profile.getLicenseNumber()!=null&&!profile.getLicenseNumber().isBlank())out.add(met("LICENCIA","Licencia aeronáutica registrada","Licencia "+profile.getLicenseNumber()));
+   else out.add(missing("LICENCIA","Licencia aeronáutica registrada","LICENCIA_AUSENTE","No tiene licencia aeronáutica registrada","ADMINISTRADOR","Administración → Usuarios: completar el perfil de comandante con su número de licencia."));
+  }
+  if(rule.requiereClasificacion()){
+   var c=classification(member,code);
+   out.add(c.ok()?met("CLASIFICACION","Clasificación administrativa",c.message()):missing("CLASIFICACION","Clasificación administrativa",c.state(),c.message(),"ADMINISTRADOR","Administración → Usuarios → «Clasificación administrativa de tripulación»: seleccionar al usuario y registrar la función. La clasificación no la puede otorgar la propia persona ni Centro de Operaciones."));
+  }
+  if(rule.requiereHabilitacionVerificada()){
+   boolean policy=credentials.hasActivePolicy(code);
+   if(policy)out.add(met("POLITICA","Política de suficiencia de habilitación definida","Hay una política de suficiencia activa para esta función"));
+   else out.add(missing("POLITICA","Política de suficiencia de habilitación definida","POLITICA_HABILITACION_NO_CONFIGURADA","No hay ninguna política de suficiencia activa para esta función: sin ella nadie es elegible aunque tenga la habilitación verificada","ADMINISTRADOR","La política (qué tipo de habilitación acredita la función) es una decisión de la organización: se carga y activa en Administración → Habilitaciones → Políticas, con su origen y referencia de aprobación. Hasta entonces nadie es elegible para esta función."));
+   var a=credentials.assess(member,code,on,context(flight,aircraft));
+   if(policy||!"POLITICA_HABILITACION_NO_CONFIGURADA".equals(a.code()))
+   out.add(a.eligible()?met("HABILITACION","Habilitación profesional verificada y vigente",a.message()):missing("HABILITACION","Habilitación profesional verificada y vigente",a.code(),a.message(),"ADMINISTRADOR",credentialProcedure(a.code())));
+  }
+  if("COMANDANTE".equals(code)&&commanderAccess!=null){
+   if(commanderAccess.isBlocked(member.getId()))out.add(missing("INFORME_FINAL","Informes finales al día","INFORME_FINAL_VENCIDO","El comandante tiene informes finales vencidos","COMANDANTE","El comandante debe presentar los informes finales vencidos y Centro de Operaciones aprobarlos."));
+   else out.add(met("INFORME_FINAL","Informes finales al día","No tiene informes finales vencidos"));
+  }
+  if(flight!=null&&flight.getId()!=null){
+   Optional<Flight> clash=conflictingFlight(flight,member);
+   if(clash.isPresent())out.add(missing("DISPONIBILIDAD","Disponibilidad en el horario del vuelo","CONFLICTO_ASIGNACION","Tiene el vuelo "+clash.get().getCodigo()+" comprometido en un horario incompatible","OPERACIONES","Elegir otro horario o liberar a la persona del vuelo "+clash.get().getCodigo()+"."));
+   else out.add(met("DISPONIBILIDAD","Disponibilidad en el horario del vuelo","Sin vuelos superpuestos"));
+  }
+  return out;
+ }
+ /** Requisitos vigentes hoy de una persona para una función (consulta administrativa, sin vuelo). */
+ @Transactional(readOnly=true) public UserRequirementsView requirementsFor(Long userId,String code){
+  User u=users.findById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  return requirementsView(u,code,role(code));
+ }
+ private UserRequirementsView requirementsView(User u,String code,CrewRole role){
+  List<RequirementView> list=requirements(null,u,code,null,null);int missing=(int)list.stream().filter(r->!r.cumplido()).count();
+  var profile=u.getPerson()==null?null:u.getPerson().getCommanderProfile();
+  return new UserRequirementsView(u.getId(),u.getUsername(),u.getPerson()==null?null:u.getPerson().getNombre(),u.getPerson()==null?null:u.getPerson().getApellido(),code,role.getNombre(),missing==0,missing,
+   profile==null||profile.getProvinciaActual()==null?null:profile.getProvinciaActual().getNombre(),profile==null?null:profile.getUbicacionActualizadaEn(),list);
+ }
+ /** Comandantes activos con sus requisitos; con {@code onlyPending} sólo los que tienen alguno sin cumplir. Sirve al administrador para ver qué falta antes de que Centro de Operaciones los necesite. */
+ @Transactional(readOnly=true) public List<UserRequirementsView> commanderRequirements(String q,boolean onlyPending,int limit){
+  String text=q==null?"":q.trim().toLowerCase(Locale.ROOT).replace("%","").replace("_","");CrewRole role=role("COMANDANTE");
+  return users.findActiveCommanderAccounts(text,org.springframework.data.domain.PageRequest.of(0,500)).stream().map(u->requirementsView(u,"COMANDANTE",role)).filter(v->!onlyPending||!v.elegible()).limit(Math.max(1,Math.min(limit,200))).toList();
  }
  /** Clasificaciones vigentes de la persona con su elegibilidad de hoy; con {@code history} también las retiradas (quién y cuándo clasificó, quién retiró y por qué). */
  @Transactional(readOnly=true) public List<QualificationView> qualifications(Long userId,boolean history){
