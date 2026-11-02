@@ -684,3 +684,17 @@ body[data-theme="dark"] .resource-empty { background: #4a3a10; color: #ffe9a8; }
 .resource-assignment .resource-option { display: flex; gap: .55rem; align-items: flex-start; }
 .resource-assignment .resource-option input[type="radio"] { width: auto; padding: 0; flex: 0 0 auto; }
 .resource-assignment .resource-option > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Planificación aeroportuaria: selector de aeropuertos candidatos (Operaciones y comandante). */
+.airport-picker .resource-option, .airport-commander-planning .resource-option { display: flex; gap: .55rem; align-items: flex-start; }
+.airport-picker .resource-option input[type="radio"], .airport-commander-planning .resource-option input[type="radio"] { width: auto; padding: 0; flex: 0 0 auto; margin-top: .3rem; }
+.airport-picker .resource-option > span { min-width: 0; overflow-wrap: anywhere; }
+.resource-search-row { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.resource-search-row .resource-search { flex: 1 1 14rem; }
+.airport-pending { background: #fff4cd; color: #5c4300; border-radius: 8px; padding: .5rem .8rem; }
+.airport-pending ul { margin: .3rem 0 0; padding-left: 1.2rem; }
+.airport-commander-planning { display: grid; gap: .8rem; }
+.airport-slot-edit p { margin: 0 0 .4rem; }
+.airport-facts .airport-slot { display: grid; grid-template-columns: minmax(8rem, 40%) 1fr; gap: .5rem; }
+body[data-theme="dark"] .airport-pending { background: #4a3a10; color: #ffe9a8; }
+@media (max-width: 800px) { .airport-facts .airport-slot { grid-template-columns: 1fr; } }

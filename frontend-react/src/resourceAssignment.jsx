@@ -4,22 +4,31 @@ import { api } from "./api";
 /**
  * Asignación de comandante y aeronave de una solicitud sanitaria con horario acordado (vista de Centro de Operaciones). Cada recurso tiene su
  * propia tarjeta, estado y acción; la elección se guarda en el servidor al confirmarla (queda «reservada» hasta que estén los dos) y el vuelo pasa
- * a Planificado cuando ambos están confirmados. El servidor es la autoridad: la elegibilidad geográfica, la autorización de excepciones y la
- * disponibilidad se validan allí; esta pantalla sólo ordena las opciones y explica las causas.
+ * a Planificado cuando ambos están confirmados. El servidor es la autoridad: la elegibilidad geográfica (la jurisdicción del comandante, provincia o CABA, contra la del
+ * aeropuerto de salida; preliminar mientras ese aeropuerto no esté confirmado), la autorización de excepciones y la disponibilidad se validan allí; esta pantalla sólo ordena
+ * las opciones y explica las causas.
  */
 const civil = (value) => (value ? String(value).replace("T", " ").slice(0, 16) : "—");
 export const GEO_LABEL = Object.freeze({
-  MISMA_LOCALIDAD: "En la localidad de salida", UBICACION_DESCONOCIDA: "Sin ubicación registrada", UBICACION_INCOMPLETA: "Sólo provincia registrada",
-  LOCALIDAD_DESHABILITADA: "Localidad deshabilitada", OTRA_LOCALIDAD: "En otra localidad", OTRA_PROVINCIA: "En otra provincia",
+  MISMA_JURISDICCION: "En la jurisdicción del aeropuerto de salida", UBICACION_DESCONOCIDA: "Sin ubicación registrada", OTRA_PROVINCIA: "En otra provincia o jurisdicción",
+  UBICACION_INCOMPLETA: "Sólo provincia registrada (anterior)", LOCALIDAD_DESHABILITADA: "Localidad deshabilitada (anterior)", OTRA_LOCALIDAD: "En otra localidad (anterior)",
 });
-const place = (x) => [x.localidad, x.provincia].filter(Boolean).join(", ") || "Ubicación no registrada";
+const place = (x) => x.provincia || "Ubicación no registrada";
 const MIN_REASON = 15;
 
 function StatusBadge({ kind, children }) {
   return <span className={`resource-status resource-status-${kind}`}>{children}</span>;
 }
 
-function CommanderCard({ flight, resources, msg, onChanged, editable, blockedReason }) {
+function geoStatus(resources, plan) {
+  if (resources.commanderId == null) return null;
+  if (resources.excepcionGeografica) return { kind: "reserved", text: "Excepción geográfica autorizada" };
+  if ((plan?.pendientes || []).some((x) => x.startsWith("El comandante asignado se encuentra en una jurisdicción diferente"))) return { kind: "pending", text: "Fuera de la jurisdicción del aeropuerto de salida" };
+  if (plan?.elegibilidadPreliminar) return { kind: "reserved", text: "Preliminar: se verificará al confirmar el aeropuerto de salida" };
+  return { kind: "assigned", text: "En la jurisdicción del aeropuerto de salida" };
+}
+
+function CommanderCard({ flight, resources, plan, msg, onChanged, editable, blockedReason }) {
   const [open, setOpen] = useState(false), [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(""),
     [selected, setSelected] = useState(""), [reason, setReason] = useState(""), [search, setSearch] = useState(""), [busy, setBusy] = useState(false);
   const lock = useRef(false), requests = useRef(0);
@@ -50,15 +59,16 @@ function CommanderCard({ flight, resources, msg, onChanged, editable, blockedRea
       await load(search, true); // la selección pudo quedar desactualizada (otro usuario, cambio de ubicación o de disponibilidad)
     } finally { lock.current = false; setBusy(false); }
   };
-  const exception = resources.excepcionGeografica;
+  const exception = resources.excepcionGeografica, geo = geoStatus(resources, plan);
   return <section className="resource-card" aria-labelledby="resource-commander-title">
     <header><h5 id="resource-commander-title">Comandante</h5>
       {assigned ? <StatusBadge kind={reserved ? "reserved" : "assigned"}>{reserved ? "Reservado — falta la aeronave" : "Asignado"}</StatusBadge> : <StatusBadge kind="pending">Pendiente</StatusBadge>}</header>
     {assigned ? <dl className="resource-facts">
       <div><dt>Comandante</dt><dd>{resources.commanderNombre} {resources.commanderApellido}</dd></div>
       <div><dt>Licencia</dt><dd>{resources.commanderLicencia || "—"}</dd></div>
-      <div><dt>Ubicación operativa</dt><dd>{[resources.commanderLocalidadActual, resources.commanderProvinciaActual].filter(Boolean).join(", ") || "No registrada"}{resources.commanderUbicacionActualizadaEn && <small> · actualizada {civil(resources.commanderUbicacionActualizadaEn)}</small>}</dd></div>
-      {exception && <div className="resource-exception"><dt>Excepción geográfica</dt><dd><strong>{GEO_LABEL[exception.tipo] || exception.tipo}</strong> — autorizada por {exception.autorizadaPor} el {civil(exception.fecha)}.<br/>Motivo: {exception.motivo}</dd></div>}
+      <div><dt>Provincia / Jurisdicción actual</dt><dd>{resources.commanderProvinciaActual || "No registrada"}{resources.commanderUbicacionActualizadaEn && <small> · actualizada {civil(resources.commanderUbicacionActualizadaEn)}</small>}</dd></div>
+      {geo && <div><dt>Elegibilidad geográfica</dt><dd><StatusBadge kind={geo.kind}>{geo.text}</StatusBadge></dd></div>}
+      {exception && <div className="resource-exception"><dt>Excepción geográfica</dt><dd><strong>{GEO_LABEL[exception.tipo] || exception.tipo}</strong> — autorizada por {exception.autorizadaPor} el {civil(exception.fecha)}{exception.provinciaSalida ? " para la salida desde " + exception.provinciaSalida : ""}.<br/>Motivo: {exception.motivo}</dd></div>}
     </dl> : <p className="hint">Aún no hay un comandante asignado a este vuelo.</p>}
     {!open && (editable
       ? <button type="button" onClick={openChooser}>{assigned ? "Cambiar comandante" : "Seleccionar comandante"}</button>
@@ -66,21 +76,22 @@ function CommanderCard({ flight, resources, msg, onChanged, editable, blockedRea
     {open && <div className="resource-chooser" aria-busy={loading || busy}>
       {loading && !data && <p className="hint" role="status">Consultando comandantes…</p>}
       {data && <>
-        <p className="hint">Localidad de salida: <strong>{data.localidadSalida}, {data.provinciaSalida}</strong>. Sólo se ofrecen de forma ordinaria los comandantes registrados en esa localidad; estar en la misma provincia no alcanza.</p>
+        <p className="hint">Jurisdicción de salida: <strong>{data.salida.provincia}</strong>{data.salida.aeropuerto ? <> (aeropuerto {data.salida.aeropuerto})</> : " (provincia donde se encuentra el paciente; todavía no hay aeropuerto de salida)"}. Sólo se ofrecen de forma ordinaria los comandantes ubicados en esa provincia o CABA; la localidad del paciente no se compara con la del comandante.</p>
+        {data.advertencia && <p className="resource-empty" role="status">{data.advertencia}</p>}
         {data.mensaje && <p className="resource-empty" role="status">{data.mensaje}</p>}
-        {data.ordinarios.length > 0 && <fieldset><legend>Disponibles en {data.localidadSalida}</legend>
+        {data.ordinarios.length > 0 && <fieldset><legend>Disponibles en {data.salida.provincia}{data.salida.preliminar ? " (preliminar)" : ""}</legend>
           {data.ordinarios.map((c) => <label key={c.id} className="resource-option"><input type="radio" name="commander" checked={String(selected) === String(c.id)} onChange={() => setSelected(String(c.id))} disabled={busy}/> <span><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{place(c)}{c.ubicacionActualizadaEn ? ` · actualizada ${civil(c.ubicacionActualizadaEn)}` : ""}{c.id === data.comandanteAsignadoId ? " · asignado actualmente" : ""}</small></span></label>)}
         </fieldset>}
-        {data.noElegiblesEnLocalidad.length > 0 && <fieldset className="resource-unavailable"><legend>En la localidad, pero no disponibles</legend>
-          {data.noElegiblesEnLocalidad.map((c) => <p key={c.id}><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{c.motivoOperativo}</small></p>)}
+        {data.noElegiblesEnJurisdiccion.length > 0 && <fieldset className="resource-unavailable"><legend>En la jurisdicción, pero no disponibles</legend>
+          {data.noElegiblesEnJurisdiccion.map((c) => <p key={c.id}><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{c.motivoOperativo}</small></p>)}
         </fieldset>}
         <details className="resource-exceptions" open={data.ordinarios.length === 0 && data.excepcionales.length > 0}>
-          <summary>Fuera de la localidad de salida — asignación excepcional{data.excepcionales.length > 0 ? ` (${data.excepcionales.length}${data.excepcionalesIncompletos ? "+" : ""})` : ""}</summary>
-          {!canPickException && <p className="hint">Asignar un comandante fuera de la localidad requiere la autorización de Centro de Operaciones.</p>}
+          <summary>Fuera de la jurisdicción de salida — asignación excepcional{data.excepcionales.length > 0 ? ` (${data.excepcionales.length}${data.excepcionalesIncompletos ? "+" : ""})` : ""}</summary>
+          {!canPickException && <p className="hint">Asignar un comandante fuera de la jurisdicción requiere la autorización de Centro de Operaciones.</p>}
           <label className="resource-search">Buscar comandante<input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); load(search); } }} placeholder="Apellido, nombre o usuario"/></label>
           <button type="button" className="secondary-action" onClick={() => load(search)} disabled={loading}>Buscar</button>
           {data.excepcionalesIncompletos && <p className="hint">Se muestran los primeros resultados; use la búsqueda para acotar.</p>}
-          {data.excepcionales.length === 0 && <p className="hint">No hay comandantes aptos fuera de la localidad{search ? " que coincidan con la búsqueda" : ""}.</p>}
+          {data.excepcionales.length === 0 && <p className="hint">No hay comandantes aptos fuera de la jurisdicción{search ? " que coincidan con la búsqueda" : ""}.</p>}
           {data.excepcionales.map((c) => <label key={c.id} className="resource-option"><input type="radio" name="commander" checked={String(selected) === String(c.id)} onChange={() => setSelected(String(c.id))} disabled={busy || !canPickException}/> <span><strong>{c.apellido}, {c.nombre}</strong> · {c.licencia}<small>{GEO_LABEL[c.codigoUbicacion] || c.codigoUbicacion}: {c.motivoUbicacion}</small></span></label>)}
         </details>
         {exceptional && <label className="resource-reason">Justificación de la excepción geográfica (obligatoria, queda registrada y auditada)
@@ -138,8 +149,8 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
     {open && <div className="resource-chooser" aria-busy={loading || busy}>
       {loading && !list && <p className="hint" role="status">Consultando aeronaves…</p>}
       {list && <>
-        <p className="hint">Aeronaves activas de la provincia de origen solicitada; sólo pueden confirmarse las que no tienen un vuelo comprometido en el horario de este vuelo.</p>
-        {available.length === 0 && <p className="resource-empty" role="status">No hay aeronaves disponibles para este vuelo en la provincia de origen.</p>}
+        <p className="hint">Aeronaves activas ubicadas en la jurisdicción del aeropuerto de salida (o, mientras no haya, en la provincia del paciente) y, si ya hay aeropuerto de salida, en ese aeropuerto; sólo pueden confirmarse las que no tienen un vuelo comprometido en el horario de este vuelo.</p>
+        {available.length === 0 && <p className="resource-empty" role="status">No hay aeronaves disponibles para este vuelo en la jurisdicción de salida.</p>}
         {available.length > 0 && <label>Aeronave disponible<select value={selected} onChange={(e) => setSelected(e.target.value)} disabled={busy}><option value="">Seleccionar</option>{available.map((x) => <option key={x.id} value={x.id}>{x.matricula} — {x.modelo || x.tipo} — {x.aeropuertoActual}</option>)}</select></label>}
         {unavailable.length > 0 && <details className="resource-unavailable"><summary>No disponibles ({unavailable.length})</summary>{unavailable.slice(0, 25).map((x) => <p key={x.id}><strong>{x.matricula}</strong> · {x.aeropuertoActual}<small>{x.motivoNoDisponible}</small></p>)}{unavailable.length > 25 && <p className="hint">… y {unavailable.length - 25} más.</p>}</details>}
       </>}
@@ -153,7 +164,7 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
   </section>;
 }
 
-export function ResourceAssignment({ flight, resources, msg, onChanged }) {
+export function ResourceAssignment({ flight, resources, plan = null, msg, onChanged }) {
   const res = resources || {};
   const complete = res.commanderId != null && res.aircraftId != null;
   const agreed = flight.estado === "APROBADO" || flight.estado === "PLANIFICADO";
@@ -163,7 +174,7 @@ export function ResourceAssignment({ flight, resources, msg, onChanged }) {
     <h4>Asignación de recursos</h4>
     <p className="hint">{complete ? "El comandante y la aeronave están asignados. Los cambios se validan nuevamente y quedan auditados." : "El horario está acordado. Confirme el comandante y la aeronave: cada elección queda reservada y el vuelo pasa a Planificado cuando están los dos."}</p>
     <div className="resource-grid">
-      <CommanderCard flight={flight} resources={res} msg={msg} onChanged={onChanged} editable={editable} blockedReason={blockedReason}/>
+      <CommanderCard flight={flight} resources={res} plan={plan} msg={msg} onChanged={onChanged} editable={editable} blockedReason={blockedReason}/>
       <AircraftCard flight={flight} resources={res} msg={msg} onChanged={onChanged} editable={editable && flight.estado === "APROBADO"} blockedReason={flight.estado === "PLANIFICADO" ? "Para cambiar la aeronave de un vuelo planificado use «Cambio de aeronave»." : blockedReason}/>
     </div>
   </div>;

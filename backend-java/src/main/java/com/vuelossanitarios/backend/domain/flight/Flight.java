@@ -8,7 +8,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
-/** Common operational flight. Sanitary data is the optional SanitaryFlight extension. */
+/**
+ * Common operational flight. Sanitary data is the optional SanitaryFlight extension. {@code origen}/{@code destino} son los aeropuertos de la ejecución aeronáutica
+ * (de dónde despega y dónde aterriza la aeronave); la necesidad sanitaria (dónde está el paciente y adónde debe llegar) vive en SanitaryFlight. Cada aeropuerto
+ * está PROPUESTO (Centro de Operaciones; el comandante debe revisarlo) o CONFIRMADO; por defecto, un aeropuerto fijado sin pasar por una propuesta es definitivo.
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_vuelos"))
 @Table(name="vuelos")
 public class Flight extends BaseEntity {
@@ -21,6 +25,10 @@ public class Flight extends BaseEntity {
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_comandante") private User comandante;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_aeropuerto_origen") private Airport origen;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_aeropuerto_destino") private Airport destino;
+ @Column(name="estado_aeropuerto_origen",length=12) private String estadoAeropuertoOrigen;
+ @Column(name="estado_aeropuerto_destino",length=12) private String estadoAeropuertoDestino;
+ @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_usuario_aeropuertos") private User aeropuertosFijadosPor;
+ @Column(name="fecha_aeropuertos") private LocalDateTime aeropuertosFijadosEn;
  @Column(name="fecha_planificada_salida") private LocalDateTime fechaPlanificadaSalida;
  @Column(name="fecha_planificada_llegada") private LocalDateTime fechaPlanificadaLlegada;
  @Column(name="fecha_salida_real") private LocalDateTime fechaSalidaReal;
@@ -39,8 +47,14 @@ public class Flight extends BaseEntity {
  public User getCreadoPor(){return creadoPor;} public void setCreadoPor(User v){creadoPor=v;}
  public Aircraft getAircraft(){return aircraft;} public void setAircraft(Aircraft v){aircraft=v;}
  public User getComandante(){return comandante;} public void setComandante(User v){comandante=v;}
- public Airport getOrigen(){return origen;} public void setOrigen(Airport v){origen=v;}
- public Airport getDestino(){return destino;} public void setDestino(Airport v){destino=v;}
+ public static final String PROPOSED="PROPUESTO",CONFIRMED="CONFIRMADO";
+ public Airport getOrigen(){return origen;} public void setOrigen(Airport v){origen=v;if(v==null)estadoAeropuertoOrigen=null;else if(estadoAeropuertoOrigen==null)estadoAeropuertoOrigen=CONFIRMED;}
+ public Airport getDestino(){return destino;} public void setDestino(Airport v){destino=v;if(v==null)estadoAeropuertoDestino=null;else if(estadoAeropuertoDestino==null)estadoAeropuertoDestino=CONFIRMED;}
+ public String getEstadoAeropuertoOrigen(){return estadoAeropuertoOrigen;} public void setEstadoAeropuertoOrigen(String v){estadoAeropuertoOrigen=v;}
+ public String getEstadoAeropuertoDestino(){return estadoAeropuertoDestino;} public void setEstadoAeropuertoDestino(String v){estadoAeropuertoDestino=v;}
+ public User getAeropuertosFijadosPor(){return aeropuertosFijadosPor;} public void setAeropuertosFijadosPor(User v){aeropuertosFijadosPor=v;}
+ public LocalDateTime getAeropuertosFijadosEn(){return aeropuertosFijadosEn;} public void setAeropuertosFijadosEn(LocalDateTime v){aeropuertosFijadosEn=v;}
+ public boolean origenConfirmado(){return origen!=null&&CONFIRMED.equals(estadoAeropuertoOrigen);} public boolean destinoConfirmado(){return destino!=null&&CONFIRMED.equals(estadoAeropuertoDestino);}
  public LocalDateTime getFechaPlanificadaSalida(){return fechaPlanificadaSalida;} public void setFechaPlanificadaSalida(LocalDateTime v){fechaPlanificadaSalida=v;}
  public LocalDateTime getFechaPlanificadaLlegada(){return fechaPlanificadaLlegada;} public void setFechaPlanificadaLlegada(LocalDateTime v){fechaPlanificadaLlegada=v;}
  public LocalDateTime getFechaSalidaReal(){return fechaSalidaReal;} public void setFechaSalidaReal(LocalDateTime v){fechaSalidaReal=v;}

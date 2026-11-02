@@ -1,5 +1,5 @@
-/* E2E de la asignación de comandante y aeronave de una solicitud sanitaria (V63) sobre el stack aislado (proyecto vuelos-sanitarios-e2e, base vuelos_sanitarios_e2e):
- * ubicación operativa del comandante, elegibilidad por localidad de salida, excepciones geográficas, reserva y asignación definitiva de comandante y aeronave,
+/* E2E de la asignación de comandante y aeronave de una solicitud sanitaria (V63/V64) sobre el stack aislado (proyecto vuelos-sanitarios-e2e, base vuelos_sanitarios_e2e):
+ * ubicación operativa del comandante (sólo provincia o CABA), elegibilidad por jurisdicción del aeropuerto de salida (preliminar con la provincia del paciente), excepciones geográficas, reserva y asignación definitiva de comandante y aeronave,
  * conflictos y concurrencia reales contra SQL Server, atomicidad ante un fallo de persistencia, autorización por HTTP directo y continuidad del flujo.
  * Sólo crea registros marcados; el único objeto temporal (un trigger de prueba que fuerza un fallo de auditoría) lo crea y elimina este script.
  * Uso: node scripts/e2e-asignacion-recursos.cjs */
@@ -24,7 +24,7 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   const info = JSON.parse(spawnSync('docker', ['inspect', BACKEND], { encoding: 'utf8' }).stdout)[0];
   const env = Object.fromEntries(info.Config.Env.filter((x) => x.includes('=')).map((x) => [x.slice(0, x.indexOf('=')), x.slice(x.indexOf('=') + 1)]));
   assert.ok(env.DB_URL.includes(`databaseName=${DB_NAME};`) && env.SPRING_PROFILES_ACTIVE.includes('e2e'));
-  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 63, 'la base E2E debe estar en V63 o posterior');
+  assert.ok(Number(one('SELECT MAX(CAST(version AS int)) FROM flyway_schema_history WHERE version IS NOT NULL')) >= 64, 'la base E2E debe estar en V64 o posterior');
   const dotenv = {}; for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { if (line.includes('=') && !line.trim().startsWith('#')) { const i = line.indexOf('='); dotenv[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^"|"$/g, ''); } }
   await waitHealthy();
   const admin = (await ok('/auth/login', { method: 'POST', body: { username: dotenv.BOOTSTRAP_ADMIN_USERNAME, password: dotenv.BOOTSTRAP_ADMIN_PASSWORD } })).accessToken;
@@ -35,18 +35,14 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   const dts = await createUser(admin, 'DTS', 'adts'), dts2 = await createUser(admin, 'DTS', 'adts2');
   const cmd = {}; for (const n of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) { cmd[n] = await createUser(admin, 'COMANDANTE', 'acm' + n); await provision(admin, cmd[n]); }
   let province, airports, localities;
-  for (const p of await ok('/catalogs/provinces', { token: co.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: co.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: co.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
-  assert.ok(province, 'se necesita una provincia con dos aeropuertos y dos localidades');
-  // La localidad de salida no debe tener comandantes de corridas anteriores: así se comprueba también el caso «sin candidatos ordinarios».
-  const free = localities.filter((l) => count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_localidades_actual=${l.id}`) === 0);
-  assert.ok(free.length >= 1, 'se necesita una localidad sin comandantes ubicados');
-  const departure = free[0], otherLocality = localities.find((l) => l.id !== departure.id);
-  const bsas = (await ok('/catalogs/provinces', { token: co.token })).find((p) => /Buenos Aires/i.test(p.nombre) && p.id !== province.id) || (await ok('/catalogs/provinces', { token: co.token })).find((p) => p.id !== province.id);
-  const bsasLocalities = await ok(`/catalogs/localities?provinceId=${bsas.id}&q=`, { token: co.token });
-  assert.ok(bsasLocalities.length > 0); const farLocality = bsasLocalities[0];
+  // La provincia de salida no debe tener comandantes de corridas anteriores: así se comprueba también el caso «sin candidatos ordinarios».
+  for (const p of await ok('/catalogs/provinces', { token: co.token })) { if (count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_provincias=${p.id}`) > 0) continue; airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: co.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: co.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
+  assert.ok(province, 'se necesita una provincia sin comandantes, con dos aeropuertos y dos localidades');
+  const departure = localities[0], otherLocality = localities[1];
+  const bsas = (await ok('/catalogs/provinces', { token: co.token })).find((p) => /^Buenos Aires$/i.test(p.nombre) && p.id !== province.id) || (await ok('/catalogs/provinces', { token: co.token })).find((p) => p.id !== province.id);
   let plateSeq = 0; const newPlane = async (airport = airports[0]) => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'A' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airport.id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;
-  const locate = (user, prov, loc, token = admin, expect = [200]) => call(`/commanders/${user.id}/location`, { method: 'PUT', token, body: { provinciaId: prov.id, localidadId: loc.id, motivo: 'E2E ' + MARK }, expect });
+  const locate = (user, prov, token = admin, expect = [200]) => call(`/commanders/${user.id}/location`, { method: 'PUT', token, body: { provinciaId: prov ? prov.id : null, motivo: 'E2E ' + MARK }, expect });
   const request = async (slot, token = dts.token) => {
     const patient = await ok('/patients', { method: 'POST', token, body: { nombre: 'Asignacion', apellido: MARK, dni: String(20000000 + Math.floor(Math.random() * 9999999)) } });
     const f = (await call('/flights', { method: 'POST', token, body: { patientId: patient.id, localidadOrigenId: departure.id, localidadDestinoId: otherLocality.id, priorityCode: priority, motivoVuelo: 'Asignación ' + MARK, fechaSolicitada: civil(slot), extremaUrgencia: false, medical: { diagnostico: 'Dx-' + MARK, condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false } } })).data;
@@ -57,17 +53,19 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   const putCommander = (id, c, extra = {}, token = co.token, expect = [200]) => call(`/flights/${id}/commander`, { method: 'PUT', token, body: { comandanteId: c.id, ...extra }, expect });
   const putAircraft = (id, plane, token = co.token, expect = [200]) => call(`/flights/${id}/assigned-aircraft`, { method: 'PUT', token, body: { aircraftId: plane.id }, expect });
   const names = (list) => list.map((x) => x.username);
-  pass('fixtures: CO, OPERACIONES, 2 DTS, 7 comandantes habilitados, provincia con 2 aeropuertos y 2 localidades');
+  pass('fixtures: CO, OPERACIONES, 2 DTS, 7 comandantes habilitados, provincia sin comandantes con 2 aeropuertos y 2 localidades');
 
-  // ---------- Esquema V63 y restricciones reales ----------
-  assert.equal(count(`SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID('dbo.perfiles_comandante') AND name IN ('id_localidades_actual','fecha_ubicacion_actual','id_usuario_ubicacion')`), 3);
+  // ---------- Esquema V64 y restricciones reales ----------
+  assert.equal(count(`SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID('dbo.perfiles_comandante') AND name='id_localidades_actual'`), 0, 'la localidad ya no forma parte de la ubicación operativa del comandante');
+  assert.equal(count(`SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID('dbo.perfiles_comandante') AND name IN ('id_provincias','fecha_ubicacion_actual','id_usuario_ubicacion')`), 3);
   assert.equal(count(`SELECT COUNT(*) FROM sys.tables WHERE name='excepciones_geograficas_comandante'`), 1);
+  assert.equal(count(`SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID('dbo.vuelos') AND name IN ('estado_aeropuerto_origen','estado_aeropuerto_destino','id_usuario_aeropuertos','fecha_aeropuertos')`), 4);
+  assert.ok(count('SELECT COUNT(*) FROM localidades WHERE latitud IS NOT NULL AND longitud IS NOT NULL') > 3000, 'las localidades tienen coordenadas aproximadas (V65)');
   const personOf = (u) => one(`SELECT id_personas FROM usuarios WHERE id_usuarios=${u.id}`);
-  assert.equal(one(`SELECT ISNULL(CAST(id_localidades_actual AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`), 'NULL', 'un comandante nuevo tiene la localidad desconocida, no una ciudad inventada');
+  assert.equal(one(`SELECT ISNULL(CAST(id_provincias AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`), 'NULL', 'un comandante nuevo tiene la ubicación desconocida, no una provincia inventada');
   const rejectedBy = (statement) => { try { sql(statement); } catch (e) { return String(e.sqlOutput || e.message); } return 'SIN ERROR'; };
-  assert.match(rejectedBy(`UPDATE perfiles_comandante SET id_provincias=${province.id}, id_localidades_actual=${farLocality.id}, fecha_ubicacion_actual=SYSDATETIME(), id_usuario_ubicacion=${co.id} WHERE id_personas=${personOf(cmd.A)}`), /fk_perfiles_comandante_localidad_provincia/);
-  assert.match(rejectedBy(`UPDATE perfiles_comandante SET id_provincias=${province.id}, id_localidades_actual=${departure.id} WHERE id_personas=${personOf(cmd.A)}`), /ck_perfiles_comandante_ubicacion/);
-  pass('V63 en SQL Server: columnas y tabla creadas; la FK compuesta impide una localidad de otra provincia y el CHECK exige fecha y responsable');
+  assert.match(rejectedBy(`UPDATE perfiles_comandante SET id_provincias=${province.id}, fecha_ubicacion_actual=SYSDATETIME(), id_usuario_ubicacion=NULL WHERE id_personas=${personOf(cmd.A)}`), /ck_perfiles_comandante_ubicacion_responsable/);
+  pass('V64 en SQL Server: la localidad se retiró del comandante, existen los estados de aeropuerto y las coordenadas de localidades, y el CHECK exige fecha y responsable juntos');
 
   // ---------- Caso 3 / 4: sin ubicación, alta y actualización por Administrador ----------
   const planeA = await newPlane(), planeB = await newPlane(), planeC = await newPlane(), planeD = await newPlane();
@@ -76,74 +74,74 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   assert.ok(!names(list.ordinarios).includes(cmd.A.name), 'sin ubicación no es ordinario');
   assert.ok(names(list.excepcionales).includes(cmd.A.name), 'sí es candidato a excepción, con la causa');
   assert.equal(list.excepcionales.find((x) => x.username === cmd.A.name).codigoUbicacion, 'UBICACION_DESCONOCIDA');
-  assert.match(list.mensaje, /No se encontraron comandantes disponibles en la localidad de salida/);
-  assert.ok(list.fueraDeLocalidad.UBICACION_DESCONOCIDA >= 7, 'el resumen cuenta a los comandantes sin ubicación');
+  assert.match(list.mensaje, /No se encontraron comandantes disponibles en/); assert.equal(list.salida.preliminar, true); assert.equal(list.salida.fuente, 'PROVINCIA_DEL_PACIENTE'); assert.equal(list.salida.provinciaId, province.id); assert.ok(list.advertencia);
+  assert.ok(list.fueraDeJurisdiccion.UBICACION_DESCONOCIDA >= 7, 'el resumen cuenta a los comandantes sin ubicación');
   const noLocation = await putCommander(f1, cmd.A, {}, co.token, [409]);
-  assert.equal(noLocation.data.code, 'COMMANDER_OUTSIDE_DEPARTURE_LOCALITY'); assert.equal(noLocation.data.tipo, 'UBICACION_DESCONOCIDA');
+  assert.equal(noLocation.data.code, 'COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION'); assert.equal(noLocation.data.tipo, 'UBICACION_DESCONOCIDA');
   assert.equal(resourcesOf(f1), '-|-'); assert.equal(stateOf(f1), 'NULL');
-  pass('caso 3: un comandante sin ubicación no es elegible de forma ordinaria (409 COMMANDER_OUTSIDE_DEPARTURE_LOCALITY, nada persiste) y el mensaje explica las causas');
+  pass('caso 3: un comandante sin ubicación no es elegible de forma ordinaria (409 COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION, nada persiste) y el mensaje explica las causas');
 
   const legacy = await call(`/catalogs/commanders/${cmd.E.id}/location`, { method: 'POST', token: admin, body: { locationId: province.id } });
   assert.equal(legacy.data.provinciaActualId, province.id);
   list = await candidates(f1);
-  assert.equal(list.excepcionales.find((x) => x.username === cmd.E.name).codigoUbicacion, 'UBICACION_INCOMPLETA', 'sólo la provincia no alcanza');
-  await putCommander(f1, cmd.E, {}, co.token, [409]);
-  pass('la provincia sola (contrato anterior) deja la localidad desconocida: tampoco es ordinario');
+  assert.ok(names(list.ordinarios).includes(cmd.E.name), 'la provincia sola alcanza: no se pide ninguna localidad');
+  assert.equal(count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_personas=${personOf(cmd.E)} AND id_usuario_ubicacion=${adminId} AND fecha_ubicacion_actual IS NOT NULL`), 1, 'el contrato anterior también registra quién y cuándo');
+  await locate(cmd.E, null, admin);
+  list = await candidates(f1); assert.ok(!names(list.ordinarios).includes(cmd.E.name)); assert.equal(list.excepcionales.find((x) => x.username === cmd.E.name).codigoUbicacion, 'UBICACION_DESCONOCIDA');
+  pass('la provincia sola es toda la ubicación operativa (contrato anterior y nuevo); marcarla como desconocida la quita de los ordinarios y conserva fecha y responsable');
 
-  const located = await locate(cmd.A, province, departure, admin);
-  assert.equal(located.data.estadoUbicacion, 'CONOCIDA'); assert.equal(located.data.localidadId, departure.id);
-  const row = sql(`SELECT CONCAT(id_provincias,'|',id_localidades_actual,'|',id_usuario_ubicacion,'|',CASE WHEN fecha_ubicacion_actual IS NULL THEN 'sin fecha' ELSE 'con fecha' END) FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`);
-  assert.equal(row, `${province.id}|${departure.id}|${adminId}|con fecha`);
+  const located = await locate(cmd.A, province, admin);
+  assert.equal(located.data.estadoUbicacion, 'CONOCIDA'); assert.equal(located.data.provinciaId, province.id); assert.equal(located.data.localidadId, undefined);
+  const row = sql(`SELECT CONCAT(id_provincias,'|',id_usuario_ubicacion,'|',CASE WHEN fecha_ubicacion_actual IS NULL THEN 'sin fecha' ELSE 'con fecha' END) FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`);
+  assert.equal(row, `${province.id}|${adminId}|con fecha`);
   assert.equal(count(`SELECT COUNT(*) FROM eventos_auditoria WHERE tipo_entidad=N'COMMANDER_PROFILE' AND operacion=N'COMMANDER_LOCATION_UPDATE' AND entidad_id=${personOf(cmd.A)}`), 1);
   list = await candidates(f1);
   assert.ok(names(list.ordinarios).includes(cmd.A.name), 'tras fijar la ubicación aparece como ordinario');
   const got = await ok(`/commanders/locations?q=${MARK}`, { token: co.token });
   const view = got.comandantes.find((x) => x.username === cmd.A.name);
-  assert.equal(view.localidad, departure.nombre); assert.equal(view.estadoUbicacion, 'CONOCIDA'); assert.ok(view.actualizadaEn && view.actualizadaPor);
+  assert.equal(view.provincia, province.nombre); assert.equal(view.localidad, undefined); assert.equal(view.estadoUbicacion, 'CONOCIDA'); assert.ok(view.actualizadaEn && view.actualizadaPor);
   assert.equal(got.comandantes.find((x) => x.username === cmd.B.name).estadoUbicacion, 'DESCONOCIDA');
   pass('caso 4: el Administrador fija la ubicación; queda con fecha y responsable, auditada, y la elegibilidad la refleja de inmediato');
 
   // Validaciones del catálogo
-  await locate(cmd.B, province, farLocality, admin, [400]);                                   // la localidad no pertenece a la provincia
-  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id, localidadId: 987654321 }, expect: [400] });
-  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id }, expect: [400] });
-  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id, localidadId: departure.id, extra: 1 }, expect: [400] });
-  await call(`/commanders/${dts.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id, localidadId: departure.id }, expect: [400] });
-  assert.equal(one(`SELECT ISNULL(CAST(id_localidades_actual AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.B)}`), 'NULL');
-  pass('validaciones: localidad de otra provincia, inexistente, sin localidad, campos extra y usuario sin perfil de comandante se rechazan sin modificar nada');
+  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: 987654321 }, expect: [400] });
+  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id, localidadId: departure.id }, expect: [400] });   // la localidad ya no se acepta
+  await call(`/commanders/${cmd.B.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id, extra: 1 }, expect: [400] });
+  await call(`/commanders/${dts.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: province.id }, expect: [400] });
+  assert.equal(one(`SELECT ISNULL(CAST(id_provincias AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.B)}`), 'NULL');
+  pass('validaciones: provincia inexistente, localidad enviada, campos extra y usuario sin perfil de comandante se rechazan sin modificar nada');
 
   // ---------- Caso 2: comandante en otra provincia ----------
-  await locate(cmd.B, bsas, farLocality, co.token);
-  await locate(cmd.F, province, otherLocality, co.token);
+  await locate(cmd.B, bsas, co.token);
+  await locate(cmd.F, province, co.token);
   list = await candidates(f1);
-  assert.ok(!names(list.ordinarios).includes(cmd.B.name) && !names(list.ordinarios).includes(cmd.F.name));
+  assert.ok(!names(list.ordinarios).includes(cmd.B.name) && names(list.ordinarios).includes(cmd.F.name), 'la jurisdicción decide: estar en la misma provincia basta, no se compara la localidad');
   assert.equal(list.excepcionales.find((x) => x.username === cmd.B.name).codigoUbicacion, 'OTRA_PROVINCIA');
-  assert.equal(list.excepcionales.find((x) => x.username === cmd.F.name).codigoUbicacion, 'OTRA_LOCALIDAD', 'la misma provincia pero otra localidad tampoco es ordinaria');
   assert.ok(!names(await ok(`/flights/${f1}/available-commanders`, { token: co.token })).includes(cmd.B.name));
-  await putCommander(f1, cmd.B, {}, co.token, [409]); await putCommander(f1, cmd.F, {}, co.token, [409]);
-  pass('caso 2: un comandante en otra provincia (y uno en otra localidad de la misma provincia) no es candidato ordinario; la asignación directa se rechaza');
+  await putCommander(f1, cmd.B, {}, co.token, [409]);
+  pass('caso 2: un comandante en otra provincia no es candidato ordinario y la asignación directa se rechaza; uno de la misma provincia sí lo es aunque no esté en la localidad del paciente');
 
   // ---------- Caso 5: excepciones ----------
   const exceptionOps = await putCommander(f1, cmd.B, { excepcionGeografica: { motivo: 'No hay otro comandante habilitado en la provincia' } }, ops.token, [403]);
   assert.equal(exceptionOps.data.code, 'GEOGRAPHIC_EXCEPTION_NOT_AUTHORIZED');
   await putCommander(f1, cmd.B, { excepcionGeografica: { motivo: 'corto' } }, co.token, [400]);
   await putCommander(f1, cmd.B, { excepcionGeografica: { motivo: '                    ' } }, co.token, [400]);
-  await putCommander(f1, cmd.A, { excepcionGeografica: { motivo: 'Justificación que no corresponde aquí' } }, co.token, [400]);   // A está en la localidad
+  await putCommander(f1, cmd.A, { excepcionGeografica: { motivo: 'Justificación que no corresponde aquí' } }, co.token, [400]);   // A está en la jurisdicción
   assert.equal(count(`SELECT COUNT(*) FROM excepciones_geograficas_comandante WHERE id_vuelos=${f1}`), 0); assert.equal(resourcesOf(f1), '-|-');
   const reason = 'Traslado crítico: no hay otro comandante habilitado en la provincia ' + MARK;
   const reserved = await putCommander(f1, cmd.B, { excepcionGeografica: { motivo: reason } }, co.token);
   assert.equal(reserved.data.estadoVuelo, null, 'reservado: el vuelo todavía no cambia de estado'); assert.equal(stateOf(f1), 'NULL');
-  const ex = sql(`SELECT CONCAT(tipo_excepcion,'|',motivo,'|',id_usuario_autoriza,'|',id_localidad_salida,'|',id_localidad_comandante,'|',CASE WHEN fecha_reemplazo IS NULL THEN 'vigente' ELSE 'reemplazada' END) FROM excepciones_geograficas_comandante WHERE id_vuelos=${f1}`);
-  assert.equal(ex, `OTRA_PROVINCIA|${reason}|${co.id}|${departure.id}|${farLocality.id}|vigente`);
+  const ex = sql(`SELECT CONCAT(tipo_excepcion,'|',motivo,'|',id_usuario_autoriza,'|',id_provincia_salida,'|',id_provincia_comandante,'|',CASE WHEN fecha_reemplazo IS NULL THEN 'vigente' ELSE 'reemplazada' END) FROM excepciones_geograficas_comandante WHERE id_vuelos=${f1}`);
+  assert.equal(ex, `OTRA_PROVINCIA|${reason}|${co.id}|${province.id}|${bsas.id}|vigente`);
   assert.equal(audit(f1, 'COMMANDER_GEOGRAPHIC_EXCEPTION', 'CREATE'), 1); assert.equal(audit(f1, 'FLIGHT', 'ASSIGN_FLIGHT_COMMANDER'), 1);
   let detail = await ok(`/flights/${f1}`, { token: co.token });
   assert.equal(detail.recursos.commanderId, cmd.B.id); assert.equal(detail.recursos.excepcionGeografica.tipo, 'OTRA_PROVINCIA'); assert.equal(detail.recursos.excepcionGeografica.motivo, reason);
-  assert.equal(detail.recursos.commanderLocalidadActual, farLocality.nombre);
+  assert.equal(detail.recursos.commanderProvinciaActual, bsas.nombre); assert.equal(detail.recursos.excepcionGeografica.provinciaSalida, province.nombre);
   pass('caso 5: la excepción exige rol de Centro de Operaciones y justificación, queda registrada con quién/cuándo/por qué y auditada; sin autorización o sin motivo se rechaza sin persistir');
 
   // La excepción no omite las demás validaciones: C sin clasificación de comandante no es apta aunque se justifique.
   const unqualified = await createUser(admin, 'COMANDANTE', 'acmX');
-  await locate(unqualified, bsas, farLocality, co.token);
+  await locate(unqualified, bsas, co.token);
   const notApt = await putCommander(f1, unqualified, { excepcionGeografica: { motivo: 'Intento de omitir las validaciones de habilitación' } }, co.token, [409]);
   assert.match(String(notApt.data.code), /CLASIFICACION|HABILITACION|POLITICA/);
   assert.equal(count(`SELECT COUNT(*) FROM excepciones_geograficas_comandante WHERE id_usuario_comandante=${unqualified.id}`), 0);
@@ -199,11 +197,11 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   // ---------- Caso 6 / 9: comandante y aeronave ocupados ----------
   const slot = nextSlot();
   const g1 = await approved(slot), g2 = await approved(slot);
-  await locate(cmd.D, province, departure, admin); await locate(cmd.G, province, departure, admin);
+  await locate(cmd.D, province, admin); await locate(cmd.G, province, admin);
   await putCommander(g1, cmd.D); await putAircraft(g1, planeB);                 // g1 PLANIFICADO con D y planeB
   list = await candidates(g2);
-  const busy = list.noElegiblesEnLocalidad.find((x) => x.username === cmd.D.name);
-  assert.ok(busy && busy.codigoOperativo === 'CONFLICTO_ASIGNACION' && !names(list.ordinarios).includes(cmd.D.name), 'caso 6: con conflicto operativo no es elegible aunque esté en la localidad');
+  const busy = list.noElegiblesEnJurisdiccion.find((x) => x.username === cmd.D.name);
+  assert.ok(busy && busy.codigoOperativo === 'CONFLICTO_ASIGNACION' && !names(list.ordinarios).includes(cmd.D.name), 'caso 6: con conflicto operativo no es elegible aunque esté en la jurisdicción');
   const conflict = await putCommander(g2, cmd.D, {}, co.token, [409]); assert.equal(conflict.data.code, 'CONFLICTO_ASIGNACION'); assert.equal(resourcesOf(g2), '-|-');
   const planes2 = await ok(`/flights/${g2}/aircraft-candidates`, { token: co.token });
   const busyPlane = planes2.find((x) => x.id === planeB.id); assert.equal(busyPlane.disponible, false); assert.ok(busyPlane.motivoNoDisponible);
@@ -229,7 +227,7 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
     assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_aeronaves=${racePlanes[index].id} AND id_vuelos IN (${x},${y})`), 1);
     assert.equal(resourcesOf(loser), '-|-'); assert.match(results[1 - winner].data.error, /comprometido/);
   }
-  await locate(cmd.G, province, departure, admin);
+  await locate(cmd.G, province, admin);
   const [cx, cy] = pairs[2];
   const cr = await Promise.all([cx, cy].map(async (id, i) => { await sleep(i * 20); return putCommander(id, cmd.G, {}, co.token, [200, 409]); }));
   assert.equal(cr.filter((r) => r.status === 200).length, 1, 'el mismo comandante no puede reservarse para dos solicitudes simultáneas');
@@ -238,7 +236,7 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
 
   // ---------- Caso 11: fallo de persistencia ----------
   const h = await approved(nextSlot()); const planeE = await newPlane(); await putCommander(h, cmd.C, {}, co.token, [409]);
-  await locate(cmd.C, province, departure, admin); await putCommander(h, cmd.C);
+  await locate(cmd.C, province, admin); await putCommander(h, cmd.C);
   const trig = 'tr_e2e_asig_' + MARK;
   sql(`EXEC(N'CREATE TRIGGER dbo.${trig} ON dbo.eventos_auditoria AFTER INSERT AS BEGIN IF EXISTS (SELECT 1 FROM inserted WHERE id_vuelos=${h} AND operacion=N''ASSIGN_RESOURCES'') THROW 51000, N''Fallo de prueba'', 1; END');`);
   try {
@@ -259,14 +257,14 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
     await call(`/flights/${v}/resources`, { method: 'POST', token, body: { aircraftId: planeA.id, comandanteId: cmd.A.id }, expect: [403] });
   }
   for (const [who, token] of [['DTS', dts.token], ['COMANDANTE', cmd.A.token]]) {
-    await call(`/commanders/${cmd.A.id}/location`, { method: 'PUT', token, body: { provinciaId: province.id, localidadId: otherLocality.id }, expect: [403] });
+    await call(`/commanders/${cmd.A.id}/location`, { method: 'PUT', token, body: { provinciaId: province.id }, expect: [403] });
     await call(`/catalogs/commanders/${cmd.A.id}/location`, { method: 'POST', token, body: { locationId: province.id }, expect: [403] });
     await call('/commanders/locations', { token, expect: [403] });
   }
   await call(`/commanders/${cmd.A.id}/location`, { token: cmd.A.token, expect: [200] }); await call(`/commanders/${cmd.D.id}/location`, { token: cmd.A.token, expect: [403] });
   await call(`/flights/${v}/commander`, { method: 'PUT', token: dts2.token, body: { comandanteId: cmd.A.id, excepcionGeografica: { motivo: 'Intento de un DTS de autorizar una excepción' } }, expect: [403] });
   await call(`/flights/${v}/commander`, { method: 'PUT', token: ops.token, body: { comandanteId: cmd.B.id, excepcionGeografica: { motivo: 'OPERACIONES no autoriza excepciones geográficas' } }, expect: [403] });
-  assert.equal(resourcesOf(v), '-|-'); assert.equal(one(`SELECT ISNULL(CAST(id_localidades_actual AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`), String(departure.id));
+  assert.equal(resourcesOf(v), '-|-'); assert.equal(one(`SELECT ISNULL(CAST(id_provincias AS varchar(20)),'NULL') FROM perfiles_comandante WHERE id_personas=${personOf(cmd.A)}`), String(province.id));
   await call(`/flights/${v}/commander`, { method: 'PUT', body: { comandanteId: cmd.A.id }, expect: [401, 403] });
   pass('caso 14: DTS, comandante y administrador no pueden asignar, consultar candidatos, cambiar ubicaciones ni autorizar excepciones por HTTP directo; OPERACIONES no autoriza excepciones; sin token se rechaza');
 

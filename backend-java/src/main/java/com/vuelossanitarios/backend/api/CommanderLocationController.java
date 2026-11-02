@@ -25,12 +25,12 @@ import org.springframework.web.bind.annotation.*;
  }
 
  @PutMapping("/api/commanders/{id}/location") @PreAuthorize("hasAnyRole('ADMINISTRADOR','OPERACIONES','CENTRO_OPERACIONES')")
- public CommanderLocationRow update(@PathVariable Long id,@Valid @RequestBody UpdateCommanderLocation r,@AuthenticationPrincipal CurrentUser current){return service.update(id,r.provinciaId(),r.localidadId(),r.motivo(),current.id());}
+ public CommanderLocationRow update(@PathVariable Long id,@Valid @RequestBody UpdateCommanderLocation r,@AuthenticationPrincipal CurrentUser current){return service.update(id,r.provinciaId(),r.motivo(),current.id());}
 
- /** Contrato anterior (sólo provincia): deja la localidad desconocida, por lo que el comandante no queda elegible de forma ordinaria hasta indicar su localidad. */
+ /** Contrato anterior (sólo provincia): equivale a {@code PUT /api/commanders/{id}/location}. */
  @PostMapping("/api/catalogs/commanders/{id}/location") @PreAuthorize("hasAnyRole('ADMINISTRADOR','OPERACIONES','CENTRO_OPERACIONES')")
  public ProvinceLocationView updateProvince(@PathVariable Long id,@Valid @RequestBody LocationRequest r,@AuthenticationPrincipal CurrentUser current){
-  CommanderLocationRow row=service.updateProvinceOnly(id,r.locationId(),current.id());return new ProvinceLocationView(row.comandanteId(),row.provinciaId(),row.provincia());
+  CommanderLocationRow row=service.update(id,r.locationId(),null,current.id());return new ProvinceLocationView(row.comandanteId(),row.provinciaId(),row.provincia());
  }
  public record LocationRequest(@NotNull Long locationId){} public record ProvinceLocationView(Long comandanteId,Long provinciaActualId,String provinciaActual){}
 }

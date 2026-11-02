@@ -70,12 +70,11 @@ import org.springframework.transaction.annotation.Transactional;
    originAll=grouped("select s.localidadOrigenSolicitada.id,count(s) from SanitaryFlight s where s.localidadOrigenSolicitada.id in :ids group by s.localidadOrigenSolicitada.id",ids),
    destinationAll=grouped("select s.localidadDestinoSolicitada.id,count(s) from SanitaryFlight s where s.localidadDestinoSolicitada.id in :ids group by s.localidadDestinoSolicitada.id",ids),
    originOpen=grouped("select s.localidadOrigenSolicitada.id,count(s) from SanitaryFlight s join s.flight f left join f.estadoVuelo e where s.localidadOrigenSolicitada.id in :ids and s.estadoSolicitud.codigo in :open and (e is null or e.codigo not in :terminal) group by s.localidadOrigenSolicitada.id",ids),
-   destinationOpen=grouped("select s.localidadDestinoSolicitada.id,count(s) from SanitaryFlight s join s.flight f left join f.estadoVuelo e where s.localidadDestinoSolicitada.id in :ids and s.estadoSolicitud.codigo in :open and (e is null or e.codigo not in :terminal) group by s.localidadDestinoSolicitada.id",ids),
-   commanders=grouped("select p.localidadActual.id,count(p) from CommanderProfile p where p.localidadActual.id in :ids group by p.localidadActual.id",ids);
+   destinationOpen=grouped("select s.localidadDestinoSolicitada.id,count(s) from SanitaryFlight s join s.flight f left join f.estadoVuelo e where s.localidadDestinoSolicitada.id in :ids and s.estadoSolicitud.codigo in :open and (e is null or e.codigo not in :terminal) group by s.localidadDestinoSolicitada.id",ids);
   for(Long id:ids){
    Map<String,Long> current=new LinkedHashMap<>(),history=new LinkedHashMap<>();
    put(current,"AEROPUERTOS_ACTIVOS",get(airportsActive,id));put(current,"SOLICITUDES_VIGENTES",get(originOpen,id)+get(destinationOpen,id));
-   put(history,"AEROPUERTOS_INACTIVOS",get(airportsInactive,id));put(history,"SOLICITUDES_CERRADAS",get(originAll,id)+get(destinationAll,id)-get(originOpen,id)-get(destinationOpen,id));put(history,"COMANDANTES_UBICADOS",get(commanders,id));
+   put(history,"AEROPUERTOS_INACTIVOS",get(airportsInactive,id));put(history,"SOLICITUDES_CERRADAS",get(originAll,id)+get(destinationAll,id)-get(originOpen,id)-get(destinationOpen,id));
    out.put(id,view(current,history));
   }
   return out;

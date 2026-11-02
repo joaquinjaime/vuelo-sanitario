@@ -3,12 +3,13 @@ import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Ubicación operativa actual del comandante (V63): localidad y provincia, con quién y cuándo la registró. No es el domicilio habitual. */
+/** Ubicación operativa actual del comandante (V64): sólo la provincia o la Ciudad Autónoma de Buenos Aires, con quién y cuándo la registró. No es el domicilio habitual ni una localidad. */
 public final class CommanderLocationDtos {
  private CommanderLocationDtos(){}
- /** estadoUbicacion: CONOCIDA (localidad vigente), LOCALIDAD_DESHABILITADA (la localidad registrada fue dada de baja), SOLO_PROVINCIA (falta la localidad) o DESCONOCIDA. */
+ /** estadoUbicacion: CONOCIDA (hay una jurisdicción registrada) o DESCONOCIDA. */
  public record CommanderLocationRow(Long comandanteId,String username,String nombre,String apellido,String licencia,boolean activo,String estadoCuenta,
-   Long provinciaId,String provincia,Long localidadId,String localidad,String estadoUbicacion,LocalDateTime actualizadaEn,String actualizadaPor){}
+   Long provinciaId,String provincia,String estadoUbicacion,LocalDateTime actualizadaEn,String actualizadaPor){}
  public record CommanderLocationList(List<CommanderLocationRow> comandantes,boolean truncado){}
- @StrictJson public record UpdateCommanderLocation(@NotNull Long provinciaId,@NotNull Long localidadId,@Size(max=300) String motivo){}
+ /** provinciaId null = ubicación desconocida. */
+ @StrictJson public record UpdateCommanderLocation(Long provinciaId,@Size(max=300) String motivo){}
 }

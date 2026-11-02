@@ -153,9 +153,9 @@ async function verifyEmail(user, emailId, address) {
   return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
 }
 
-/** V63: la asignación de un vuelo sanitario exige la ubicación operativa del comandante en la localidad de salida de la solicitud. Ubica al comandante en `locality` (de `province`). */
-async function placeCommander(user, province, locality, token) {
-  return call(`/commanders/${user.id}/location`, { method: 'PUT', token, body: { provinciaId: province.id, localidadId: locality.id, motivo: 'Ubicación de la prueba E2E' } });
+/** V64: la asignación de un vuelo sanitario exige que la ubicación operativa del comandante (sólo provincia o CABA) sea la del aeropuerto de salida. Ubica al comandante en `province`; el tercer argumento (la antigua localidad) se ignora y se conserva para no cambiar los llamadores. */
+async function placeCommander(user, province, _locality, token) {
+  return call(`/commanders/${user.id}/location`, { method: 'PUT', token, body: { provinciaId: province.id, motivo: 'Ubicación de la prueba E2E' } });
 }
 
 async function waitHealthy() {

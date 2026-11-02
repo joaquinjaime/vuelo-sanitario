@@ -7,8 +7,8 @@ vi.mock("./api", () => ({ api: vi.fn(), uploadFile: vi.fn(), downloadFile: vi.fn
 
 const flight = (extra = {}) => ({ id: 7, estado: "APROBADO", salida: "2026-11-10T10:00:00", ...extra });
 const noResources = { aircraftId: null, commanderId: null };
-const candidate = (id, extra = {}) => ({ id, username: `cmd${id}`, nombre: `Nombre${id}`, apellido: `Apellido${id}`, licencia: `LIC-${id}`, localidadId: 10, localidad: "Yerba Buena", provinciaId: 1, provincia: "Tucumán", ubicacionActualizadaEn: "2026-11-02T09:00:00", elegibilidad: "ORDINARIA", codigoUbicacion: "MISMA_LOCALIDAD", motivoUbicacion: "Se encuentra en la localidad de salida", codigoOperativo: null, motivoOperativo: null, ...extra });
-const candidates = (extra = {}) => ({ localidadSalidaId: 10, localidadSalida: "Yerba Buena", provinciaSalida: "Tucumán", comandanteAsignadoId: null, ordinarios: [], noElegiblesEnLocalidad: [], excepcionales: [], excepcionalesIncompletos: false, fueraDeLocalidad: {}, puedeAutorizarExcepcion: true, mensaje: null, ...extra });
+const candidate = (id, extra = {}) => ({ id, username: `cmd${id}`, nombre: `Nombre${id}`, apellido: `Apellido${id}`, licencia: `LIC-${id}`, provinciaId: 1, provincia: "Tucumán", ubicacionActualizadaEn: "2026-11-02T09:00:00", elegibilidad: "ORDINARIA", codigoUbicacion: "MISMA_JURISDICCION", motivoUbicacion: "Se encuentra en la jurisdicción del aeropuerto de salida (Tucumán)", codigoOperativo: null, motivoOperativo: null, ...extra });
+const candidates = (extra = {}) => ({ salida: { provinciaId: 1, provincia: "Tucumán", aeropuertoId: 5, aeropuerto: "Matienzo", fuente: "AEROPUERTO_CONFIRMADO", preliminar: false }, comandanteAsignadoId: null, ordinarios: [], noElegiblesEnJurisdiccion: [], excepcionales: [], excepcionalesIncompletos: false, fueraDeJurisdiccion: {}, puedeAutorizarExcepcion: true, mensaje: null, advertencia: null, ...extra });
 const plane = (id, extra = {}) => ({ id, matricula: `LV-${id}`, modelo: "King Air", tipo: "Avion", aeropuertoActualId: 5, aeropuertoActual: "Tucumán", disponible: true, motivoNoDisponible: null, conflictos: [], ...extra });
 beforeEach(() => { vi.mocked(api).mockReset(); });
 afterEach(cleanup);
@@ -21,14 +21,25 @@ test("muestra comandante y aeronave como pendientes, con una acción visible en 
   expect(screen.getByRole("button", { name: "Seleccionar aeronave" })).toBeEnabled();
 });
 
-test("sin comandantes en la localidad explica por qué en lugar de mostrar una lista vacía", async () => {
-  vi.mocked(api).mockResolvedValue(candidates({ mensaje: "No se encontraron comandantes disponibles en la localidad de salida (Yerba Buena, Tucumán). Comandantes activos fuera de la localidad: 1 sin ubicación registrada." }));
+test("sin comandantes en la jurisdicción explica por qué en lugar de mostrar una lista vacía", async () => {
+  vi.mocked(api).mockResolvedValue(candidates({ mensaje: "No se encontraron comandantes disponibles en Tucumán, jurisdicción del aeropuerto de salida. Comandantes activos fuera de la jurisdicción: 1 sin ubicación registrada." }));
   setup();
   fireEvent.click(screen.getByRole("button", { name: "Seleccionar comandante" }));
-  expect(await screen.findByText(/No se encontraron comandantes disponibles en la localidad de salida/)).toBeInTheDocument();
+  expect(await screen.findByText(/No se encontraron comandantes disponibles en Tucumán/)).toBeInTheDocument();
   expect(screen.getByText(/1 sin ubicación registrada/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Confirmar comandante" })).toBeDisabled();
   expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/7/commander-candidates?q=");
+});
+
+test("avisa que los candidatos son preliminares mientras el aeropuerto de salida no esté confirmado y usa la provincia del paciente", async () => {
+  vi.mocked(api).mockResolvedValue(candidates({ salida: { provinciaId: 1, provincia: "Tucumán", aeropuertoId: null, aeropuerto: null, fuente: "PROVINCIA_DEL_PACIENTE", preliminar: true }, ordinarios: [candidate(3)],
+    advertencia: "Todavía no hay aeropuerto de salida: los candidatos son preliminares y se calcularon con la provincia donde se encuentra el paciente (Tucumán)." }));
+  setup();
+  fireEvent.click(screen.getByRole("button", { name: "Seleccionar comandante" }));
+  expect(await screen.findByText(/los candidatos son preliminares/)).toBeInTheDocument();
+  expect(screen.getByText(/todavía no hay aeropuerto de salida/)).toBeInTheDocument();
+  expect(screen.getByText("Disponibles en Tucumán (preliminar)")).toBeInTheDocument();
+  expect(screen.queryByText(/Localidad de salida/)).toBeNull();
 });
 
 test("confirma un comandante ordinario: envía la elección, informa recién tras la respuesta y evita el doble envío", async () => {
@@ -51,7 +62,7 @@ test("confirma un comandante ordinario: envía la elección, informa recién tra
 });
 
 test("un comandante fuera de la localidad exige la justificación y la envía como excepción", async () => {
-  vi.mocked(api).mockImplementation((path, options) => options?.method === "PUT" ? Promise.resolve({}) : Promise.resolve(candidates({ mensaje: "No se encontraron comandantes disponibles en la localidad de salida (Yerba Buena, Tucumán).", excepcionales: [candidate(4, { elegibilidad: "EXCEPCION", codigoUbicacion: "OTRA_PROVINCIA", motivoUbicacion: "Se encuentra en Ciudad de Buenos Aires", localidad: "Ciudad de Buenos Aires", provincia: "Buenos Aires" })] })));
+  vi.mocked(api).mockImplementation((path, options) => options?.method === "PUT" ? Promise.resolve({}) : Promise.resolve(candidates({ mensaje: "No se encontraron comandantes disponibles en Tucumán, jurisdicción del aeropuerto de salida.", excepcionales: [candidate(4, { elegibilidad: "EXCEPCION", codigoUbicacion: "OTRA_PROVINCIA", motivoUbicacion: "Se encuentra en Buenos Aires y el vuelo sale de Tucumán", provincia: "Buenos Aires" })] })));
   const { onChanged } = setup();
   fireEvent.click(screen.getByRole("button", { name: "Seleccionar comandante" }));
   fireEvent.click(await screen.findByRole("radio", { name: /Apellido4, Nombre4/ }));
@@ -67,8 +78,8 @@ test("un comandante fuera de la localidad exige la justificación y la envía co
   expect(JSON.parse(put[1].body)).toEqual({ comandanteId: 4, excepcionGeografica: { motivo: "No hay otro comandante habilitado en Tucumán" } });
 });
 
-test("sin autorización para excepciones las opciones fuera de la localidad no pueden elegirse", async () => {
-  vi.mocked(api).mockResolvedValue(candidates({ puedeAutorizarExcepcion: false, excepcionales: [candidate(4, { elegibilidad: "EXCEPCION", codigoUbicacion: "UBICACION_DESCONOCIDA", motivoUbicacion: "No tiene una ubicación operativa registrada", localidad: null, provincia: null })] }));
+test("sin autorización para excepciones las opciones fuera de la jurisdicción no pueden elegirse", async () => {
+  vi.mocked(api).mockResolvedValue(candidates({ puedeAutorizarExcepcion: false, excepcionales: [candidate(4, { elegibilidad: "EXCEPCION", codigoUbicacion: "UBICACION_DESCONOCIDA", motivoUbicacion: "No tiene una ubicación operativa registrada", provincia: null })] }));
   setup();
   fireEvent.click(screen.getByRole("button", { name: "Seleccionar comandante" }));
   const radio = await screen.findByRole("radio", { name: /Apellido4, Nombre4/ });
@@ -123,25 +134,25 @@ test("un conflicto de aeronave se informa y actualiza la lista sin marcar nada c
   fireEvent.click(screen.getByRole("button", { name: "Confirmar aeronave" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("tiene un vuelo comprometido en ese horario (V-9)");
   expect(onChanged).not.toHaveBeenCalled(); expect(msg).not.toHaveBeenCalledWith(expect.stringMatching(/asignada|reservada/i));
-  expect(await screen.findByText("No hay aeronaves disponibles para este vuelo en la provincia de origen.")).toBeInTheDocument();
+  expect(await screen.findByText("No hay aeronaves disponibles para este vuelo en la jurisdicción de salida.")).toBeInTheDocument();
 });
 
-test("muestra los recursos asignados con la ubicación del comandante y la excepción geográfica registrada", () => {
+test("muestra los recursos asignados con la jurisdicción del comandante, su elegibilidad geográfica y la excepción registrada", () => {
   setup({
     flight: flight({ estado: "PLANIFICADO" }),
-    resources: { aircraftId: 1, aircraftMatricula: "LV-AAA", aircraftModelo: "King Air", aircraftTipo: "Avion", aircraftUbicacion: "Tucumán", aircraftCapacidadTripulacion: 4, commanderId: 3, commanderNombre: "Ana", commanderApellido: "Paz", commanderLicencia: "LIC-9", commanderProvinciaActual: "Buenos Aires", commanderLocalidadActual: "Ciudad de Buenos Aires", commanderUbicacionActualizadaEn: "2026-11-02T09:00:00", excepcionGeografica: { id: 1, tipo: "OTRA_PROVINCIA", motivo: "No hay otro comandante habilitado", autorizadaPor: "Luis Gómez", fecha: "2026-11-02T10:00:00", localidadComandante: "Ciudad de Buenos Aires", localidadSalida: "Yerba Buena" } },
+    resources: { aircraftId: 1, aircraftMatricula: "LV-AAA", aircraftModelo: "King Air", aircraftTipo: "Avion", aircraftUbicacion: "Tucumán", aircraftCapacidadTripulacion: 4, commanderId: 3, commanderNombre: "Ana", commanderApellido: "Paz", commanderLicencia: "LIC-9", commanderProvinciaActual: "Buenos Aires", commanderUbicacionActualizadaEn: "2026-11-02T09:00:00", excepcionGeografica: { id: 1, tipo: "OTRA_PROVINCIA", motivo: "No hay otro comandante habilitado", autorizadaPor: "Luis Gómez", fecha: "2026-11-02T10:00:00", localidadComandante: "Ciudad de Buenos Aires", localidadSalida: "Yerba Buena" } },
   });
   expect(screen.getAllByText("Asignado").length + screen.getAllByText("Asignada").length).toBe(2);
   expect(screen.getByText("Ana Paz")).toBeInTheDocument();
-  expect(screen.getByText(/Ciudad de Buenos Aires, Buenos Aires/)).toBeInTheDocument();
-  expect(screen.getByText(/En otra provincia/)).toBeInTheDocument(); expect(screen.getByText(/No hay otro comandante habilitado/)).toBeInTheDocument();
+  expect(screen.getByText("Provincia / Jurisdicción actual")).toBeInTheDocument();
+  expect(screen.getByText(/En otra provincia o jurisdicción/)).toBeInTheDocument(); expect(screen.getByText("Excepción geográfica autorizada")).toBeInTheDocument(); expect(screen.getByText(/No hay otro comandante habilitado/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Cambiar comandante" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Cambiar aeronave" })).toBeNull();
   expect(screen.getByText(/use «Cambio de aeronave»/)).toBeInTheDocument();
 });
 
 test("con una asignación parcial indica qué falta", () => {
-  setup({ resources: { aircraftId: null, commanderId: 3, commanderNombre: "Ana", commanderApellido: "Paz", commanderLicencia: "L", commanderProvinciaActual: "Tucumán", commanderLocalidadActual: "Yerba Buena" } });
+  setup({ resources: { aircraftId: null, commanderId: 3, commanderNombre: "Ana", commanderApellido: "Paz", commanderLicencia: "L", commanderProvinciaActual: "Tucumán" } });
   expect(screen.getByText("Reservado — falta la aeronave")).toBeInTheDocument();
   expect(screen.getByText("Pendiente")).toBeInTheDocument();
 });

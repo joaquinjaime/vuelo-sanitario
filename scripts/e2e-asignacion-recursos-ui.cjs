@@ -26,13 +26,12 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
   const cmdLocal = await createUser(admin, 'COMANDANTE', 'aicml'), cmdFar = await createUser(admin, 'COMANDANTE', 'aicmf');
   for (const c of [cmdLocal, cmdFar]) await provision(admin, c);
   let province, airports, localities;
-  for (const p of await ok('/catalogs/provinces', { token: co.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: co.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: co.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
-  assert.ok(province);
-  const free = localities.filter((l) => count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_localidades_actual=${l.id}`) === 0);
-  assert.ok(free.length >= 1, 'se necesita una localidad sin comandantes de otras corridas');
-  const departure = free[0], destination = localities.find((l) => l.id !== departure.id);
-  const farProvince = (await ok('/catalogs/provinces', { token: co.token })).find((p) => p.id !== province.id); const farLocality = (await ok(`/catalogs/localities?provinceId=${farProvince.id}&q=`, { token: co.token }))[0];
-  await ok(`/commanders/${cmdFar.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: farProvince.id, localidadId: farLocality.id, motivo: 'E2E UI' } });
+  // La provincia del paciente no debe tener comandantes de otras corridas: así el comandante local es el único ordinario.
+  for (const p of await ok('/catalogs/provinces', { token: co.token })) { if (count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_provincias=${p.id}`) > 0) continue; airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: co.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: co.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
+  assert.ok(province, 'se necesita una provincia sin comandantes de otras corridas, con dos aeropuertos y dos localidades');
+  const departure = localities[0], destination = localities[1];
+  const farProvince = (await ok('/catalogs/provinces', { token: co.token })).find((p) => p.id !== province.id);
+  await ok(`/commanders/${cmdFar.id}/location`, { method: 'PUT', token: admin, body: { provinciaId: farProvince.id, motivo: 'E2E UI' } });
   const plane = await ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'U1').toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;
   const approved = async () => {
@@ -59,20 +58,21 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     await row.waitFor(); assert.match(await row.innerText(), /Sin ubicación/);
     await row.getByRole('button', { name: /Registrar ubicación/ }).click();
     const form = adminPage.getByRole('form', { name: /Ubicación de/ });
-    await form.getByLabel('Provincia').selectOption(String(province.id));
-    await form.getByLabel('Buscar localidad').fill(departure.nombre.slice(0, 6));
-    await form.locator('label').filter({ hasText: /^Localidad/ }).locator('select').selectOption(String(departure.id), { timeout: 30000 });
+    assert.equal(await form.getByLabel(/localidad/i).count(), 0, 'la interfaz no solicita una localidad');
+    const options = await form.getByLabel('Provincia / Jurisdicción').locator('option').allInnerTexts();
+    assert.ok(options.includes('Ciudad Autónoma de Buenos Aires') && options.includes('Buenos Aires') && options.length >= 25, 'las 23 provincias y CABA (diferenciada de Buenos Aires) están disponibles');
+    await form.getByLabel('Provincia / Jurisdicción').selectOption(String(province.id));
     await form.getByLabel('Motivo del cambio (opcional)').fill('Alta de ubicación E2E UI');
     await snap(adminPage, 'ai01-admin-ubicacion');
-    await form.getByRole('button', { name: 'Guardar ubicación' }).click();
+    await form.getByRole('button', { name: 'Actualizar ubicación' }).click();
     await adminPage.getByText(/Ubicación de .* actualizada/).first().waitFor();
     const person = one(`SELECT id_personas FROM usuarios WHERE id_usuarios=${cmdLocal.id}`);
-    assert.equal(count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_personas=${person} AND id_localidades_actual=${departure.id} AND id_provincias=${province.id} AND fecha_ubicacion_actual IS NOT NULL AND id_usuario_ubicacion IS NOT NULL`), 1);
+    assert.equal(count(`SELECT COUNT(*) FROM perfiles_comandante WHERE id_personas=${person} AND id_provincias=${province.id} AND fecha_ubicacion_actual IS NOT NULL AND id_usuario_ubicacion IS NOT NULL`), 1);
     assert.equal(count(`SELECT COUNT(*) FROM eventos_auditoria WHERE tipo_entidad=N'COMMANDER_PROFILE' AND operacion=N'COMMANDER_LOCATION_UPDATE' AND entidad_id=${person}`), 1);
     await adminPage.reload(); await adminPage.getByRole('button', { name: 'Ubicación de comandantes' }).click(); await adminPage.getByLabel('Buscar', { exact: true }).fill(cmdLocal.name);
     const reloaded = adminPage.getByRole('row', { name: new RegExp(cmdLocal.name, 'i') }); await reloaded.waitFor();
-    assert.match(await reloaded.innerText(), new RegExp(departure.nombre.replace(/[()]/g, '.'))); assert.match(await reloaded.innerText(), /Registrada/);
-    pass('Administrador registra la ubicación de un comandante (provincia → localidad del catálogo); queda en SQL con responsable y fecha, auditada, y se ve igual tras recargar la aplicación');
+    assert.match(await reloaded.innerText(), new RegExp(province.nombre.replace(/[()]/g, '.'))); assert.match(await reloaded.innerText(), /Registrada/);
+    pass('Administrador registra la ubicación de un comandante (sólo provincia o CABA, sin localidad); queda en SQL con responsable y fecha, auditada, y se ve igual tras recargar la aplicación');
 
     // ================= CO: asignación de comandante y aeronave =================
     const f1 = await approved(); const opsPage = await login(co.name);
@@ -88,7 +88,8 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     await opsPage.getByText('Comandante reservado: falta confirmar la aeronave').waitFor();
     assert.equal(stateOf(f1.id), 'NULL'); assert.equal(resourcesOf(f1.id), `${cmdLocal.id}|-`);
     await panel.getByText('Reservado — falta la aeronave').waitFor();
-    await panel.getByText(departure.nombre).first().waitFor(); // se muestra la ubicación operativa del comandante
+    await panel.getByText(province.nombre).first().waitFor(); // se muestra la jurisdicción operativa del comandante
+    await panel.getByText('Elegibilidad geográfica').waitFor(); await panel.getByText(/Preliminar: se verificará al confirmar el aeropuerto de salida/).waitFor();
     await panel.getByRole('button', { name: 'Seleccionar aeronave' }).click();
     await panel.getByLabel('Aeronave disponible').selectOption(String(plane.id), { timeout: 150000 });
     await snap(opsPage, 'ai03-co-aeronave');
@@ -100,7 +101,7 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     assert.equal(await after.getByText('Asignado', { exact: true }).count() + await after.getByText('Asignada', { exact: true }).count(), 2);
     assert.ok(await after.getByText(plane.matricula).first().isVisible());
     await snap(opsPage, 'ai04-co-asignado');
-    pass('CO: reserva un comandante de la localidad (el vuelo no cambia de estado), confirma la aeronave y el vuelo queda PLANIFICADO; tras recargar la sesión la asignación persiste en pantalla y en SQL');
+    pass('CO: reserva un comandante de la jurisdicción (el vuelo no cambia de estado), confirma la aeronave y el vuelo queda PLANIFICADO; tras recargar la sesión la asignación persiste en pantalla y en SQL');
 
     // ================= CO: sin comandantes en la localidad + excepción justificada =================
     const f2 = await approved();
@@ -108,8 +109,8 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     await openFlight(opsPage, f2.id);
     const panel2 = opsPage.getByRole('group', { name: 'Asignación de recursos' }); await panel2.getByRole('button', { name: 'Seleccionar comandante' }).click();
     // cmdLocal ya está comprometido con f1: no queda ningún comandante ordinario y la pantalla lo explica.
-    await panel2.getByText(/No se encontraron comandantes disponibles en la localidad de salida/).waitFor({ timeout: 90000 });
-    assert.ok(await panel2.getByText(/no cumplen las condiciones operativas|no cumple las condiciones operativas/).first().isVisible(), 'explica que el comandante de la localidad no está disponible');
+    await panel2.getByText(/No se encontraron comandantes disponibles en/).first().waitFor({ timeout: 90000 });
+    assert.ok(await panel2.getByText(/no cumplen las condiciones operativas|no cumple las condiciones operativas/).first().isVisible(), 'explica que el comandante de la jurisdicción no está disponible');
     await snap(opsPage, 'ai05-co-sin-candidatos');
     await panel2.locator('details.resource-exceptions').evaluate((d) => { d.open = true; });
     await panel2.getByLabel('Buscar comandante').fill(cmdFar.name); await panel2.getByRole('button', { name: 'Buscar', exact: true }).click();
@@ -124,7 +125,7 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     await panel2.getByText(/Excepción geográfica/).first().waitFor({ timeout: 30000 });
     await panel2.getByRole('button', { name: 'Seleccionar aeronave' }).click(); await panel2.getByLabel('Aeronave disponible').selectOption(String(plane2.id), { timeout: 150000 }); await panel2.getByRole('button', { name: 'Confirmar aeronave' }).click();
     await opsPage.getByText('Aeronave asignada').first().waitFor(); assert.equal(stateOf(f2.id), 'PLANIFICADO');
-    pass('CO: sin comandantes disponibles en la localidad la pantalla lo explica; asigna uno de otra provincia sólo con la excepción justificada, que queda registrada y visible junto a la asignación');
+    pass('CO: sin comandantes disponibles en la jurisdicción la pantalla lo explica; asigna uno de otra provincia sólo con la excepción justificada, que queda registrada y visible junto a la asignación');
 
     // ================= Comandante: ve el vuelo asignado =================
     const cmdPage = await login(cmdLocal.name);
@@ -132,9 +133,35 @@ const resourcesOf = (id) => one(`SELECT CONCAT(ISNULL(CAST(id_usuario_comandante
     await cmdPage.getByRole('heading', { name: 'Planificación operativa', exact: true }).waitFor();
     const planning = cmdPage.getByRole('heading', { name: 'Planificación operativa', exact: true }).locator('..');
     await planning.locator('select').first().selectOption(String(f1.id), { timeout: 60000 });
-    await planning.locator('label').filter({ hasText: /^Aeropuerto de origen/ }).locator('select').waitFor({ state: 'visible', timeout: 60000 });
+    await planning.getByText('Aeropuertos del vuelo').waitFor({ timeout: 60000 });
     await snap(cmdPage, 'ai07-comandante');
-    pass('Comandante: el vuelo asignado aparece en su planificación operativa y puede continuar con el procedimiento');
+    pass('Comandante: el vuelo asignado aparece en su planificación operativa con los aeropuertos para revisar y puede continuar con el procedimiento');
+
+    // ================= CO propone aeropuertos; el comandante los revisa y confirma =================
+    await openFlight(opsPage, f1.id);
+    const airportsPanel = opsPage.getByRole('group', { name: 'Aeropuertos del vuelo' }); await airportsPanel.waitFor();
+    await airportsPanel.getByText('Origen del paciente (solicitud de DTS)').waitFor(); await airportsPanel.getByText(`${departure.nombre}, ${province.nombre}`).first().waitFor();
+    await airportsPanel.getByRole('button', { name: 'Proponer aeropuerto de salida' }).click();
+    const firstAirport = airportsPanel.getByRole('radio').first(); await firstAirport.check({ timeout: 90000 });
+    await snap(opsPage, 'ai08-co-aeropuertos');
+    await airportsPanel.getByRole('button', { name: 'Proponer aeropuerto de salida' }).click();
+    await opsPage.getByText(/Aeropuerto de salida propuesto: queda pendiente de confirmación del comandante/).waitFor();
+    assert.equal(one(`SELECT estado_aeropuerto_origen FROM vuelos WHERE id_vuelos=${f1.id}`), 'PROPUESTO'); assert.equal(count(`SELECT COUNT(*) FROM vuelos_sanitarios WHERE id_vuelos=${f1.id} AND id_localidad_origen=${departure.id} AND id_localidad_destino=${destination.id}`), 1, 'las localidades del paciente no se modifican');
+    await airportsPanel.getByText('Propuesto').first().waitFor();
+    pass('CO: propone el aeropuerto de salida (pendiente de confirmación) sin tocar las localidades del paciente');
+    await cmdPage.reload(); await cmdPage.getByRole('button', { name: 'Gestión de vuelos' }).click();
+    const planning2 = cmdPage.getByRole('heading', { name: 'Planificación operativa', exact: true }).locator('..');
+    await planning2.locator('select').first().selectOption(String(f1.id), { timeout: 60000 });
+    await planning2.getByText(/Centro de Operaciones propuso estos aeropuertos/).waitFor({ timeout: 60000 });
+    await planning2.getByRole('button', { name: 'Elegir otro aeropuerto de llegada' }).click();
+    await planning2.getByRole('radio').first().check({ timeout: 60000 });
+    const salidaF = one(`SELECT CONVERT(varchar(16),fecha_planificada_salida,126) FROM vuelos WHERE id_vuelos=${f1.id}`);
+    await planning2.getByLabel('Llegada planificada').fill(fmt(new Date(new Date(salidaF).getTime() + 3 * 3600000)).slice(0, 16));
+    await snap(cmdPage, 'ai09-comandante-aeropuertos');
+    await planning2.getByRole('button', { name: 'Confirmar aeropuertos y guardar planificación' }).click();
+    await cmdPage.getByText('Aeropuertos confirmados y planificación guardada').waitFor();
+    assert.equal(one(`SELECT CONCAT(estado_aeropuerto_origen,'|',estado_aeropuerto_destino) FROM vuelos WHERE id_vuelos=${f1.id}`), 'CONFIRMADO|CONFIRMADO');
+    pass('Comandante: revisa lo propuesto por CO, elige el aeropuerto de llegada y confirma ambos; quedan CONFIRMADOS en SQL Server');
 
     console.log(`\nE2E de asignación de recursos (navegador): ${passed} bloques correctos.`);
   } finally { await browser.close(); }

@@ -58,8 +58,8 @@ export function RequestSummary({ flight, medical = null }) {
       <dl>
         <div><dt>Recibida</dt><dd>{dt(flight.recibida)}</dd></div>
         <div><dt>Salida solicitada</dt><dd>{dt(flight.solicitada)}</dd></div>
-        <div><dt>Origen solicitado</dt><dd>{place(flight.origen)}</dd></div>
-        <div><dt>Destino solicitado</dt><dd>{place(flight.destino)}</dd></div>
+        <div><dt>Origen del paciente</dt><dd>{place(flight.origen)}<small> Localidad donde se encuentra; no es el aeropuerto.</small></dd></div>
+        <div><dt>Destino del paciente</dt><dd>{place(flight.destino)}<small> Localidad adonde debe llegar; no es el aeropuerto.</small></dd></div>
         <div><dt>Prioridad</dt><dd>{flight.prioridad || "—"}</dd></div>
         <div><dt>Urgencia</dt><dd>{flight.extremaUrgencia ? <span className="urgency-badge"><span aria-hidden="true">⚠</span><strong>EXTREMA URGENCIA</strong><span>Límite de traslado: {dt(flight.fechaLimiteTraslado)}</span></span> : "Sin extrema urgencia"}</dd></div>
         {flight.extremaUrgencia && flight.justificacionExtremaUrgencia && <div className="wide"><dt>Justificación</dt><dd>{flight.justificacionExtremaUrgencia}</dd></div>}

@@ -1,5 +1,7 @@
 # Asignación de comandante y aeronave, ubicación operativa y excepciones geográficas (V63)
 
+> **Actualización (V64/V65):** las reglas **por localidad** de este documento fueron corregidas. La ubicación operativa del comandante es sólo **provincia o CABA** y la elegibilidad se evalúa contra la **jurisdicción del aeropuerto de salida** (no contra la localidad del paciente). Se conservan la reserva→asignación, la concurrencia, la auditoría y el modelo de excepciones (ahora por provincia de salida). Ver `docs/CORRECCION_GEOGRAFICA_COMANDANTES_Y_AEROPUERTOS_V64_2026-11-02.md`.
+
 Fecha: 2026-11-02 · Rama: `fix/asignacion-comandante-aeronave-ubicacion` · Migración: **V63**
 
 ## 1. Diagnóstico

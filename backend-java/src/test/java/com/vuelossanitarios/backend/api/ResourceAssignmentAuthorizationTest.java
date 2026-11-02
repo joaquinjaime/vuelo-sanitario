@@ -33,11 +33,11 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Autorización del servidor para la asignación de comandante y aeronave, las excepciones geográficas y la ubicación operativa del comandante:
  * peticiones HTTP directas de cada rol, y cuerpos inválidos rechazados antes de llegar al servicio.
  */
-@WebMvcTest(controllers={FlightController.class,CommanderLocationController.class})
+@WebMvcTest(controllers={FlightController.class,CommanderLocationController.class,AirportPlanningController.class})
 @Import({SecurityConfig.class,JwtAuthenticationFilter.class,com.vuelossanitarios.backend.config.StrictJsonConfiguration.class})
 class ResourceAssignmentAuthorizationTest {
- @Autowired MockMvc mvc; @MockBean JwtService jwt; @MockBean UserRepository users; @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean CrewContactService crewContacts; @MockBean SanitaryRequestRegistrationService registration; @MockBean CommanderLocationService locations;
- private static final String COMMANDER="{\"comandanteId\":4,\"excepcionGeografica\":{\"motivo\":\"No hay otro comandante habilitado en la provincia\"}}",AIRCRAFT="{\"aircraftId\":9}",LOCATION="{\"provinciaId\":1,\"localidadId\":2,\"motivo\":\"Reubicación\"}",LEGACY="{\"locationId\":1}";
+ @Autowired MockMvc mvc; @MockBean JwtService jwt; @MockBean UserRepository users; @MockBean FlightService flights; @MockBean AirportCandidateService airportCandidates; @MockBean CrewManagementService crewManagement; @MockBean CrewContactService crewContacts; @MockBean SanitaryRequestRegistrationService registration; @MockBean CommanderLocationService locations;
+ private static final String COMMANDER="{\"comandanteId\":4,\"excepcionGeografica\":{\"motivo\":\"No hay otro comandante habilitado en la provincia\"}}",AIRCRAFT="{\"aircraftId\":9}",LOCATION="{\"provinciaId\":1,\"motivo\":\"Reubicación\"}",LEGACY="{\"locationId\":1}";
  private RequestPostProcessor as(String role){return SecurityMockMvcRequestPostProcessors.authentication(new UsernamePasswordAuthenticationToken(new CurrentUser(7L,"u"),null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));}
  private void allowed(String role,boolean can,MockHttpServletRequestBuilder request) throws Exception {mvc.perform(request.with(as(role)).contentType(MediaType.APPLICATION_JSON)).andExpect(can?status().is2xxSuccessful():status().isForbidden());}
  private void stubUser(String role){User u=new User();u.setId(7L);Role r=new Role();r.setCodigo(role);UserRole link=new UserRole();link.setRole(r);u.setUserRoles(Set.of(link));when(users.findWithRolesById(7L)).thenReturn(Optional.of(u));}
@@ -49,7 +49,7 @@ class ResourceAssignmentAuthorizationTest {
   for(String role:List.of("ADMINISTRADOR","COMANDANTE","DTS")){
    allowed(role,false,put("/api/flights/1/commander").content(COMMANDER));allowed(role,false,put("/api/flights/1/assigned-aircraft").content(AIRCRAFT));allowed(role,false,get("/api/flights/1/commander-candidates"));
   }
-  verify(flights,times(2)).assignCommander(eq(1L),any(AssignCommander.class),eq(7L));verify(flights,times(2)).assignAircraft(eq(1L),any(AssignAircraft.class),eq(7L));verify(flights,times(2)).commanderCandidates(eq(1L),eq(7L),eq(""));
+  verify(flights,times(2)).assignCommander(eq(1L),any(AssignCommander.class),eq(7L));verify(flights,times(2)).assignAircraft(eq(1L),any(AssignAircraft.class),eq(7L));verify(flights,times(2)).commanderCandidates(eq(1L),eq(7L),eq(""),isNull());
  }
  @Test void theGeographicExceptionTravelsOnlyInsideTheAssignmentRequestAndKeepsItsJustification() throws Exception {
   mvc.perform(put("/api/flights/1/commander").with(as("CENTRO_OPERACIONES")).contentType(MediaType.APPLICATION_JSON).content(COMMANDER)).andExpect(status().isOk());
@@ -69,26 +69,33 @@ class ResourceAssignmentAuthorizationTest {
   verify(flights).assign(eq(1L),any(AssignResources.class),eq(7L));
  }
  @Test void onlyAdministratorAndOperationsListAndSetTheOperationalLocationOfCommanders() throws Exception {
-  when(locations.list(any(),any(),any(),any())).thenReturn(new CommanderLocationList(List.of(),false));when(locations.updateProvinceOnly(any(),any(),any())).thenReturn(new com.vuelossanitarios.backend.api.dto.CommanderLocationDtos.CommanderLocationRow(4L,"u","N","A","L",true,"ACTIVO",1L,"Tucumán",null,null,"SOLO_PROVINCIA",null,null));
+  when(locations.list(any(),any(),any(),any())).thenReturn(new CommanderLocationList(List.of(),false));when(locations.update(any(),any(),any(),any())).thenReturn(new com.vuelossanitarios.backend.api.dto.CommanderLocationDtos.CommanderLocationRow(4L,"u","N","A","L",true,"ACTIVO",1L,"Tucumán","CONOCIDA",null,null));
   for(String role:List.of("ADMINISTRADOR","OPERACIONES","CENTRO_OPERACIONES")){
    allowed(role,true,get("/api/commanders/locations"));allowed(role,true,put("/api/commanders/4/location").content(LOCATION));allowed(role,true,post("/api/catalogs/commanders/4/location").content(LEGACY));
   }
   for(String role:List.of("COMANDANTE","DTS")){
    allowed(role,false,get("/api/commanders/locations"));allowed(role,false,put("/api/commanders/4/location").content(LOCATION));allowed(role,false,post("/api/catalogs/commanders/4/location").content(LEGACY));
   }
-  verify(locations,times(3)).update(eq(4L),eq(1L),eq(2L),eq("Reubicación"),eq(7L));verify(locations,times(3)).updateProvinceOnly(4L,1L,7L);
+  verify(locations,times(3)).update(eq(4L),eq(1L),eq("Reubicación"),eq(7L));verify(locations,times(3)).update(eq(4L),eq(1L),isNull(),eq(7L));
  }
  @Test void aCommanderConsultsOnlyItsOwnLocationAndCannotChangeIt() throws Exception {
   stubUser("COMANDANTE");
   allowed("COMANDANTE",true,get("/api/commanders/7/location"));
   allowed("COMANDANTE",false,get("/api/commanders/8/location"));
   allowed("COMANDANTE",false,put("/api/commanders/7/location").content(LOCATION));
-  verify(locations,never()).update(any(),any(),any(),any(),any());verify(locations).get(7L);verify(locations,never()).get(8L);
+  verify(locations,never()).update(any(),any(),any(),any());verify(locations).get(7L);verify(locations,never()).get(8L);
  }
  @Test void invalidLocationBodiesAreRejectedBeforeReachingTheService() throws Exception {
-  for(String body:List.of("{}","{\"provinciaId\":1}","{\"localidadId\":2}","{\"provinciaId\":1,\"localidadId\":2,\"extra\":true}"))
+  for(String body:List.of("{\"localidadId\":2}","{\"provinciaId\":1,\"localidadId\":2}","{\"provinciaId\":1,\"extra\":true}"))
    mvc.perform(put("/api/commanders/4/location").with(as("ADMINISTRADOR")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
-  verify(locations,never()).update(any(),any(),any(),any(),any());
+  verify(locations,never()).update(any(),any(),any(),any());
+ }
+ @Test void onlyOperationsProposeAirportsAndOperationsAndTheCommanderListCandidates() throws Exception {
+  for(String role:List.of("OPERACIONES","CENTRO_OPERACIONES"))allowed(role,true,put("/api/flights/1/airports").content("{\"origenId\":3}"));
+  for(String role:List.of("ADMINISTRADOR","COMANDANTE","DTS"))allowed(role,false,put("/api/flights/1/airports").content("{\"origenId\":3}"));
+  for(String role:List.of("OPERACIONES","CENTRO_OPERACIONES","COMANDANTE"))allowed(role,true,get("/api/flights/1/airport-candidates?tipo=SALIDA"));
+  for(String role:List.of("ADMINISTRADOR","DTS"))allowed(role,false,get("/api/flights/1/airport-candidates?tipo=SALIDA"));
+  verify(flights,times(2)).setAirports(eq(1L),any(SetAirports.class),eq(7L));verify(airportCandidates,times(3)).candidates(eq(1L),eq(7L),eq("SALIDA"),eq(""));
  }
  @Test void unauthenticatedRequestsAreRejected() throws Exception {
   mvc.perform(put("/api/flights/1/commander").contentType(MediaType.APPLICATION_JSON).content(COMMANDER)).andExpect(status().is4xxClientError());
