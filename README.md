@@ -61,4 +61,6 @@ npm run dev
 
 El perfil `windows` conserva el uso local de autenticación integrada y su DLL JDBC; no se utiliza dentro de Docker.
 
+La interfaz es una SPA con rutas reales (`/app/inicio`, `/app/solicitudes/12/documentos`…): Nginx reenvía cualquier ruta desconocida a `index.html`, de modo que se pueden abrir y recargar directamente. Si no se define `VITE_API_URL`, `npm run dev` reenvía `/api` a `http://localhost:8080` (`VITE_DEV_PROXY` cambia el destino). Tras modificar el frontend, el contenedor no se actualiza solo: `docker compose up -d --build frontend` y refrescar el navegador. Arquitectura, rutas y matriz de cobertura: [docs/REESTRUCTURACION_FRONTEND_NAVEGACION_2026-11-02.md](docs/REESTRUCTURACION_FRONTEND_NAVEGACION_2026-11-02.md).
+
 Más detalle operativo y funcional: [docs/DOCKER.md](docs/DOCKER.md) y [docs/ESTADO_FUNCIONAL.md](docs/ESTADO_FUNCIONAL.md).

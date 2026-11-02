@@ -25,7 +25,7 @@
 .status-finalizado, .status-cancelado, .status-desactivado { background: var(--soft); color: var(--muted); }
 
 /* Tablas */
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
 table { width: 100%; border-collapse: collapse; background: var(--card); }
 .table-wrap table { min-width: 44rem; }
 th, td { padding: .75rem .9rem; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); }
@@ -184,3 +184,15 @@ a.stat-card:hover { border-color: var(--brand); }
 .form-page > form.grid-form { display: grid; }
 form.grid-form > .form-section { margin-bottom: 0; }
 .form-actions.wide { justify-content: flex-end; }
+.field > label { display: block; }
+.field > label .required-mark { display: inline; }
+
+/* Móvil: las cuadrículas de formularios nunca ensanchan la página y las tablas heredadas sin contenedor desplazan por su cuenta. */
+.grid-form > *, .form-grid > *, .filters > *, .account-columns > * { min-width: 0; }
+@media (max-width: 760px) {
+  .grid-form, .form-grid, .filters, .account-columns, .locality-picker { grid-template-columns: minmax(0, 1fr); }
+  table:not(.data-table) { display: block; max-width: 100%; overflow-x: auto; }
+  .card, .form-section { min-width: 0; }
+}
+label { min-width: 0; }
+label > input:not([type="checkbox"]):not([type="radio"]), label > select, label > textarea { width: 100%; min-width: 0; }

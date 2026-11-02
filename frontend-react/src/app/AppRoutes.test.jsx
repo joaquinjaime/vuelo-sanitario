@@ -310,3 +310,11 @@ test("al cambiar de pantalla el foco pasa al contenido y hay un enlace para salt
   await screen.findByRole("heading", { level: 1, name: "Informes finales" });
   expect(document.getElementById("main-content")).toHaveFocus();
 });
+
+test("«Mis solicitudes» deja de figurar como pantalla actual cuando se abre «Nueva solicitud»", async () => {
+  renderApp("/app/solicitudes/nueva", { roles: [ROLE.dts] });
+  await screen.findByRole("heading", { level: 1, name: "Nueva solicitud de vuelo sanitario" });
+  expect(within(nav()).getByRole("link", { name: "Nueva solicitud" })).toHaveAttribute("aria-current", "page");
+  expect(within(nav()).getByRole("link", { name: "Mis solicitudes" })).not.toHaveAttribute("aria-current", "page");
+  expect(within(nav()).getByRole("link", { name: "Mis solicitudes" }).className).not.toContain("is-active");
+});

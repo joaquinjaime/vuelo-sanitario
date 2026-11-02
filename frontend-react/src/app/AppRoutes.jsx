@@ -1,26 +1,32 @@
-import React from "react";
+import React, { lazy } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth, RedirectIfAuthenticated, RequireWorkspace, NotFound } from "./guards";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthLayout } from "../features/auth/AuthLayout";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PasswordChangePage } from "../features/auth/PasswordChangePage";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { MyAccountPage } from "../features/account/MyAccountPage";
-import { UsersListPage } from "../features/users/UsersListPage";
-import { UserCreatePage } from "../features/users/UserCreatePage";
-import { UserDetailPage } from "../features/users/UserDetailPage";
-import { AircraftListPage } from "../features/aircraft/AircraftListPage";
-import { AircraftFormPage } from "../features/aircraft/AircraftFormPage";
-import { AircraftDetailPage } from "../features/aircraft/AircraftDetailPage";
-import { GeographyPage, CommanderLocationsPage, PatientsPage, AuditPage, HealthStaffPage } from "../features/admin/AdminPages";
-import { RequestsPage } from "../features/flights/pages/RequestsPage";
-import { FlightsPage } from "../features/flights/pages/FlightsPage";
-import { NewRequestPage } from "../features/flights/pages/NewRequestPage";
-import { NewOperationalFlightPage } from "../features/flights/pages/NewOperationalFlightPage";
-import { FlightDetailPage } from "../features/flights/detail/FlightDetailPage";
-import { ReportsPage } from "../features/reports/ReportsPage";
-import { NotificationsPage } from "../features/notifications/NotificationsPage";
+
+// Cada pantalla se descarga al abrirla: el paquete inicial sólo trae el ingreso y la carcasa.
+const DashboardPage = lazy(() => import("../features/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const MyAccountPage = lazy(() => import("../features/account/MyAccountPage").then((m) => ({ default: m.MyAccountPage })));
+const UsersListPage = lazy(() => import("../features/users/UsersListPage").then((m) => ({ default: m.UsersListPage })));
+const UserCreatePage = lazy(() => import("../features/users/UserCreatePage").then((m) => ({ default: m.UserCreatePage })));
+const UserDetailPage = lazy(() => import("../features/users/UserDetailPage").then((m) => ({ default: m.UserDetailPage })));
+const AircraftListPage = lazy(() => import("../features/aircraft/AircraftListPage").then((m) => ({ default: m.AircraftListPage })));
+const AircraftFormPage = lazy(() => import("../features/aircraft/AircraftFormPage").then((m) => ({ default: m.AircraftFormPage })));
+const AircraftDetailPage = lazy(() => import("../features/aircraft/AircraftDetailPage").then((m) => ({ default: m.AircraftDetailPage })));
+const RequestsPage = lazy(() => import("../features/flights/pages/RequestsPage").then((m) => ({ default: m.RequestsPage })));
+const FlightsPage = lazy(() => import("../features/flights/pages/FlightsPage").then((m) => ({ default: m.FlightsPage })));
+const NewRequestPage = lazy(() => import("../features/flights/pages/NewRequestPage").then((m) => ({ default: m.NewRequestPage })));
+const NewOperationalFlightPage = lazy(() => import("../features/flights/pages/NewOperationalFlightPage").then((m) => ({ default: m.NewOperationalFlightPage })));
+const FlightDetailPage = lazy(() => import("../features/flights/detail/FlightDetailPage").then((m) => ({ default: m.FlightDetailPage })));
+const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const NotificationsPage = lazy(() => import("../features/notifications/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const GeographyPage = lazy(() => import("../features/admin/AdminPages").then((m) => ({ default: m.GeographyPage })));
+const CommanderLocationsPage = lazy(() => import("../features/admin/AdminPages").then((m) => ({ default: m.CommanderLocationsPage })));
+const PatientsPage = lazy(() => import("../features/admin/AdminPages").then((m) => ({ default: m.PatientsPage })));
+const AuditPage = lazy(() => import("../features/admin/AdminPages").then((m) => ({ default: m.AuditPage })));
+const HealthStaffPage = lazy(() => import("../features/admin/AdminPages").then((m) => ({ default: m.HealthStaffPage })));
 
 const guard = (segment, element) => <RequireWorkspace segment={segment}>{element}</RequireWorkspace>;
 

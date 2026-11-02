@@ -23,7 +23,7 @@ const serve = (items, own) => vi.mocked(api).mockImplementation((path, opts) => 
 test("separa aeronaves activas de desactivadas, muestra el estado operativo y el estado vacío", async () => {
   serve([plane(), plane({ id: 2, matricula: "LV-BBB", estadoOperativo: "ASIGNADA", vuelosComprometidos: 2, proximoVuelo: { codigo: "V-9", salida: "2026-11-01T10:00:00" } }), plane({ id: 3, matricula: "LV-OFF", activo: false, estadoOperativo: "DESACTIVADA" })]);
   renderApp("/app/aeronaves", admin());
-  expect(await screen.findByRole("button", { name: /Aeronaves activas/ })).toHaveTextContent("2");
+  await waitFor(() => expect(screen.getByRole("button", { name: /Aeronaves activas/ })).toHaveTextContent("2"));
   expect(screen.getByText("LV-AAA")).toBeInTheDocument(); expect(screen.queryByText("LV-OFF")).toBeNull();
   expect(screen.getByText("Activa · con vuelos asignados")).toBeInTheDocument(); expect(screen.getByText(/V-9/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Aeronaves desactivadas/ }));

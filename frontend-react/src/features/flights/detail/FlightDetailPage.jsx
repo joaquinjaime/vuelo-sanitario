@@ -94,7 +94,7 @@ export function FlightDetailPage() {
   return (
     <>
       <PageHeader
-        title={`${sanitary ? "Solicitud" : "Vuelo"} ${flight.codigo || id}`}
+        title={`${section === "solicitudes" ? "Solicitud" : "Vuelo"} ${flight.codigo || id}`}
         breadcrumbs={[{ label: "Inicio", to: appPath("inicio") }, { label: listLabel, to: appPath(section) }, { label: flight.codigo || `Vuelo ${id}`, to: current?.key === model.defaultKey ? undefined : basePath }, ...(current && current.key !== model.defaultKey ? [{ label: current.label }] : [])]}
         titleExtra={<StatusBadge state={flight.estado} />}
         description={<><span>{locationLabel(flight.origen)} → {locationLabel(flight.destino)}</span> · <span>{flight.salida ? `Salida ${dt(flight.salida)}` : `Horario solicitado ${dt(flight.solicitada)}`}</span></>}

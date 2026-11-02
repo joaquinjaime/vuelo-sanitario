@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, downloadFile, uploadFile } from "../../services/api";
 
 // Los instantes de las obligaciones son OffsetDateTime; se muestran siempre en la zona de negocio.
@@ -302,7 +303,8 @@ export const NOTIFICATION_LABEL = {
   FINAL_REPORT_EXTENSION: "Prórroga concedida",
 };
 
-export function NotificationsPanel({ items = [], unread = 0, msg, reload }) {
+/** `linkFor(notificación)` (opcional) devuelve la ruta del vuelo al que se refiere el aviso, para abrirlo desde la lista. */
+export function NotificationsPanel({ items = [], unread = 0, msg, reload, linkFor }) {
   const mark = async (path) => {
     try { await api(path, { method: "POST" }); await reload(); } catch (e) { msg(e.message, true); }
   };
@@ -317,6 +319,7 @@ export function NotificationsPanel({ items = [], unread = 0, msg, reload }) {
           {items.map((n) => (
             <li key={n.id} className={n.leido ? "" : "unread"}>
               <strong>{NOTIFICATION_LABEL[n.tipo] || n.tipo}</strong> — {n.mensaje} <small>{String(n.createdAt || "").replace("T", " ").slice(0, 16)}</small>
+              {linkFor && n.flightId ? <Link className="button-link secondary-action" to={linkFor(n)}>Abrir</Link> : null}
               {!n.leido && <button className="secondary-action" onClick={() => mark(`/notifications/${n.id}/read`)}>Marcar leída</button>}
             </li>
           ))}

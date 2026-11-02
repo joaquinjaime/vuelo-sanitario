@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../providers/SessionProvider";
 import { OperationalDataProvider, useOperationalData } from "../providers/OperationalDataProvider";
@@ -8,6 +8,7 @@ import { inboxSections } from "../../features/flights/requestInbox";
 import { attentionFor } from "../../features/dashboard/attention";
 import { WorkspaceSelector } from "../../features/auth/WorkspaceSelector";
 import { LegacyHashRedirect } from "../guards";
+import { LoadingBlock } from "../../components/ui/feedback";
 
 const readCollapsed = () => { try { return localStorage.getItem("vs-sidebar") === "collapsed"; } catch { return false; } };
 
@@ -42,7 +43,7 @@ function Shell() {
           onOpenMenu={() => setMobileOpen(true)} onSelectWorkspace={selectWorkspace} onSignOut={() => { signOut(); navigate("/login", { replace: true }); }} />
         <main id="main-content" className="app-main" ref={main} tabIndex={-1}>
           <LegacyHashRedirect />
-          <Outlet />
+          <Suspense fallback={<LoadingBlock label="Cargando la pantalla…" />}><Outlet /></Suspense>
         </main>
       </div>
     </div>

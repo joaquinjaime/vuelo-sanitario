@@ -25,9 +25,10 @@ export function Sidebar({ workspace, workspaceLabel, counts, collapsed, onToggle
               <ul>
                 {group.items.map((item) => {
                   const count = item.badge ? counts?.[item.badge] : 0;
+                  const excluded = (item.excludes || []).some((x) => pathname.startsWith(appPath(x)));
                   return (
                     <li key={item.to}>
-                      <NavLink to={appPath(item.to)} end={item.end ?? false} className={({ isActive }) => `nav-link${isActive && !(item.excludes || []).some((x) => pathname.startsWith(appPath(x))) ? " is-active" : ""}`} title={collapsed ? item.label : undefined} onClick={onClose}>
+                      <NavLink to={appPath(item.to)} end={item.end ?? false} aria-current={excluded ? "false" : "page"} className={({ isActive }) => `nav-link${isActive && !excluded ? " is-active" : ""}`} title={collapsed ? item.label : undefined} onClick={onClose}>
                         <Icon name={item.icon} />
                         <span className="nav-label">{item.label}</span>
                         {count > 0 && <span className="nav-count" title={item.badge === "unread" ? "Avisos sin leer" : "Requieren su atención"}>{count}<span className="visually-hidden"> {item.badge === "unread" ? "sin leer" : "pendientes"}</span></span>}

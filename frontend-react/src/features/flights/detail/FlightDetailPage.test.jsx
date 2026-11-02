@@ -186,3 +186,17 @@ test("la etapa se informa con el indicador de avance y el estado con texto, no s
   expect(within(stepper).getByText(/etapa actual/)).toBeInTheDocument();
   expect(screen.getAllByText("Nueva solicitud").length).toBeGreaterThan(0);
 });
+
+test("las notificaciones abren el vuelo o la solicitud a la que se refieren según el área", async () => {
+  const notice = (id, tipo, flightId) => ({ id, tipo, flightId, mensaje: `Aviso ${id}`, leido: false, createdAt: "2026-11-02T09:00:00" });
+  vi.mocked(api).mockImplementation((path) => Promise.resolve(path === "/notifications" ? { items: [notice(1, "NEW_SANITARY_REQUEST", 7), notice(2, "COMMANDER_ASSIGNED", 8)], unread: 2 } : []));
+  renderApp("/app/notificaciones", { roles: [ROLE.ops] });
+  const links = await screen.findAllByRole("link", { name: "Abrir" });
+  expect(links.map((a) => a.getAttribute("href"))).toEqual(["/app/solicitudes/7", "/app/vuelos/8"]);
+  cleanup();
+  renderApp("/app/notificaciones", { roles: [ROLE.dts] });
+  expect((await screen.findAllByRole("link", { name: "Abrir" })).map((a) => a.getAttribute("href"))).toEqual(["/app/solicitudes/7", "/app/solicitudes/8"]);
+  cleanup();
+  renderApp("/app/notificaciones", { roles: [ROLE.cmd] });
+  expect((await screen.findAllByRole("link", { name: "Abrir" })).map((a) => a.getAttribute("href"))).toEqual(["/app/vuelos/7", "/app/vuelos/8"]);
+});
