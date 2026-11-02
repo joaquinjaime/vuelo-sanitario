@@ -7,7 +7,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ROOT, MARK, sql, one, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PASSWORD } = require('./e2e-cierre-support.cjs');
+const { ROOT, MARK, sql, one, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PASSWORD, placeCommander } = require('./e2e-cierre-support.cjs');
 const { chromium } = require('playwright');
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
@@ -27,7 +27,7 @@ const routeState = (id) => one(`SELECT estado_revision FROM rutas_vuelo WHERE id
     if (airports.length >= 3 && localities.length >= 2) { province = p; break; }
   }
   assert.ok(province);
-  for (const c of [cmdO, cmdS]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const c of [cmdO, cmdS]) await placeCommander(c, province, localities[0], ops.token);
   let seq = 0;
   const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'V' + (++seq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const at = (d, h) => fmt(new Date(d.getTime() + h * 3600000));

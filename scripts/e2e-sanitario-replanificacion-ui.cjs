@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { chromium } = require('playwright');
-const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, placeCommander } = require('./e2e-cierre-support.cjs');
 
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 const DAY = 86400000, TZ = -3 * 3600000;
@@ -42,7 +42,7 @@ async function until(fn, what, ms = 45000) { const end = Date.now() + ms; let la
   let province, airports, localities;
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
   assert.ok(province, 'se requiere una provincia con 2 aeropuertos y 2 localidades');
-  for (const c of [cmd, cmdOp]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const c of [cmd, cmdOp]) await placeCommander(c, province, localities[0], ops.token);
   const suffix = String(Date.now()).slice(-7); let seq = 0;
   const newAirport = async (label) => { const n = ++seq; return ok('/admin/geography/airports', { method: 'POST', token: admin, body: { codigoOficial: `SF${suffix}${n}`, nombre: `Aeropuerto ${label} ${MARK}`, ciudad: 'Ciudad E2E', provinciaId: province.id, localidadId: null, tipo: 'AERODROMO', pais: 'Argentina', latitud: -26.5, longitud: -65.1 } }); };
   const alt1 = await newAirport('Alternativo uno'), alt2 = await newAirport('Alternativo dos'), alt3 = await newAirport('Alternativo tres'), destA = await newAirport('Destino sanitario');
@@ -78,14 +78,16 @@ async function until(fn, what, ms = 45000) { const end = Date.now() + ms; let la
     pass('D1 DTS busca al paciente, completa origen/destino, horario y datos médicos y registra la solicitud; SQL conserva paciente, localidades, datos clínicos, negociación inicial, auditoría y aviso');
 
     const opsPage = await login(ops.name); let card = await pick(opsPage, 'Centro de Operaciones', F);
-    await card.getByRole('button', { name: 'Aceptar horario DTS' }).click(); await opsPage.getByText('✓ Horario aceptado').waitFor();
+    await card.getByRole('button', { name: 'Aceptar horario solicitado' }).click(); await card.getByRole('button', { name: 'Confirmar horario' }).click(); await opsPage.getByText('✓ Horario aceptado').waitFor();
     assert.equal(reqState(F), 'APROBADO');
-    const assign = opsPage.locator('.detail-actions', { has: opsPage.getByRole('heading', { name: /de recursos/ }) });
-    await assign.getByRole('button', { name: 'Consultar disponibilidad' }).click();
-    await assign.locator('select').first().waitFor({ timeout: 150000 }).catch(async () => { console.error('Panel de asignación:', await assign.innerText().catch(() => '(sin panel)'), '| avisos:', await opsPage.locator('.error, [role=alert], .notice').allTextContents()); throw new Error('no aparecieron las listas de recursos'); });
-    await assign.locator('label').filter({ hasText: /^Aeronave/ }).locator('select').selectOption(String(plane.id), { timeout: 60000 });
-    await assign.locator('label').filter({ hasText: /^Comandante/ }).locator('select').selectOption(String(cmd.id), { timeout: 60000 });
-    await assign.getByRole('button', { name: 'Confirmar asignación' }).click(); await opsPage.getByText('Recursos asignados').waitFor();
+    const assign = opsPage.getByRole('group', { name: 'Asignación de recursos' });
+    await assign.getByRole('button', { name: 'Seleccionar comandante' }).click();
+    await assign.getByRole('radio', { name: new RegExp(cmd.name, 'i') }).check({ timeout: 150000 });
+    await assign.getByRole('button', { name: 'Confirmar comandante' }).click(); await opsPage.getByText('✓ Comandante reservado: falta confirmar la aeronave').waitFor();
+    assert.equal(stateOf(F), 'NULL', 'con el comandante reservado y sin aeronave el vuelo todavía no cambia de estado');
+    await assign.getByRole('button', { name: 'Seleccionar aeronave' }).click();
+    await assign.getByLabel('Aeronave disponible').selectOption(String(plane.id), { timeout: 150000 });
+    await assign.getByRole('button', { name: 'Confirmar aeronave' }).click(); await opsPage.getByText('✓ Aeronave asignada').waitFor();
     assert.equal(stateOf(F), 'PLANIFICADO'); assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_vuelos=${F} AND id_aeronaves=${plane.id} AND id_usuario_comandante=${cmd.id}`), 1);
     assert.equal(count(`SELECT COUNT(*) FROM vuelos_tripulantes vt JOIN roles_tripulacion r ON r.id_roles_tripulacion=vt.id_roles_tripulacion WHERE vt.id_vuelos=${F} AND vt.id_usuarios=${cmd.id} AND r.codigo_rol_tripulacion=N'COMANDANTE' AND vt.fecha_baja IS NULL`), 1, 'una sola fila activa de comandante');
     assert.equal(audit(F, 'FLIGHT', 'ASSIGN_RESOURCES'), 1); assert.equal(notes(F, 'COMMANDER_ASSIGNED', cmd.id), 1);

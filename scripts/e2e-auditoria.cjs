@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ROOT, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const HOUR = 3600000, DAY = 86400000, TZ_OFFSET = -3 * HOUR; // America/Argentina/Tucuman, sin horario de verano
 const civilDay = (ms) => new Date(ms + TZ_OFFSET).toISOString().slice(0, 10);
@@ -41,7 +41,7 @@ const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
     let province, airports, localities;
     for (const p of await ok('/catalogs/provinces', { token: ops.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
     assert.ok(province, 'Se requiere una provincia con dos aeropuertos y dos localidades');
-    for (const n of Object.keys(cmd)) await call(`/catalogs/commanders/${cmd[n].id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+    for (const n of Object.keys(cmd)) await placeCommander(cmd[n], province, localities[0], ops.token);
     let plateSeq = 0; const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'A' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
     const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;
     const patient = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'Auditoria', apellido: MARK } });

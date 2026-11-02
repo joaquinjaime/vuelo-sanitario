@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, placeCommander } = require('./e2e-cierre-support.cjs');
 
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const delayed = (ms, fn) => new Promise((r) => setTimeout(r, ms)).then(fn);
@@ -47,7 +47,7 @@ const DAY = 86400000, TZ = -3 * 3600000, civilDay = (ms) => new Date(ms + TZ).to
     return c.id;
   }
   const member = async (role, label, opts = {}) => { const u = await createUser(admin, opts.access || 'DTS', label); if (opts.classify !== false) await classify(u, role); if (opts.credential !== false) u.credential = await credential(u, role, opts); return u; };
-  const commander = async (label, { classified = true, creds = true, expires = null } = {}) => { const u = await createUser(admin, 'COMANDANTE', label); await call(`/catalogs/commanders/${u.id}/location`, { method: 'POST', token: ops.token, body: { locationId: province.id } }); if (classified) await classify(u, 'COMANDANTE'); if (creds) u.credential = await credential(u, 'COMANDANTE', { expires }); return u; };
+  const commander = async (label, { classified = true, creds = true, expires = null } = {}) => { const u = await createUser(admin, 'COMANDANTE', label); await placeCommander(u, province, localities[0], ops.token); if (classified) await classify(u, 'COMANDANTE'); if (creds) u.credential = await credential(u, 'COMANDANTE', { expires }); return u; };
   const createFlight = async (cmd, plane, { token = ops.token, expect = [200], when = futureSlot(), hours = 2, destination = airports[1] } = {}) => call('/flights/operational', { method: 'POST', token, expect, body: { tipoVueloCode: 'REGRESO_BASE', motivoVuelo: 'Roles y clasificaciones ' + MARK, aircraftId: plane.id, comandanteId: cmd.id, destinoId: destination.id, salida: fmt(when), llegada: fmt(new Date(when.getTime() + hours * 3600000)) } });
   const planned = async (cmd, opts = {}) => { const plane = await newPlane(opts.capacity); const f = (await createFlight(cmd, plane, opts)).data; await call(`/flights/${f.id}/commander-assignment/response`, { method: 'POST', token: cmd.token, body: { aceptar: true } }); assert.equal(stateOf(f.id), 'PLANIFICADO'); return { id: f.id, plane, commander: cmd }; };
   const addCrew = (flight, user, role, expect = [204], token = ops.token) => call(`/flights/${flight.id}/crew`, { method: 'POST', token, body: { userId: user.id, crewRoleCode: role }, expect });

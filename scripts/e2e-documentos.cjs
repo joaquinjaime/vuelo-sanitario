@@ -9,7 +9,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 let passed = 0;
 const pass = (text) => { passed++; console.log('PASS: ' + text); };
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -64,7 +64,7 @@ async function send(method, p, token, fields, file, expect = [200]) {
       if (airports.length >= 2 && localities.length >= 2) { province = p; break; }
     }
     assert.ok(province, 'Se requiere una provincia con dos aeropuertos y dos localidades');
-    for (const n of Object.keys(cmd)) await call(`/catalogs/commanders/${cmd[n].id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+    for (const n of Object.keys(cmd)) await placeCommander(cmd[n], province, localities[0], ops.token);
     let plateSeq = 0;
     const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'D' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
     const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;
@@ -340,11 +340,12 @@ async function send(method, p, token, fields, file, expect = [200]) {
     assert.equal((await ok(`/flights/${C1}/documents/retired`, { token: ops.token })).length, 0);
     const whenR = futureSlot();
     const R = (await ok('/flights', { method: 'POST', token: dts.token, body: { patientId: patient.id, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority, motivoVuelo: 'Documentos rechazada ' + MARK, fechaSolicitada: fmt(whenR), extremaUrgencia: false, medical: { diagnostico: 'Prueba', condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false } } })).id;
-    const rdoc = (await createDoc(R, ops, 'Doc solicitud ' + MARK, pdfWith('% req ' + MARK), 'AUTORIZACION', {})).data;
+    // Sin horario acordado la documentación está bloqueada (409 con código estable): una solicitud rechazada no puede tener documentos nuevos.
+    const lockedR = await createDoc(R, ops, 'Doc solicitud ' + MARK, pdfWith('% req ' + MARK), 'AUTORIZACION', {}, [409]);
+    assert.equal(lockedR.data.code, 'DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED'); assert.equal(rows(R).length, 0);
     await call(`/flights/${R}/schedule/reject`, { method: 'POST', token: ops.token, body: { motivoCancelacionId: reason.id } });
-    for (const r of [await createDoc(R, ops, 'Tardío ' + MARK, pdfA, 'OTRO', {}, [400]), await lock(rdoc.id, ops, 'POST', [400]), await addVersion(rdoc.id, ops, pdfB, [400]), await retire(R, rdoc.id, ops, { motivo: REASON }, [400])]) assert.ok(r.status === 400);
-    assert.match((await createDoc(R, ops, 'Tardío 2 ' + MARK, pdfA, 'OTRO', {}, [400])).data.error, /sólo consulta documental/);
-    assert.equal(docRow(rdoc.id)[0], '1'); assert.equal((await ok(`/flights/${R}/documents`, { token: dts.token })).length, 1, 'la solicitud rechazada sigue siendo consultable');
+    assert.match((await createDoc(R, ops, 'Tardío ' + MARK, pdfA, 'OTRO', {}, [400])).data.error, /sólo consulta documental/);
+    assert.equal(rows(R).length, 0); assert.deepEqual(await ok(`/flights/${R}/documents`, { token: dts.token }), [], 'la solicitud rechazada sigue siendo consultable (sin documentos)');
     pass(`L baja lógica: motivo obligatorio (7 cuerpos inválidos = 400), sólo Operaciones o el comandante que cargó el documento (403 al resto, 404 si es de otro vuelo), bloqueo ajeno = 409 y propio liberado en la misma transacción, fila y ${keysL.length} versiones con sus archivos conservados, fuera del listado y sin bloqueos ni versiones nuevas, historial y descarga sólo para Operaciones y el comandante, nombre reutilizable, 1 baja entre 3 simultáneas, 6 rondas baja-contra-bloqueo y 4 baja-contra-versión consistentes, y sin bajas en vuelos finalizados, cancelados ni solicitudes rechazadas`);
 
     // ---------- M: compatibilidad de tipos documentales con el tipo de vuelo ----------

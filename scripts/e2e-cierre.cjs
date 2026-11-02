@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { PDF, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 const BASE_URL = BASE;
 let passed = 0;
 const pass = (text) => { passed++; console.log('PASS: ' + text); };
@@ -63,7 +63,7 @@ const pdfWith = (extra) => Buffer.from(PDF.toString('latin1').replace('startxref
     if (airports.length >= 2 && localities.length >= 2) { province = p; break; }
   }
   assert.ok(province, 'Se requiere una provincia con dos aeropuertos y dos localidades');
-  for (const n of names) await call(`/catalogs/commanders/${cmd[n].id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const n of names) await placeCommander(cmd[n], province, localities[0], ops.token);
   let plateSeq = 0;
   const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'P' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;

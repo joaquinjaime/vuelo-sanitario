@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
-const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy } = require('./e2e-cierre-support.cjs');
+const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, fmt, createUser, provision, waitHealthy, placeCommander } = require('./e2e-cierre-support.cjs');
 const { chromium } = require('playwright');
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 const DAY = 86400000, TZ = -3 * 3600000;
@@ -23,7 +23,7 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
   for (const c of [cmdU, cmdO]) await provision(admin, c);
   let province, airports, localities;
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
-  for (const c of [cmdU, cmdO]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const c of [cmdU, cmdO]) await placeCommander(c, province, localities[0], ops.token);
   const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'W' + Math.floor(Math.random() * 1e5)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0]; const reasons = await ok('/catalogs/cancellation-reasons', { token: ops.token }); const reason = reasons.find((r) => r.codigo !== 'OTRO');
   // La búsqueda por nombre exige letras: el apellido de prueba se deriva de la marca sin dígitos.
@@ -79,12 +79,12 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
     const codeUrgent = one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${fUrgent}`), codeNormal = one(`SELECT codigo_vuelo FROM vuelos WHERE id_vuelos=${fNormalFirst}`); const iUrgent = urgentOptions.findIndex((t) => t.includes('⚠ URGENTE') && t.includes(codeUrgent)), iNormal = urgentOptions.findIndex((t) => t.includes(codeNormal));
     assert.ok(iUrgent > 0 && iNormal > 0 && iUrgent < iNormal, `la urgente se lista antes que la normal (${iUrgent} < ${iNormal})`);
     let card = await pick(opsPage, 'Centro de Operaciones', fUrgent); await opsPage.getByText(/EXTREMA URGENCIA/i).first().waitFor(); await snap(opsPage, 's02-ops-urgente');
-    await card.getByRole('button', { name: 'Aceptar horario DTS' }).click(); await opsPage.getByText('✓ Horario aceptado').waitFor(); assert.equal(reqState(fUrgent), 'APROBADO');
-    card = await pick(opsPage, 'Centro de Operaciones', fA); const evalA = opsPage.getByLabel('Evaluación de la solicitud');
-    await evalA.getByLabel('Nueva fecha y hora').fill(input(nowMs + 9 * DAY, '09:00')); await evalA.getByLabel('Motivo de la propuesta').fill('No hay aeronave'); await evalA.getByRole('button', { name: 'Proponer otro horario' }).click(); await opsPage.getByText('✓ Propuesta enviada al DTS').waitFor(); assert.equal(reqState(fA), 'PENDIENTE_RESPUESTA_DTS');
-    await opsPage.getByText(/Propuesta vigente:/).waitFor(); await evalA.getByLabel('Nueva fecha y hora').fill(input(nowMs + 10 * DAY, '09:00')); await evalA.getByLabel('Motivo de la propuesta').fill('Nueva disponibilidad'); await evalA.getByRole('button', { name: 'Reemplazar propuesta' }).click(); await opsPage.getByText('✓ Propuesta reemplazada').waitFor();
+    await card.getByRole('button', { name: 'Aceptar horario solicitado' }).click(); await card.getByRole('button', { name: 'Confirmar horario' }).click(); await opsPage.getByText('✓ Horario aceptado').waitFor(); assert.equal(reqState(fUrgent), 'APROBADO');
+    card = await pick(opsPage, 'Centro de Operaciones', fA); const evalA = opsPage.getByRole('region', { name: 'Negociación del horario' });
+    await evalA.getByRole('button', { name: 'Proponer otro horario' }).click(); await evalA.getByLabel('Nueva fecha y hora').fill(input(nowMs + 9 * DAY, '09:00')); await evalA.getByLabel('Motivo de la propuesta').fill('No hay aeronave'); await evalA.getByRole('button', { name: 'Enviar propuesta' }).click(); await opsPage.getByText('✓ Propuesta enviada al DTS').waitFor(); assert.equal(reqState(fA), 'PENDIENTE_RESPUESTA_DTS');
+    await opsPage.getByText('Última propuesta vigente').waitFor(); await evalA.getByRole('button', { name: 'Reemplazar propuesta' }).click(); await evalA.getByLabel('Nueva fecha y hora').fill(input(nowMs + 10 * DAY, '09:00')); await evalA.getByLabel('Motivo de la propuesta').fill('Nueva disponibilidad'); await evalA.getByRole('button', { name: 'Enviar propuesta' }).click(); await opsPage.getByText('✓ Propuesta reemplazada').waitFor();
     assert.equal(count(`SELECT COUNT(*) FROM negociaciones_horario_vuelo WHERE id_vuelos=${fA} AND tipo_negociacion=N'CO_CONTRAPROPUESTA'`), 2); assert.equal(count(`SELECT COUNT(*) FROM negociaciones_horario_vuelo WHERE id_vuelos=${fA} AND id_negociacion_respondida IS NOT NULL AND tipo_negociacion=N'CO_CONTRAPROPUESTA'`), 2);
-    card = await pick(opsPage, 'Centro de Operaciones', fB); const evalB = opsPage.getByLabel('Evaluación de la solicitud'); await evalB.getByLabel('Motivo de cancelación').selectOption(String(reason.id)); await evalB.getByRole('button', { name: 'Rechazar solicitud' }).click(); await opsPage.getByText('✓ Solicitud rechazada').waitFor();
+    card = await pick(opsPage, 'Centro de Operaciones', fB); const evalB = opsPage.getByRole('region', { name: 'Negociación del horario' }); await evalB.getByRole('button', { name: 'Rechazar solicitud' }).click(); await evalB.getByLabel('Motivo de cancelación').selectOption(String(reason.id)); await evalB.getByRole('button', { name: 'Confirmar rechazo' }).click(); await opsPage.getByText('✓ Solicitud rechazada').waitFor();
     assert.equal(reqState(fB), 'RECHAZADO'); assert.equal(stateOf(fB), 'NULL'); await snap(opsPage, 's03-ops-evaluacion');
     pass('UI-2 Operaciones ve la urgente primero y destacada, aprueba, propone otro horario, reemplaza la propuesta y rechaza otra solicitud con motivo del catálogo; todo persiste en SQL Server');
 
@@ -97,13 +97,13 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
     dcard = await pick(dtsPage, 'Mis solicitudes y contrapropuestas', fC); await dtsPage.getByRole('button', { name: 'Aceptar contrapropuesta' }).click(); await dtsPage.getByText('✓ Contrapropuesta aceptada').waitFor(); assert.equal(reqState(fC), 'APROBADO');
     await pick(dtsPage, 'Mis solicitudes y contrapropuestas', fB); await dtsPage.getByText(/RECHAZADA por Operaciones: /).waitFor(); assert.equal(await dtsPage.getByRole('button', { name: 'Cancelar solicitud' }).count(), 0, 'una solicitud rechazada no ofrece cancelación');
     await pick(dtsPage, 'Mis solicitudes y contrapropuestas', fNew); await dtsPage.getByLabel('Motivo de cancelación').first().selectOption(String(reason.id)); await dtsPage.getByRole('button', { name: 'Cancelar solicitud' }).click(); await dtsPage.getByText('✓ Solicitud cancelada').waitFor(); assert.equal(reqState(fNew), 'CANCELADO');
-    await dtsPage.reload(); await dtsPage.getByRole('region', { name: 'Notificaciones' }).getByText(/Propuesta de horario|Solicitud rechazada|Solicitud aprobada/).first().waitFor(); await snap(dtsPage, 's04-dts-respuestas');
+    await dtsPage.reload(); await dtsPage.getByRole('navigation').getByRole('button', { name: /^Notificaciones/ }).click(); await dtsPage.getByRole('region', { name: 'Notificaciones' }).getByText(/Propuesta de horario|Solicitud rechazada|Solicitud aprobada/).first().waitFor(); await snap(dtsPage, 's04-dts-respuestas');
     pass('UI-3 DTS ve la contrapropuesta vigente, el motivo OTRO exige descripción, rechazar cancela la solicitud, acepta otra, ve el motivo del rechazo de Operaciones y cancela su propia solicitud; sus avisos son visibles');
 
     // ---- Comandante: urgencia visible, asignación y contrapropuesta; Operaciones responde ----
     await call(`/flights/${fUrgent}/resources`, { method: 'POST', token: ops.token, body: { aircraftId: planeU.id, comandanteId: cmdU.id } });
     const cmdPage = await login(cmdU.name); await pick(cmdPage, 'Planificación operativa', fUrgent); await cmdPage.getByText(/EXTREMA URGENCIA/i).first().waitFor(); await cmdPage.getByText('Historial de negociación').waitFor(); await snap(cmdPage, 's05-cmd-urgente');
-    await cmdPage.getByRole('region', { name: 'Notificaciones' }).getByText(/EXTREMA URGENCIA/).first().waitFor();
+    await cmdPage.getByRole('navigation').getByRole('button', { name: /^Notificaciones/ }).click(); await cmdPage.getByRole('region', { name: 'Notificaciones' }).getByText(/EXTREMA URGENCIA/).first().waitFor();
     const cmdOPage = await login(cmdO.name); await pick(cmdOPage, 'Planificación operativa', fO); await cmdOPage.getByRole('heading', { name: 'Confirmación de asignación' }).waitFor();
     // La fecha de la propuesta se arma con la hora local del navegador (datetime-local) para evitar desfases de zona.
     const proposeLocal = async (days, hh) => { const d = new Date(Date.now() + days * DAY); const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(hh).padStart(2, '0')}:00`; const a = new Date(d.getTime() + 2 * 3600000); const arr = `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, '0')}-${String(a.getDate()).padStart(2, '0')}T${String(hh + 2).padStart(2, '0')}:00`; await cmdOPage.getByLabel('Motivo (obligatorio para rechazar o proponer)').fill('Llego más tarde'); await cmdOPage.getByLabel('Nueva salida').fill(val); await cmdOPage.getByLabel('Nueva llegada').fill(arr); await cmdOPage.getByRole('button', { name: 'Proponer horario' }).click(); await cmdOPage.getByText('✓ Respuesta enviada a Operaciones').waitFor(); };
@@ -117,7 +117,7 @@ const input = (ms, hhmm) => `${civilDay(ms)}T${hhmm}`; // valor para datetime-lo
     await pick(opsPage, 'Centro de Operaciones', fO); const cancelSection = opsPage.locator('.detail-actions', { has: opsPage.getByRole('heading', { name: 'Cancelar vuelo' }) }); await cancelSection.getByLabel('Motivo de cancelación').selectOption(String((reasons.find((r) => r.codigo === 'OTRO')).id)); await cancelSection.getByLabel('Especifique el motivo').fill('Aeronave en mantenimiento'); await cancelSection.getByRole('button', { name: 'Cancelar vuelo' }).click(); await opsPage.getByText('✓ Vuelo cancelado').waitFor();
     assert.equal(stateOf(fO), 'CANCELADO'); assert.equal(count(`SELECT COUNT(*) FROM vuelos WHERE id_vuelos=${fO} AND motivo_cancelacion_personalizado=N'Aeronave en mantenimiento' AND id_usuario_cancelador=${ops.id}`), 1);
     await opsPage.getByText(/Vuelo CANCELADO por/).first().waitFor(); assert.equal(await cancelSection.count(), 0, 'un vuelo cancelado no ofrece nueva cancelación');
-    await cmdOPage.reload(); await cmdOPage.getByRole('region', { name: 'Notificaciones' }).getByText(/Vuelo cancelado/).first().waitFor();
+    await cmdOPage.reload(); await cmdOPage.getByRole('navigation').getByRole('button', { name: /^Notificaciones/ }).click(); await cmdOPage.getByRole('region', { name: 'Notificaciones' }).getByText(/Vuelo cancelado/).first().waitFor();
     pass('UI-5 Operaciones cancela un vuelo con motivo OTRO descrito; el estado y los datos de la cancelación persisten, la pantalla deja de ofrecer cancelarlo y el comandante recibe el aviso');
   } catch (e) { try { for (const [i, c] of browser.contexts().entries()) for (const p of c.pages()) await snap(p, 'sol-fallo-' + i); } catch { /* sin capturas */ } throw e; }
   finally { await browser.close(); }

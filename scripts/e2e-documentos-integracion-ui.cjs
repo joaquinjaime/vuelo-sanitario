@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { ROOT, MARK, PASSWORD, PDF, BACKEND, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ROOT, MARK, PASSWORD, PDF, BACKEND, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 const { spawnSync } = require('node:child_process');
 const { chromium } = require('playwright');
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
@@ -38,7 +38,7 @@ const storedSha = (key) => spawnSync('docker', ['exec', BACKEND, 'sha256sum', '/
     airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token });
     if (airports.length >= 2 && localities.length >= 2) { province = p; break; }
   }
-  for (const c of [cmdA, cmdB]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const c of [cmdA, cmdB]) await placeCommander(c, province, localities[0], ops.token);
   let seq = 0; const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'G' + (++seq)).toUpperCase(), modelo: 'UI', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const stateOf = (id) => one(`SELECT e.codigo_estado_vuelo FROM vuelos v JOIN estados_vuelo e ON e.id_estados_vuelo=v.id_estados_vuelo WHERE v.id_vuelos=${id}`);
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;

@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
-const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ROOT, MARK, PASSWORD, sql, one, count, call, ok, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 const { chromium } = require('playwright');
 const UI = process.env.E2E_UI_URL || 'http://127.0.0.1:18081/';
 const DAY = 86400000, TZ = -3 * 3600000;
@@ -22,7 +22,7 @@ const z = (n) => String(n).padStart(2, '0');
   const cmdA = await createUser(boot, 'COMANDANTE', 'uiacmda'), cmdB = await createUser(boot, 'COMANDANTE', 'uiacmdb'); for (const c of [cmdA, cmdB]) await provision(boot, c);
   let province, airports, localities;
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
-  for (const c of [cmdA, cmdB]) await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const c of [cmdA, cmdB]) await placeCommander(c, province, localities[0], ops.token);
   let seq = 0; const plane = async () => ok('/catalogs/aircraft', { method: 'POST', token: boot, body: { matricula: (MARK + 'V' + (++seq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo; const DX = 'DxUI-' + MARK;
   const patient = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'AuditUI', apellido: MARK } });
@@ -99,7 +99,7 @@ const z = (n) => String(n).padStart(2, '0');
     await admin.getByLabel('ID de vuelo').fill(String(F)); await admin.getByLabel('Acción').selectOption('ASSIGN_RESOURCES'); await admin.getByRole('button', { name: 'Aplicar filtros' }).click();
     const assignCount = eventsF.filter((e) => e.op === 'ASSIGN_RESOURCES').length; await admin.waitForFunction((n) => document.querySelectorAll('table[aria-label="Eventos de auditoría"] tbody tr').length === n, assignCount);
     const detailRows = table.locator('tbody tr'); let opened = false;
-    for (let i = 0; i < assignCount && !opened; i++) { await detailRows.nth(i).getByRole('button', { name: 'Ver detalle' }).click(); const region = admin.getByLabel(/Detalle del evento/); await region.waitFor(); await region.getByText('Cargando detalle…').waitFor({ state: 'detached' }); const text = await region.innerText(); if (text.includes('uiacmda') || /E2E uiacmda/.test(text)) { opened = true; assert.match(text, /Valor anterior/); assert.match(text, /E2E uiacmda/); assert.match(text, /E2E uiacmdb/); assert.match(text, /Comandante/); await snap(admin, 'a03-admin-detalle'); } else await detailRows.nth(i).getByRole('button', { name: 'Cerrar' }).click(); }
+    for (let i = 0; i < assignCount && !opened; i++) { await detailRows.nth(i).getByRole('button', { name: 'Ver detalle' }).click(); const region = admin.getByLabel(/Detalle del evento/); await region.waitFor(); await region.getByText('Cargando detalle…').waitFor({ state: 'detached' }); const text = await region.innerText(); if (text.includes('uiacmda') || /E2E uiacmda/.test(text)) { opened = true; assert.match(text, /valor anterior/i); assert.match(text, /E2E uiacmda/); assert.match(text, /E2E uiacmdb/); assert.match(text, /Comandante/); await snap(admin, 'a03-admin-detalle'); } else await detailRows.nth(i).getByRole('button', { name: 'Cerrar' }).click(); }
     assert.ok(opened, 'el detalle del cambio de comandante muestra el valor anterior y el nuevo');
     await admin.getByRole('button', { name: 'Cerrar detalle' }).click(); await admin.getByRole('button', { name: 'Limpiar filtros' }).click();
     await admin.getByLabel('Tipo de entidad').selectOption('AIRCRAFT'); await admin.getByLabel('Acción').selectOption('MANUAL_LOCATION_CHANGE'); await admin.getByLabel('ID del registro afectado').fill(String(p2.id)); await admin.getByRole('button', { name: 'Aplicar filtros' }).click();

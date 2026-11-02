@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 
 let passed = 0;
 const pass = (text) => { passed++; console.log('PASS: ' + text); };
@@ -45,7 +45,7 @@ const OFFSETS = [0, 30, -30, 80, -80, 150, -150, 300];
     if (airports.length >= 3 && localities.length >= 2) { province = p; break; }
   }
   assert.ok(province, 'Se requiere una provincia con tres aeropuertos y dos localidades');
-  for (const n of names) await call(`/catalogs/commanders/${cmd[n].id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const n of names) await placeCommander(cmd[n], province, localities[0], ops.token);
   let plateSeq = 0;
   const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'R' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0].codigo;
@@ -205,7 +205,7 @@ const OFFSETS = [0, 30, -30, 80, -80, 150, -150, 300];
   if (dualCreated.status < 300) {
     await call('/auth/activar-cuenta', { method: 'POST', body: { dni: dualRequest.dni, codigo: dualCreated.data.codigo, username: MARK + 'dual', password: PASSWORD, confirmacionPassword: PASSWORD }, expect: [204] });
     const dual = { name: MARK + 'dual', token: (await ok('/auth/login', { method: 'POST', body: { username: MARK + 'dual', password: PASSWORD } })).accessToken }; dual.id = (await ok('/auth/me', { token: dual.token })).id;
-    await provision(admin, dual); await call(`/catalogs/commanders/${dual.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+    await provision(admin, dual); await placeCommander(dual, province, localities[0], ops.token);
     const D = await plannedOperational(dual);
     await put(D.id, dual.token, { version: 0, recorrido: 'Ruta propia', presentar: true });
     assert.equal((await route(D.id, dual.token)).puedeRevisar, false);

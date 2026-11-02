@@ -53,19 +53,22 @@ const DAY = 86400000, TZ = -3 * 3600000, civilDay = (ms) => new Date(ms + TZ).to
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { const a = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }), l = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (!province && a.length >= 1 && l.length >= 2) { province = p; airports = a; localities = l; } else if (province && p.id !== province.id && !other) other = p; }
   assert.ok(province && other, 'se requieren dos provincias');
   assert.equal((await call(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', token: dts.token, body: { locationId: province.id }, expect: [403] })).status, 403, 'sólo Operaciones o el administrador ubican comandantes');
-  const placed = await ok(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', token: ops.token, body: { locationId: province.id } }); assert.ok(placed);
-  assert.equal(count(`SELECT COUNT(*) FROM perfiles_comandante c JOIN personas p ON p.id_personas=c.id_personas JOIN usuarios u ON u.id_personas=p.id_personas WHERE u.id_usuarios=${cmd.id} AND c.id_provincias=${province.id}`), 1);
+  const placed = await ok(`/commanders/${cmd.id}/location`, { method: 'PUT', token: ops.token, body: { provinciaId: province.id, localidadId: localities[0].id, motivo: 'E2E perfiles' } }); assert.ok(placed);
+  assert.equal(count(`SELECT COUNT(*) FROM perfiles_comandante c JOIN personas p ON p.id_personas=c.id_personas JOIN usuarios u ON u.id_personas=p.id_personas WHERE u.id_usuarios=${cmd.id} AND c.id_provincias=${province.id} AND c.id_localidades_actual=${localities[0].id}`), 1);
   const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0], surname = MARK.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]);
   const patient = await ok('/patients', { method: 'POST', token: dts.token, body: { nombre: 'Perfil', apellido: surname, dni: String(30000000 + Math.floor(Math.random() * 9999990)) } });
   const when = `${civilDay(Date.now() + 25 * DAY)}T10:00:00`;
   const flight = await ok('/flights', { method: 'POST', token: dts.token, body: { patientId: patient.id, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority.codigo, motivoVuelo: 'Perfil comandante ' + MARK, fechaSolicitada: when, extremaUrgencia: false, medical: { diagnostico: 'Dx-' + MARK, condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false } } });
   await ok(`/flights/${flight.id}/schedule/accept`, { method: 'POST', token: ops.token });
   const listed = async () => (await ok(`/flights/${flight.id}/available-commanders`, { token: ops.token })).some((c) => c.id === cmd.id);
-  assert.equal(await listed(), true, 'el comandante provisionado y ubicado en la provincia de origen figura como disponible');
-  await ok(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', token: ops.token, body: { locationId: other.id } });
-  assert.equal(await listed(), false, 'fuera de la provincia de origen deja de ser candidato');
+  assert.equal(await listed(), true, 'el comandante provisionado y ubicado en la localidad de salida figura como disponible');
+  const otherLocalities = await ok(`/catalogs/localities?provinceId=${other.id}&q=`, { token: ops.token }); assert.ok(otherLocalities.length > 0, 'la otra provincia necesita una localidad');
+  await ok(`/commanders/${cmd.id}/location`, { method: 'PUT', token: ops.token, body: { provinciaId: other.id, localidadId: otherLocalities[0].id } });
+  assert.equal(await listed(), false, 'fuera de la localidad de salida deja de ser candidato ordinario');
   await ok(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', token: ops.token, body: { locationId: province.id } });
+  assert.equal(await listed(), false, 'la provincia sola (contrato anterior) no alcanza: falta la localidad');
+  await ok(`/commanders/${cmd.id}/location`, { method: 'PUT', token: ops.token, body: { provinciaId: province.id, localidadId: localities[0].id } });
   assert.equal(await listed(), true);
-  pass('C sólo Operaciones/administrador ubican comandantes; la ubicación persiste en el perfil y decide si es candidato de un traslado sanitario (y deja de serlo al salir de la provincia)');
+  pass('C sólo Operaciones/administrador ubican comandantes; la ubicación persiste en el perfil y decide si es candidato de un traslado sanitario (y deja de serlo al salir de la localidad, aunque siga en la provincia)');
   console.log(`\nE2E PERFILES COMANDANTE COMPLETO: ${passed} bloques aprobados (marca ${MARK}).`);
 })().catch((e) => { console.error('FALLO E2E PERFILES COMANDANTE:', e.stack || e); process.exit(1); });

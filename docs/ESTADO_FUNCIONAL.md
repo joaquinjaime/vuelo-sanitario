@@ -89,6 +89,10 @@ Crear un documento lógico no requiere lease porque aún no existe un recurso co
 
 Los roles que pueden crear documentos, adquirir/liberar lease o versionar son `COMANDANTE`, `OPERACIONES` y `CENTRO_OPERACIONES`; la autorización concreta sobre el vuelo se comprueba además en el servicio. `DTS` comparte solamente lectura de historial, estado y descarga.
 
+### Bloqueo documental hasta acordar el horario (2026-11-01)
+
+Un vuelo sanitario sólo admite operaciones documentales (lectura y escritura) con la solicitud en `APROBADO`, estado que el servidor fija únicamente cuando Operaciones acepta el horario solicitado o el DTS acepta la contrapropuesta. Con `SOLICITADO` o `PENDIENTE_RESPUESTA_DTS` toda operación responde `409 DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED` (`DocumentScheduleGate`, evaluado en cada operación y con el vuelo bloqueado en las escrituras); una fecha planificada o la aprobación de la ruta no sustituyen el acuerdo. `GET /api/flights/{id}/documents/access` informa la disponibilidad y quién debe responder la negociación. Las solicitudes `RECHAZADO`/`CANCELADO` conservan la consulta del historial. Los vuelos no sanitarios no cambian. Detalle, bandeja de solicitudes del Centro de Operaciones y pruebas: `SOLICITUDES_Y_BLOQUEO_DOCUMENTAL_HORARIO_2026-11-01.md`.
+
 ## Auditoría
 
 `eventos_auditoria` registra actor, entidad, operación, vuelo y snapshots acotados. No registra PDFs ni contenido clínico. La planificación operativa, inicio y finalización de vuelo se auditan como `OPERATIONAL_PLANNING`, `START` y `FINISH`. Las acciones de lease se auditan como `DOCUMENT_LOCK` con `ACQUIRE`, `RECOVER` o `RELEASE`. La consulta está paginada y reservada a los roles autorizados.
@@ -199,3 +203,10 @@ La ruta de un vuelo (sanitario u operativo) es una secuencia de versiones en `ru
 | POST `/api/flights/{id}/route/approve` `{version, comentario?}` | OPERACIONES, CENTRO_OPERACIONES | Aprueba la versión pendiente; 403 `AUTOREVISION_RUTA_NO_PERMITIDA`; 409 `VERSION_RUTA_DESACTUALIZADA`, `TRANSICION_RUTA_NO_PERMITIDA` |
 | POST `/api/flights/{id}/route/return` `{version, motivo}` | OPERACIONES, CENTRO_OPERACIONES | Devuelve con observaciones; 400 `MOTIVO_DEVOLUCION_INVALIDO` |
 | GET `/api/flights/route-statuses` | OPERACIONES, CENTRO_OPERACIONES, ADMINISTRADOR | Estado efectivo de la ruta de cada vuelo (cola de revisión) |
+
+## Asignación de comandante y aeronave, ubicación operativa y excepciones geográficas (V63, 2026-11-02)
+
+* El comandante tiene una **ubicación operativa actual** (localidad, con su provincia, fecha y responsable); distinta del domicilio. Solo la fijan Administrador y Centro de Operaciones (el comandante la consulta). Un comandante sin localidad (o solo con provincia) **no es elegible de forma ordinaria**.
+* Un vuelo sanitario con horario acordado ofrece como comandantes ordinarios a los registrados en la **localidad de salida** solicitada y aptos. Fuera de la localidad solo cabe una **excepción** autorizada por CENTRO_OPERACIONES con justificación (≥15 caracteres), registrada en `excepciones_geograficas_comandante` y auditada; no omite habilitación ni disponibilidad.
+* Comandante y aeronave se confirman por separado (`PUT /flights/{id}/commander`, `PUT /flights/{id}/assigned-aircraft`): el primero queda **reservado** sin cambiar el estado del vuelo y al estar ambos pasa a `PLANIFICADO`. `POST /flights/{id}/resources` sigue disponible con las mismas reglas.
+* Detalle, API, reglas y limitaciones: [ASIGNACION_COMANDANTE_Y_AERONAVE_V63_2026-11-02.md](ASIGNACION_COMANDANTE_Y_AERONAVE_V63_2026-11-02.md).

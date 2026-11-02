@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PDF, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, PDF, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const dniSeq = () => String(60000000 + Math.floor(Math.random() * 30000000));
 const NEW_PASSWORD = 'Definitiva-' + MARK + '-1';
@@ -74,7 +74,7 @@ const tokenOf = async (username, password) => { const r = await login(username, 
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { airports = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); localities = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (airports.length >= 2 && localities.length >= 2) { province = p; break; } }
   assert.ok(province);
   let plateSeq = 0; const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'U' + (++plateSeq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, aeropuertoActualId: airports[0].id, activo: true } });
-  const newCommander = async (suffix) => { const c = await createUser(admin, 'COMANDANTE', suffix); await provision(admin, c); await call(`/catalogs/commanders/${c.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token }); return c; };
+  const newCommander = async (suffix) => { const c = await createUser(admin, 'COMANDANTE', suffix); await provision(admin, c); await placeCommander(c, province, localities[0], ops.token); return c; };
   const priority = (await ok('/catalogs/priorities', { token: dtsA.token }))[0].codigo;
   const reasons = await ok('/catalogs/cancellation-reasons', { token: ops.token }); const reason = reasons.find((x) => x.codigo !== 'OTRO');
   const patient = await ok('/patients', { method: 'POST', token: dtsA.token, body: { nombre: 'Usuarios', apellido: MARK } });

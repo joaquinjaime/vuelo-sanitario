@@ -43,7 +43,7 @@ async function provisionRole(admin, user, roleCode) {
   let province, airports, localities;
   for (const p of await ok('/catalogs/provinces', { token: ops.token })) { const a = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }), l = await ok('/catalogs/localities?provinceId=' + p.id, { token: ops.token }); if (a.length >= 3 && l.length >= 2) { province = p; airports = a; localities = l; break; } }
   assert.ok(province);
-  await call(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  await call(`/catalogs/commanders/${cmd.id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token }); // vuelos operativos: sólo la provincia
   let seq = 0;
   const newPlane = async () => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'C' + (++seq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 5, equipamientoMedico: 'Camilla', aeropuertoActualId: airports[0].id, activo: true } });
   const slot = () => { const d = futureSlot(); d.setHours(9, 0, 0, 0); return d; };
@@ -220,7 +220,7 @@ async function provisionRole(admin, user, roleCode) {
   assert.equal(after.transfer, before.transfer, 'los contactos de coordinación del traslado no se usan ni se alteran');
   assert.deepEqual(after.identity, before.identity, 'cuentas, hashes, roles y versiones intactos');
   assert.equal(count("SELECT COUNT(*) FROM sys.tables WHERE name NOT IN ('flyway_schema_history')"), tablesBefore, 'sin tablas nuevas');
-  assert.equal(count("SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL AND CAST(version AS int)>60"), 0, 'sin migraciones nuevas de contactos (V55 rutas, V56 índices, V57 licencia única, V58 clasificaciones, V59 habilitaciones y V60 endurecimiento de políticas y documentos no tocan contactos)');
+  assert.equal(count("SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL AND CAST(version AS int)>63"), 0, 'sin migraciones nuevas de contactos (V55 rutas, V56 índices, V57 licencia única, V58 clasificaciones, V59 habilitaciones, V60 endurecimiento de políticas y documentos, V61/V62 formato del código OTP y V63 ubicación operativa del comandante no cambian los contactos laborales)');
   assert.equal(sql("DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS, NO_INFOMSGS").replace(/s/g, ''), '', 'DBCC CHECKCONSTRAINTS limpio');
   // los contactos sólo cambiaron por las acciones de sus titulares (fixtures y sección D), nunca por una consulta
   const c0 = snapshot().contacts; for (let i = 0; i < 3; i++) await contactsOf(f); assert.equal(snapshot().contacts, c0, 'consultar no modifica contactos');

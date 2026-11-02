@@ -7,7 +7,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute } = require('./e2e-cierre-support.cjs');
+const { ensureCredentialPolicies, ROOT, BASE, BACKEND, DB_NAME, MARK, PASSWORD, PDF, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute, placeCommander } = require('./e2e-cierre-support.cjs');
 let passed = 0; const pass = (t) => { passed++; console.log('PASS: ' + t); };
 const HOUR = 3600000, DAY = 86400000, TZ = -3 * HOUR;
 const civilDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
@@ -61,7 +61,7 @@ async function provisionRole(admin, user, roleCode) {
   assert.ok(province, 'se requiere una provincia con 3 aeropuertos y 2 localidades');
   for (const p of provinces) if (p.id !== province.id) { const a = await ok('/catalogs/airports?provinceId=' + p.id, { token: ops.token }); if (a.length) { otherAirport = a[0]; break; } }
   assert.ok(otherAirport, 'se requiere un aeropuerto de otra provincia');
-  for (const n of cmdNames) await call(`/catalogs/commanders/${cmd[n].id}/location`, { method: 'POST', body: { locationId: province.id }, token: ops.token });
+  for (const n of cmdNames) await placeCommander(cmd[n], province, localities[0], ops.token);
   const [A0, A1, A2] = airports;
   let seq = 0;
   const newPlane = async (airport = A0, extra = {}) => ok('/catalogs/aircraft', { method: 'POST', token: admin, body: { matricula: (MARK + 'Z' + (++seq)).toUpperCase(), modelo: 'E2E', tipo: 'PRUEBA', capacidadPacientes: 1, capacidadTripulacion: 4, equipamientoMedico: 'Camilla', aeropuertoActualId: airport.id, activo: true, ...extra } });

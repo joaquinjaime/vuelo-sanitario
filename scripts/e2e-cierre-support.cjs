@@ -17,8 +17,14 @@ const PASSWORD = process.env.E2E_FIXED_PASSWORD || 'E2E-' + crypto.randomBytes(1
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sql(query, database = DB_NAME) {
-  const r = spawnSync('docker', ['exec', '-i', SQL_CONTAINER, 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d ' + database + ' -W -h -1 -s "|" -i /dev/stdin'], { input: 'SET NOCOUNT ON; SET QUOTED_IDENTIFIER ON;\n' + query, encoding: 'utf8' });
-  const out = (r.stdout || '') + (r.stderr || '');
+  // Un `docker exec` que falla sin ninguna salida (no es un error de SQL, que siempre imprime «Msg …») es un fallo transitorio del motor Docker bajo carga: se reintenta.
+  let r, out = '';
+  for (let attempt = 0; attempt < 4; attempt++) {
+    r = spawnSync('docker', ['exec', '-i', SQL_CONTAINER, 'bash', '-c', 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -C -d ' + database + ' -W -h -1 -s "|" -i /dev/stdin'], { input: 'SET NOCOUNT ON; SET QUOTED_IDENTIFIER ON;\n' + query, encoding: 'utf8' });
+    out = (r.stdout || '') + (r.stderr || '');
+    if (r.status === 0 || out.trim() !== '') break;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+  }
   if (r.status !== 0) { const e = new Error('SQL falló: ' + out.slice(0, 600)); e.sqlOutput = out; throw e; }
   return out.trim();
 }
@@ -147,6 +153,11 @@ async function verifyEmail(user, emailId, address) {
   return call('/auth/me/correos/' + emailId + '/verificacion/confirmar', { method: 'POST', token: user.token, body: { codigo: code } });
 }
 
+/** V63: la asignación de un vuelo sanitario exige la ubicación operativa del comandante en la localidad de salida de la solicitud. Ubica al comandante en `locality` (de `province`). */
+async function placeCommander(user, province, locality, token) {
+  return call(`/commanders/${user.id}/location`, { method: 'PUT', token, body: { provinciaId: province.id, localidadId: locality.id, motivo: 'Ubicación de la prueba E2E' } });
+}
+
 async function waitHealthy() {
   const health = process.env.E2E_HEALTH_URL || BASE.replace(/\/api\/?$/, '') + '/actuator/health';
   for (let i = 0; i < 120; i++) { try { const r = await fetch(health); if (r.status === 200) return; } catch { /* reintentar */ } await sleep(2000); }
@@ -175,4 +186,4 @@ async function withoutPolicies(admin, roleCode, fn) {
   }
 }
 
-module.exports = { applyDbPermissions, backendEnv, withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, provision, waitHealthy, approveRoute };
+module.exports = { applyDbPermissions, backendEnv, withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, placeCommander, provision, waitHealthy, approveRoute };
