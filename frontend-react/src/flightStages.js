@@ -48,20 +48,21 @@ export function flightStage(flight, events = []) {
  *  resumen        datos de la solicitud (consulta)        negociacion  panel de negociación e historial
  *  aeropuertos    aeropuertos de salida y llegada (planificación aeronáutica, distinta de las localidades del paciente)
  *  recursos       asignar comandante y aeronave (consulta/cambio del comandante una vez planificado)            cancelar     cancelación del vuelo ya acordado
- *  aeronave       cambio de aeronave                       tripulacion  tripulación adicional           ruta   ruta del comandante
+ *  aeronave       cambio de aeronave                       tripulacion  tripulación con cuenta (comandante y copiloto)   ruta   ruta del comandante
+ *  personal       personal sanitario del vuelo (médicos y enfermeros que asigna el DTS; sin cuenta)
  *  ciclo          iniciar / finalizar                      cierre       informe final
  *  documentos / coordinaciones / hangar / contactos / bitacora / clima / auditoria
  */
-const COMMON_PREPARATION = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "contactos", "auditoria"];
+const COMMON_PREPARATION = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "contactos", "auditoria", "personal"];
 const BY_STAGE = {
   [STAGE.NEGOCIACION]: ["resumen", "negociacion"],
   [STAGE.ACORDADO]: [...COMMON_PREPARATION, "aeropuertos", "recursos", "cancelar"],
   [STAGE.PREPARACION]: [...COMMON_PREPARATION, "aeropuertos", "recursos", "aeronave", "tripulacion", "ruta", "bitacora", "clima", "ciclo", "cancelar", "cierre"],
   [STAGE.EJECUCION]: [...COMMON_PREPARATION, "aeropuertos", "tripulacion", "ruta", "bitacora", "clima", "ciclo", "cierre"],
-  [STAGE.CIERRE]: ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima", "cierre"],
+  [STAGE.CIERRE]: ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "personal", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima", "cierre"],
 };
-const HISTORY_ONLY = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima"];
-const ALL = ["resumen", "negociacion", "recursos", "aeronave", "tripulacion", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "contactos", "bitacora", "clima", "auditoria"];
+const HISTORY_ONLY = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "personal", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima"];
+const ALL = ["resumen", "negociacion", "recursos", "aeronave", "tripulacion", "personal", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "contactos", "bitacora", "clima", "auditoria"];
 
 export function visibleSections(flight, events = [], role = "OPERACIONES") {
   const stage = flightStage(flight, events);

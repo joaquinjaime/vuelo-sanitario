@@ -12,7 +12,7 @@ const candidates = (extra = {}) => ({ salida: { provinciaId: 1, provincia: "Tucu
 const plane = (id, extra = {}) => ({ id, matricula: `LV-${id}`, modelo: "King Air", tipo: "Avion", aeropuertoActualId: 5, aeropuertoActual: "Tucumán", disponible: true, motivoNoDisponible: null, conflictos: [], ...extra });
 beforeEach(() => { vi.mocked(api).mockReset(); });
 afterEach(cleanup);
-const setup = (props = {}) => { const msg = vi.fn(), onChanged = vi.fn(async () => {}); render(<ResourceAssignment flight={flight()} resources={noResources} msg={msg} onChanged={onChanged} {...props} />); return { msg, onChanged }; };
+const setup = (props = {}) => { const msg = vi.fn(), onChanged = vi.fn(async () => {}); render(<ResourceAssignment flight={flight()} resources={noResources} msg={msg} onChanged={onChanged} copilot={false} {...props} />); return { msg, onChanged }; };
 
 test("muestra comandante y aeronave como pendientes, con una acción visible en cada tarjeta", () => {
   setup();

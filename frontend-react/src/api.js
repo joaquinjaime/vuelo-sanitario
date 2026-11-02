@@ -47,11 +47,3 @@ export async function downloadFile(path) {
   if (!response.ok) throw await documentError(response);
   return response.blob();
 }
-export async function credentialFile(path, file) {
-  const token = localStorage.getItem('vs-token');
-  const body = file ? new FormData() : undefined;
-  if (file) body.append('file', file);
-  const response = await fetch(`${base}${path}`, { method: file ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body });
-  if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'No se pudo procesar el documento'); }
-  return file ? response.json() : response.blob();
-}

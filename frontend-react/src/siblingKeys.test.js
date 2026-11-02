@@ -9,7 +9,7 @@ import path from "node:path";
  * congelado junto al panel vigente. Dos componentes hermanos de un mismo bloque JSX no pueden compartir la expresión de clave.
  */
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const sources = ["main.jsx", "aircraft.jsx", "closure.jsx", "documents.jsx", "flightRoute.jsx", "users.jsx", "patients.jsx", "geography.jsx", "audit.jsx", "credentials.jsx", "account.jsx"];
+const sources = ["main.jsx", "aircraft.jsx", "closure.jsx", "documents.jsx", "flightRoute.jsx", "users.jsx", "patients.jsx", "geography.jsx", "audit.jsx", "healthStaff.jsx", "account.jsx"];
 
 test("ningún componente de un mismo bloque JSX comparte la expresión de clave con otro", () => {
   const repeated = [];

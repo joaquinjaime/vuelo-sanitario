@@ -53,55 +53,26 @@ test("comandante consulta la tripulación sin acciones de modificación", async 
  const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" msg={vi.fn()}/>);
  expect(await screen.findByText(/Luis Médico/)).toBeInTheDocument();expect(screen.queryByRole("button",{name:"Retirar"})).toBeNull();
 });
-test("operaciones consulta disponibilidad y asigna el usuario elegido", async () => {
+test("operaciones elige al copiloto entre los usuarios COMANDANTE y lo asigna con la función COPILOTO", async () => {
  vi.mocked(api).mockReset();
- const initial=[{id:1,userId:10,nombre:"Ana",apellido:"Piloto",crewRoleName:"Comandante",comandante:true}];
+ const initial=[{id:1,userId:10,nombre:"Ana",apellido:"Piloto",crewRoleName:"Comandante",crewRoleCode:"COMANDANTE",comandante:true,vigente:true}];
+ const candidate={id:11,username:"luis",nombre:"Luis",apellido:"Gómez",licencia:"L-11",provinciaId:1,provincia:"Tucumán",ubicacionPrevistaTrasVuelo:null,elegibilidad:"ORDINARIA"};
  vi.mocked(api).mockImplementation((path,opts)=>{
-  if(path.includes("/crew/available"))return Promise.resolve([{userId:11,nombre:"Luis",apellido:"Médico",username:"luis"}]);
+  if(path.startsWith("/flights/7/commander-candidates"))return Promise.resolve({salida:{provinciaId:1,provincia:"Tucumán",aeropuertoId:5,aeropuerto:"Matienzo",fuente:"AEROPUERTO_CONFIRMADO",preliminar:false},comandanteAsignadoId:10,ordinarios:[candidate],noElegiblesEnJurisdiccion:[],excepcionales:[],excepcionalesIncompletos:false,fueraDeJurisdiccion:{},puedeAutorizarExcepcion:false,mensaje:null,advertencia:null});
   if(opts?.method==="POST")return Promise.resolve(null);
   return Promise.resolve(initial);
  });
- const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()}/>);
- await screen.findByText(/Ana Piloto/);fireEvent.change(screen.getByLabelText("Función de tripulación"),{target:{value:"MEDICO"}});
- await screen.findByRole("option",{name:"Luis Médico (luis)"});fireEvent.change(screen.getByLabelText("Personal disponible"),{target:{value:"11"}});
- fireEvent.click(screen.getByRole("button",{name:"Asignar tripulante"}));
- await waitFor(()=>expect(api).toHaveBeenCalledWith("/flights/7/crew",{method:"POST",body:JSON.stringify({userId:11,crewRoleCode:"MEDICO"})}));
- await waitFor(()=>expect(vi.mocked(api).mock.calls.filter(([path,opts])=>path==="/flights/7/crew"&&!opts)).toHaveLength(2));
+ const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" canManage copilot msg={vi.fn()}/>);
+ await screen.findByText(/Ana Piloto/);fireEvent.click(await screen.findByRole("button",{name:"Seleccionar copiloto"}));
+ expect(await screen.findByText("Disponibles en Tucumán")).toBeInTheDocument();expect(screen.queryByRole("option",{name:/Médico|Enfermero/})).toBeNull();
+ fireEvent.click(screen.getByRole("radio",{name:/Gómez, Luis/}));fireEvent.click(screen.getByRole("button",{name:"Confirmar copiloto"}));
+ await waitFor(()=>expect(api).toHaveBeenCalledWith("/flights/7/crew",{method:"POST",body:JSON.stringify({userId:11,crewRoleCode:"COPILOTO",excepcionGeografica:null})}));
 });
-const ROLES=[{codigo:"COMANDANTE",nombre:"Comandante",asignacion:"RECURSOS",requiereClasificacion:true,requiereHabilitacionVerificada:true,requiereLicencia:true,requiereRolAcceso:true},{codigo:"MEDICO",nombre:"Médico",asignacion:"TRIPULACION",requiereClasificacion:true,requiereHabilitacionVerificada:true,requiereLicencia:false,requiereRolAcceso:false}];
-test("administración clasifica y retira desde las funciones del servidor, muestra elegibilidad e historial y actualiza con lo confirmado", async () => {
- vi.mocked(api).mockReset();let state="NONE";const notify=vi.fn();
- const row=(vigente)=>({userId:11,crewRoleCode:"MEDICO",crewRoleName:"Médico",vigente,clasificadoPor:"admin",fechaClasificacion:"2026-10-27T10:00:00",retiradoPor:vigente?null:"admin",fechaBaja:vigente?null:"2026-10-27T11:00:00",motivoBaja:vigente?null:"Cambio de función",elegible:vigente?false:null,elegibilidadCodigo:vigente?"HABILITACION_VENCIDA":null,elegibilidadMotivo:vigente?"La habilitación vence antes de la salida o ya venció":null});
- vi.mocked(api).mockImplementation((path,opts)=>{
-  if(path==="/catalogs/crew-roles")return Promise.resolve(ROLES);
-  if(opts?.method==="PUT"){state="CURRENT";return Promise.resolve(null);}
-  if(opts?.method==="DELETE"){state="RETIRED";return Promise.resolve(null);}
-  if(path.startsWith("/crew-qualifications/11"))return Promise.resolve(state==="CURRENT"?[row(true)]:state==="RETIRED"?[row(false)]:[]);
-  return Promise.resolve([]);
- });
- const { AdminCrewQualifications } = await import("./main.jsx");render(<AdminCrewQualifications users={[{id:11,nombre:"Luis",apellido:"Médico",username:"luis"}]} notify={notify}/>);
- fireEvent.change(screen.getByLabelText("Usuario"),{target:{value:"11"}});
- const card=await screen.findByTestId("rol-MEDICO");expect(within(card).getByText(/Sin clasificación vigente/)).toBeInTheDocument();
- expect(within(card).getByText(/habilitación profesional verificada y vigente/)).toBeInTheDocument();expect(within(screen.getByTestId("rol-COMANDANTE")).getByText(/licencia aeronáutica registrada, rol de acceso COMANDANTE/)).toBeInTheDocument();
- fireEvent.click(within(card).getByRole("button",{name:"Clasificar como Médico"}));
- expect(await within(card).findByText(/No elegible hoy: La habilitación vence/)).toBeInTheDocument();expect(api).toHaveBeenCalledWith("/crew-qualifications/11/MEDICO",{method:"PUT"});
- fireEvent.change(within(card).getByLabelText("Motivo del retiro (opcional)"),{target:{value:"Cambio de función"}});fireEvent.click(within(card).getByRole("button",{name:"Retirar clasificación de Médico"}));
- expect(await within(card).findByText(/Sin clasificación vigente/)).toBeInTheDocument();expect(api).toHaveBeenCalledWith("/crew-qualifications/11/MEDICO?motivo=Cambio%20de%20funci%C3%B3n",{method:"DELETE"});
- expect(await screen.findByTestId("historial-clasificaciones")).toHaveTextContent("Motivo: Cambio de función");expect(notify).toHaveBeenCalledWith("Clasificación retirada; queda en el historial");
-});
-test("un retiro rechazado por asignaciones activas muestra el motivo del servidor, no informa éxito y conserva la clasificación", async () => {
- vi.mocked(api).mockReset();const notify=vi.fn();
- vi.mocked(api).mockImplementation((path,opts)=>{
-  if(path==="/catalogs/crew-roles")return Promise.resolve(ROLES);
-  if(opts?.method==="DELETE")return Promise.reject(Object.assign(new Error("Retire primero las asignaciones activas de esta función (V-ABC)"),{code:"CLASIFICACION_EN_USO"}));
-  if(path.startsWith("/crew-qualifications/11"))return Promise.resolve([{userId:11,crewRoleCode:"MEDICO",crewRoleName:"Médico",vigente:true,clasificadoPor:"admin",fechaClasificacion:"2026-10-27T10:00:00",elegible:true,elegibilidadCodigo:"ELEGIBLE"}]);
-  return Promise.resolve([]);
- });
- const { AdminCrewQualifications } = await import("./main.jsx");render(<AdminCrewQualifications users={[{id:11,nombre:"Luis",apellido:"Médico",username:"luis"}]} notify={notify}/>);
- fireEvent.change(screen.getByLabelText("Usuario"),{target:{value:"11"}});
- const card=await screen.findByTestId("rol-MEDICO");expect(await within(card).findByText(/Elegible hoy/)).toBeInTheDocument();
- fireEvent.click(within(card).getByRole("button",{name:"Retirar clasificación de Médico"}));
- expect(await screen.findByRole("alert")).toHaveTextContent("V-ABC");expect(notify).not.toHaveBeenCalled();expect(within(card).getByText(/Elegible hoy/)).toBeInTheDocument();
+test("la tripulación explica que el copiloto no recibe las tareas del comandante principal", async () => {
+ vi.mocked(api).mockReset();vi.mocked(api).mockResolvedValue([{id:2,userId:11,nombre:"Luis",apellido:"Gómez",crewRoleCode:"COPILOTO",crewRoleName:"Copiloto",comandante:false,vigente:true,elegibilidadCodigo:"ITINERARIO_INCOHERENTE",elegibilidadMotivo:"Estará en Tucumán al terminar el vuelo V-1"}]);
+ const { FlightCrew } = await import("./main.jsx");render(<FlightCrew flightId={7} state="PLANIFICADO" msg={vi.fn()}/>);
+ expect(await screen.findByText(/Luis Gómez/)).toBeInTheDocument();expect(screen.getByText(/no recibe las tareas del comandante principal/)).toBeInTheDocument();
+ expect(screen.getByRole("status")).toHaveTextContent("Requiere revisión: Estará en Tucumán");
 });
 test("activation rejects an 11-character password without sending a request", async () => {
  vi.mocked(api).mockReset();

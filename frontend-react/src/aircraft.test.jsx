@@ -185,31 +185,31 @@ test("retirar pide confirmación y no actúa si se cancela", async () => {
   await screen.findByText(/Luis Médico/); window.confirm = vi.fn(() => false); fireEvent.click(screen.getByRole("button", { name: "Retirar" }));
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Luis Médico")); expect(api).not.toHaveBeenCalledWith("/flights/7/crew/2", expect.anything());
 });
-test("la asignación lista a quienes no están disponibles con el vuelo en conflicto y un conflicto 409 se muestra sin falso éxito", async () => {
+test("la asignación del copiloto lista a quienes no están disponibles con el vuelo en conflicto y un conflicto 409 se muestra sin falso éxito", async () => {
   const msg = vi.fn(); let attempts = 0;
+  const candidate = (id, extra = {}) => ({ id, username: "u" + id, nombre: "Pablo" + id, apellido: "Cmd", licencia: "L" + id, provinciaId: 1, provincia: "Tucumán", elegibilidad: "ORDINARIA", ...extra });
   vi.mocked(api).mockImplementation((path, opts) => {
-    if (path.startsWith("/flights/7/crew/available")) return Promise.resolve([{ userId: 13, nombre: "Pablo", apellido: "Médico", username: "pablo" }]);
-    if (path.startsWith("/flights/7/crew/candidates")) return Promise.resolve([{ userId: 13, nombre: "Pablo", apellido: "Médico", username: "pablo", disponible: true }, { userId: 14, nombre: "Rosa", apellido: "Médica", username: "rosa", disponible: false, motivoNoDisponible: "Tiene el vuelo V-9 comprometido en un horario incompatible" }]);
-    if (path === "/flights/7/crew" && opts?.method === "POST") { attempts++; return Promise.reject(failure("El tripulante tiene otro compromiso incompatible (V-9)")); }
+    if (path.startsWith("/flights/7/commander-candidates")) return Promise.resolve({ salida: { provincia: "Tucumán", preliminar: false }, ordinarios: [candidate(13)], noElegiblesEnJurisdiccion: [candidate(14, { elegibilidad: "NO_ELEGIBLE", motivoOperativo: "Tiene el vuelo V-9 comprometido en un horario incompatible" })], excepcionales: [], puedeAutorizarExcepcion: false });
+    if (path === "/flights/7/crew" && opts?.method === "POST") { attempts++; return Promise.reject(failure("Tiene el vuelo V-9 comprometido en un horario incompatible")); }
     return Promise.resolve(path === "/flights/7/crew" ? crewRows : []);
   });
-  render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={msg} />);
-  await screen.findByText(/Luis Médico/); fireEvent.change(screen.getByLabelText("Función de tripulación"), { target: { value: "MEDICO" } });
-  await screen.findByRole("option", { name: "Pablo Médico (pablo)" }); expect(screen.getByText(/Personal que requiere revisión \(1\)/)).toBeInTheDocument(); expect(screen.getByText(/Rosa Médica: Tiene el vuelo V-9/)).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Personal disponible"), { target: { value: "13" } });
-  const assign = screen.getByRole("button", { name: "Asignar tripulante" }); fireEvent.click(assign); fireEvent.click(assign);
-  expect(await screen.findByRole("alert")).toHaveTextContent("V-9"); expect(msg).not.toHaveBeenCalled(); expect(attempts).toBe(1);
+  render(<FlightCrew flightId={7} state="PLANIFICADO" canManage copilot msg={msg} />);
+  await screen.findByText(/Luis Médico/); fireEvent.click(await screen.findByRole("button", { name: "Seleccionar copiloto" }));
+  expect(await screen.findByText(/Cmd, Pablo13/)).toBeInTheDocument(); expect(screen.getByText(/Cmd, Pablo14/)).toBeInTheDocument(); expect(screen.getByText(/Tiene el vuelo V-9 comprometido/)).toBeInTheDocument();
+  expect(screen.queryByRole("radio", { name: /Pablo14/ })).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: /Pablo13/ }));
+  const confirm = screen.getByRole("button", { name: "Confirmar copiloto" }); fireEvent.click(confirm); fireEvent.click(confirm);
+  expect(await screen.findByRole("alert")).toHaveTextContent("V-9"); expect(attempts).toBe(1);
 });
-test("sin personal disponible se informa el estado vacío y las funciones salen del catálogo", async () => {
+test("sin comandantes disponibles como copiloto se informa el estado vacío y el rol de médico o enfermero no se ofrece como tripulación", async () => {
   vi.mocked(api).mockImplementation((path) => {
-    if (path === "/catalogs/crew-roles") return Promise.resolve([{ codigo: "COMANDANTE", nombre: "Comandante" }, { codigo: "MEDICO", nombre: "Médico" }, { codigo: "TECNICO", nombre: "Técnico de a bordo" }]);
-    if (path.startsWith("/flights/7/crew/")) return Promise.resolve([]);
+    if (path.startsWith("/flights/7/commander-candidates")) return Promise.resolve({ salida: { provincia: "Tucumán", preliminar: false }, ordinarios: [], noElegiblesEnJurisdiccion: [], excepcionales: [], puedeAutorizarExcepcion: false, mensaje: "No se encontraron comandantes disponibles en Tucumán, jurisdicción del aeropuerto de salida." });
     return Promise.resolve(crewRows);
   });
-  render(<FlightCrew flightId={7} state="PLANIFICADO" canManage msg={vi.fn()} />);
-  await screen.findByRole("option", { name: "Técnico de a bordo" }); expect(screen.queryByRole("option", { name: "Comandante" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("Función de tripulación"), { target: { value: "TECNICO" } });
-  expect(await screen.findByText("No hay personal disponible con esa función para el horario del vuelo.")).toBeInTheDocument();
+  render(<FlightCrew flightId={7} state="PLANIFICADO" canManage copilot msg={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Seleccionar copiloto" }));
+  expect(await screen.findByText(/No se encontraron comandantes disponibles en Tucumán/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("Función de tripulación")).toBeNull(); expect(screen.getByRole("button", { name: "Confirmar copiloto" })).toBeDisabled();
 });
 test("Operaciones ve la revocación y el estado actualizado después de regularizar", async () => {
   let revoked=true;
