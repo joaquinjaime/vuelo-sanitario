@@ -1,0 +1,269 @@
+/* Estilos específicos de cada módulo (conservados de la hoja de estilos anterior). Usan los tokens de tokens.css. */
+.report-item { border-top: 1px solid #d7e1ef; padding: 1rem 0; display: grid; gap: .65rem; }
+.report-item h3, .report-item p { margin: 0; }
+.report-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.report-blocked { border: 2px solid #b42318; background: #fff4f2; }
+.filters, .account-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
+.account-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.contact { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.contact button, .activation-code button { padding: .35rem .55rem; font-size: .8rem; }
+.patient-search { border-top: 1px solid var(--line); padding-top: 1rem; }
+.patient-search-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.patient-search-form button { align-self: end; }
+.patient-results { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.patient-results li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .7rem; border: 1px solid var(--line); border-radius: 8px; }
+.patient-results button { flex: none; }
+.patient-maintenance { margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+@media (max-width: 760px) { .patient-search-form { grid-template-columns: 1fr; } .patient-results li { align-items: stretch; flex-direction: column; } }
+body[data-theme="dark"] .urgent-row, body[data-theme="dark"] .report-blocked { background: #3a2629; }
+.locality-picker { position: relative; z-index: 0; overflow: visible; border: 1px solid var(--line); border-radius: 8px; padding: .8rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.locality-picker:focus-within { z-index: 2; }
+.locality-picker legend { padding: 0 .4rem; font-weight: 700; }
+.locality-search { position: relative; min-width: 0; }
+.autocomplete { position: absolute; top: calc(100% + .35rem); right: 0; left: 0; z-index: 10; isolation: isolate; opacity: 1; background: var(--autocomplete-surface); color: var(--autocomplete-text); border: 1px solid var(--autocomplete-border); border-radius: 6px; max-height: 11rem; overflow: auto; padding: .25rem; box-shadow: 0 .5rem 1.25rem #0002; scrollbar-color: var(--autocomplete-scrollbar) var(--autocomplete-surface); scrollbar-width: thin; }
+.autocomplete button { display: block; width: 100%; text-align: left; background: transparent; color: var(--autocomplete-text); border: 0; padding: .5rem; }
+.autocomplete button:hover, .autocomplete button:focus { background-color: var(--autocomplete-hover); }
+.autocomplete::-webkit-scrollbar { width: .7rem; }
+.autocomplete::-webkit-scrollbar-track { background: var(--autocomplete-surface); }
+.autocomplete::-webkit-scrollbar-thumb { background: var(--autocomplete-scrollbar); border: 2px solid var(--autocomplete-surface); border-radius: 999px; }
+.locality-picker .success { display: block; margin-top: .25rem; }
+@media (max-width: 760px) { .filters, .account-columns, .locality-picker { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .activation-modal-backdrop { align-items: start; padding: .5rem; overflow-y: auto; }
+  .activation-modal.user-create-modal { width: 100%; max-height: none; margin: .5rem 0; padding: 1rem; }
+  .user-create-section { padding: .8rem; }
+  .user-create-fields { grid-template-columns: 1fr; }
+  .phone-country-controls { grid-template-columns: 1fr; }
+  .user-create-roles { display: grid; grid-template-columns: 1fr; }
+  .form-actions { display: grid; grid-template-columns: 1fr; }
+  .form-actions button { width: 100%; }
+}
+
+/* Cierre de vuelos: informes finales, historial y notificaciones */
+.report-overdue { border-left: 4px solid #b42318; padding-left: .75rem; }
+.report-versions { display: grid; gap: .75rem; padding-left: 1.25rem; }
+.report-text { white-space: pre-wrap; margin: .25rem 0; }
+.notification-list { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.notification-list li { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+.notification-list li.unread { font-weight: 600; }
+
+/* Auditoría: línea de tiempo contextual y tabla administrativa */
+.audit-timeline { list-style: none; margin: 0; padding: 0; }
+.audit-timeline > li { border-left: 3px solid #526b89; padding: 0.25rem 0 0.75rem 0.9rem; margin-bottom: 0.4rem; }
+.audit-timeline p { margin: 0.15rem 0; }
+.audit-detail { border: 1px solid #cfd8e3; border-radius: 8px; padding: 0.75rem 1rem; margin: 0.6rem 0; background: rgba(82, 107, 137, 0.06); }
+.audit-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.audit-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.4rem 1rem; margin: 0.5rem 0; }
+.audit-facts dt { font-size: 0.78rem; text-transform: uppercase; opacity: 0.7; }
+.audit-facts dd { margin: 0; }
+.audit-changes table { width: 100%; }
+.audit-changes tr.audit-changed td { font-weight: 600; }
+.audit-changes pre { max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.audit-admin table { width: 100%; }
+.audit-admin tr.audit-selected { outline: 2px solid #526b89; }
+.audit-pager { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+
+/* Contactos de la propia persona (Mi cuenta de todas las áreas) */
+.contact-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.contact-edit, .contact-add { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .5rem; }
+.contact-edit input, .contact-add input { flex: 1 1 14rem; min-width: 0; }
+.contact-value { overflow-wrap: anywhere; }
+.contact-owner { margin: .25rem 0; }
+
+/* Contactos de coordinación del traslado (solicitud DTS y detalle de Operaciones) */
+.transfer-contacts-fieldset { border: 1px solid var(--border, #c9d1d9); border-radius: .5rem; padding: .75rem; display: grid; gap: .75rem; }
+.transfer-contact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .5rem; }
+.transfer-contact-block { display: grid; gap: .5rem; }
+.transfer-contact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.transfer-contact-edit { display: grid; gap: .5rem; width: 100%; }
+.transfer-contact-phone { font-weight: 600; margin: 0 .5rem; }
+.crew-contacts { display: grid; gap: .5rem; margin: .5rem 0; }
+.crew-contact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.crew-contact-values { margin: .15rem 0; }
+
+.phone-field { display: grid; gap: .65rem; width: 100%; min-width: 0; }
+.phone-country-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.phone-country-controls label, .phone-number-control { display: grid; gap: .4rem; min-width: 0; }
+.phone-country-controls input, .phone-country-controls select { width: 100%; min-width: 0; }
+.phone-number-input { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; min-width: 0; }
+.phone-number-input input { width: 100%; min-width: 0; border-radius: 0 8px 8px 0; }
+.phone-field > small { grid-column: 1 / -1; }
+.phone-prefix { display: grid; place-items: center; min-width: 3.35rem; padding: .55rem .65rem; font-weight: 600; white-space: nowrap; border: 1px solid #b7c5d8; border-right: 0; border-radius: 8px 0 0 8px; background: color-mix(in srgb, var(--surface) 70%, var(--card)); }
+.phone-final { color: inherit; }
+/* Va después de la regla base para que el buscador y selector no queden comprimidos en teléfonos. */
+@media (max-width: 760px) { .phone-country-controls { grid-template-columns: 1fr; } }
+.verification { margin: 0 .35rem; padding: .05rem .4rem; border-radius: .5rem; border: 1px solid currentColor; }
+.verification-VERIFICADO, .verification-VALIDADO { color: #1b6b32; }
+.verification-PENDIENTE { color: #8a5a00; }
+.verification-EXPIRADO, .verification-SIN_VERIFICAR, .verification-SIN_VALIDAR { color: #8b2d2d; }
+.email-verification { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .35rem; }
+.email-verification input[autocomplete="one-time-code"] { width: 8.5rem; letter-spacing: .42em; font-variant-numeric: tabular-nums; }
+
+/* Revisión de rutas (I-4): un color por estado de la versión y las observaciones de Operaciones bien visibles. */
+.status-ruta-borrador, .status-ruta-sin_revision, .status-ruta-sin_planificar { background: #e6e9ee; color: #40536a; }
+.status-ruta-pendiente_revision { background: #fff4cd; color: #765400; }
+.status-ruta-aprobada { background: #dff8ef; color: #11784f; }
+.status-ruta-devuelta, .status-ruta-requiere_revision { background: #fde7e4; color: #8f2a1c; }
+.route-observation { border-left: 4px solid #8f2a1c; padding-left: 0.6rem; }
+.route-version summary { cursor: pointer; }
+
+/* Bandeja de solicitudes sanitarias del Centro de Operaciones y bloqueo documental. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.nav-count + .nav-workspace-label { margin-left: .5rem; }
+.inbox-counters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.inbox-counters .counter-new { border-top: 3px solid #b7791f; }
+.inbox-counters .counter-agreed { border-top: 3px solid #1f5faa; }
+.inbox-counters .counter-negotiation { border-top: 3px solid #6b5bb5; }
+.inbox-counters .counter-urgent { border-top: 3px solid #c84437; }
+.inbox-hint { margin: 0 0 .5rem; font-size: .86rem; }
+.inbox-group { display: flex; align-items: center; gap: .5rem; margin: 1rem 0 .4rem; font-size: .98rem; }
+.inbox-count { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; padding: 0 .4rem; border-radius: 999px; background: var(--soft); border: 1px solid var(--line); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.inbox-list { display: grid; gap: .6rem; margin: 0 0 .6rem; padding: 0; list-style: none; }
+.inbox-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 8px; background: var(--card); }
+.inbox-item[data-stage="NUEVA"] { border-left-color: #b7791f; }
+.inbox-item[data-stage="ACORDADA"] { border-left-color: #1f5faa; }
+.inbox-item[data-stage="NEGOCIACION"] { border-left-color: #6b5bb5; }
+.inbox-item.is-urgent { border-left-color: #c84437; background: color-mix(in srgb, #c84437 6%, var(--card)); }
+.inbox-main { display: grid; gap: .3rem; min-width: 0; }
+.inbox-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.inbox-route { font-weight: 600; }
+.inbox-meta { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin: 0; }
+.inbox-meta div { display: flex; gap: .35rem; }
+.inbox-meta dt { color: var(--muted); font-size: .84rem; }
+.inbox-meta dd { margin: 0; font-size: .84rem; font-weight: 650; }
+.inbox-item small { color: var(--muted); }
+.inbox-item > button { flex: 0 0 auto; }
+.stage-badge { display: inline-flex; align-items: center; min-height: 1.55rem; padding: .2rem .55rem; border-radius: 99px; font-size: .75rem; font-weight: 700; line-height: 1.15; }
+.stage-new { background: #fff4cd; color: #765400; }
+.stage-agreed { background: #dceeff; color: #075298; }
+.stage-negotiation { background: #ece8fb; color: #43338a; }
+.stage-advanced { background: #dff8ef; color: #11784f; }
+.stage-closed { background: #e6e9ee; color: #40536a; }
+html[data-theme="dark"] .stage-new, body[data-theme="dark"] .stage-new { background: #4a3a0f; color: #ffe59a; }
+html[data-theme="dark"] .stage-agreed, body[data-theme="dark"] .stage-agreed { background: #173a63; color: #bfe0ff; }
+html[data-theme="dark"] .stage-negotiation, body[data-theme="dark"] .stage-negotiation { background: #2e2858; color: #d9d2ff; }
+html[data-theme="dark"] .stage-advanced, body[data-theme="dark"] .stage-advanced { background: #124432; color: #bdf1da; }
+html[data-theme="dark"] .stage-closed, body[data-theme="dark"] .stage-closed { background: #2b3647; color: #cdd6e3; }
+.dashboard-columns > .quick-links:only-child { grid-column: 1 / -1; }
+.schedule-summary { padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+.schedule-summary h4 { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0 0 .5rem; }
+.schedule-summary dl { display: grid; gap: .35rem; margin: 0; }
+.schedule-summary dl div { display: grid; grid-template-columns: minmax(11rem, 14rem) 1fr; gap: .75rem; }
+.schedule-summary dt { color: var(--muted); font-size: .88rem; }
+.schedule-summary dd { margin: 0; font-weight: 600; }
+.locked-panel { display: grid; gap: .3rem; padding: 1rem 1.1rem; border: 1px dashed var(--muted); border-radius: 8px; background: var(--soft); }
+.locked-panel p { margin: 0; }
+@media (max-width: 900px) { .inbox-counters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .inbox-counters { grid-template-columns: 1fr 1fr; }
+  .inbox-item { flex-direction: column; align-items: stretch; }
+  .inbox-item > button { width: 100%; }
+  .schedule-summary dl div { grid-template-columns: 1fr; gap: .1rem; }
+}
+
+/* Detalle por etapas: resumen de la solicitud y negociación del horario como tarea principal. */
+.request-summary { padding: 1rem 1.15rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.request-summary-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+.request-summary-head h3, .negotiation-head h3 { margin: 0; font-size: 1.05rem; }
+.request-summary dl, .negotiation-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .6rem 1.5rem; margin: 0; }
+.request-summary dl > div, .negotiation-facts > div { display: grid; gap: .1rem; }
+.request-summary dl > .wide { grid-column: 1 / -1; }
+.request-summary dt, .negotiation-facts dt { color: var(--muted); font-size: .8rem; font-weight: 650; }
+.request-summary dd, .negotiation-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.negotiation-panel { padding: 1.15rem 1.25rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.negotiation-panel.is-primary { border: 2px solid var(--brand); box-shadow: var(--shadow); background: color-mix(in srgb, var(--brand) 4%, var(--card)); }
+.negotiation-panel.is-compact { padding: .8rem 1rem; }
+.negotiation-panel.is-compact p { margin: .3rem 0; }
+.negotiation-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .6rem; }
+.negotiation-head .eyebrow { margin-bottom: .15rem; }
+.negotiation-status { margin: .6rem 0; font-size: 1.02rem; }
+.negotiation-facts { margin: .6rem 0 1rem; }
+.negotiation-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: .5rem 0 1rem; }
+.negotiation-actions button { min-height: 2.9rem; padding-inline: 1.2rem; }
+.negotiation-form { display: grid; gap: .7rem; max-width: 40rem; margin: .5rem 0 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.negotiation-form p { margin: 0; }
+.negotiation-form label { display: grid; gap: .3rem; }
+.danger-action { background: #b42318; color: #fff; }
+.negotiation-panel h4 { margin: 1rem 0 .4rem; }
+.negotiation-history { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.negotiation-history li { display: grid; gap: .1rem; padding: .5rem .7rem; border-left: 3px solid var(--line); background: var(--soft); border-radius: 0 6px 6px 0; }
+.negotiation-history li span { color: var(--muted); font-size: .86rem; }
+.negotiation-panel details summary { cursor: pointer; font-weight: 650; }
+@media (max-width: 760px) {
+ .negotiation-panel.is-primary { order: -1; } /* en pantallas angostas la decisión va antes que el resumen */
+  .request-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1rem; }
+  .negotiation-facts { grid-template-columns: 1fr; }
+  .negotiation-actions { flex-direction: column; }
+  .negotiation-actions button { width: 100%; }
+  .negotiation-panel { padding: .95rem; }
+}
+
+/* Asignación de comandante y aeronave (Centro de Operaciones) y ubicación operativa de comandantes */
+.resource-assignment { border: 1px solid var(--line); border-radius: 10px; padding: 1rem; background: var(--card); }
+.resource-assignment h4 { margin-top: 0; }
+.resource-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.resource-card { border: 1px solid var(--line); border-radius: 10px; padding: .9rem; display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+.resource-card > header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.resource-card h5 { margin: 0; font-size: 1.05rem; }
+.resource-status { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+.resource-status-assigned { background: #dff8ef; color: #0b5f3f; }
+.resource-status-reserved { background: #fff4cd; color: #765400; }
+.resource-status-pending { background: #e6e9ee; color: #34445a; }
+.resource-facts { margin: 0; display: grid; gap: .35rem; }
+.resource-facts > div { display: grid; grid-template-columns: minmax(8rem, 40%) 1fr; gap: .5rem; }
+.resource-facts dt { color: var(--muted); font-size: .9rem; }
+.resource-facts dd { margin: 0; overflow-wrap: anywhere; }
+.resource-exception { border-left: 4px solid #c27c0e; padding-left: .6rem; }
+.resource-chooser { display: grid; gap: .6rem; border-top: 1px dashed var(--line); padding-top: .6rem; }
+.resource-chooser fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; display: grid; gap: .4rem; }
+.resource-option { display: flex; gap: .55rem; align-items: flex-start; cursor: pointer; }
+.resource-option input { margin-top: .3rem; }
+.resource-option small, .resource-unavailable small, .resource-reason small, .resource-facts small { display: block; color: var(--muted); }
+.resource-unavailable p { margin: .25rem 0; }
+.resource-empty { background: #fff4cd; color: #5c4300; border-radius: 8px; padding: .6rem .8rem; margin: 0; }
+.resource-blocked { margin: 0; }
+.resource-reason textarea { width: 100%; }
+.resource-exceptions summary { cursor: pointer; font-weight: 600; }
+.location-editor { max-width: 40rem; margin-top: .8rem; }
+body[data-theme="dark"] .resource-status-assigned { background: #0f4d38; color: #c9f5e2; }
+body[data-theme="dark"] .resource-status-reserved { background: #5c4300; color: #ffe9a8; }
+body[data-theme="dark"] .resource-status-pending { background: #31465f; color: #e6eefb; }
+body[data-theme="dark"] .resource-empty { background: #4a3a10; color: #ffe9a8; }
+@media (max-width: 800px) {
+  .resource-grid { grid-template-columns: 1fr; }
+  .resource-facts > div { grid-template-columns: 1fr; }
+}
+.location-editor label, .resource-chooser > label { display: grid; gap: .3rem; }
+.resource-search { display: grid; gap: .3rem; }
+.resource-option input[type="radio"] { width: auto; flex: 0 0 auto; margin-top: .3rem; }
+.resource-option { margin: 0; }
+.resource-exceptions > button { justify-self: start; }
+.resource-assignment .resource-option { display: flex; gap: .55rem; align-items: flex-start; }
+.resource-assignment .resource-option input[type="radio"] { width: auto; padding: 0; flex: 0 0 auto; }
+.resource-assignment .resource-option > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Planificación aeroportuaria: selector de aeropuertos candidatos (Operaciones y comandante). */
+.airport-picker .resource-option, .airport-commander-planning .resource-option { display: flex; gap: .55rem; align-items: flex-start; }
+.airport-picker .resource-option input[type="radio"], .airport-commander-planning .resource-option input[type="radio"] { width: auto; padding: 0; flex: 0 0 auto; margin-top: .3rem; }
+.airport-picker .resource-option > span { min-width: 0; overflow-wrap: anywhere; }
+.resource-search-row { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.resource-search-row .resource-search { flex: 1 1 14rem; }
+.airport-pending { background: #fff4cd; color: #5c4300; border-radius: 8px; padding: .5rem .8rem; }
+.airport-pending ul { margin: .3rem 0 0; padding-left: 1.2rem; }
+.airport-commander-planning { display: grid; gap: .8rem; }
+.airport-slot-edit p { margin: 0 0 .4rem; }
+.airport-facts .airport-slot { display: grid; grid-template-columns: minmax(8rem, 40%) 1fr; gap: .5rem; }
+body[data-theme="dark"] .airport-pending { background: #4a3a10; color: #ffe9a8; }
+@media (max-width: 800px) { .airport-facts .airport-slot { grid-template-columns: 1fr; } }
+
+/* Requisitos de tripulación (clasificación, habilitación…): cada requisito en su bloque, con su causa y procedimiento */
+.requirement-list { list-style: none; margin: .5rem 0; padding: 0; display: grid; gap: .5rem; }
+.requirement-list li { padding: .5rem .75rem; border-left: 4px solid #2f7d4f; background: rgba(47, 125, 79, .08); border-radius: 4px; }
+.requirement-list li.requirement-missing { border-left-color: #b3261e; background: rgba(179, 38, 30, .08); }
+.requirement-list small { display: block; margin-top: .15rem; }
+.requirement-list .requirement-how { font-weight: 600; }
+.requirement-state { text-transform: none; font-weight: 400; }
+.resource-unavailable-item { margin-bottom: .75rem; }
+.pending-commanders table { width: 100%; }
+.pending-commanders .inline-check { display: flex; align-items: center; gap: .5rem; }
+.pending-commanders .inline-check input { width: auto; }

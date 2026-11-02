@@ -1,0 +1,91 @@
+/* Tokens de diseño: color, tipografía, espacios, radios y sombras. Todo el sistema visual sale de aquí. */
+:root {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+
+  --ink: #172033;
+  --muted: #526078;
+  --surface: #f4f6fa;
+  --card: #ffffff;
+  --soft: #f1f4f9;
+  --line: #d9dfe9;
+  --line-strong: #b9c3d3;
+
+  --brand: #1f5faa;
+  --brand-strong: #174b87;
+  --brand-soft: #e7f0fb;
+  --on-brand: #ffffff;
+  --focus: #276fc2;
+
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --warning: #8a5a00;
+  --warning-soft: #fff4d6;
+  --success: #11784f;
+  --success-soft: #e0f6ec;
+  --info: #075298;
+  --info-soft: #e1efff;
+  --negotiation: #43338a;
+  --negotiation-soft: #ece8fb;
+
+  --sidebar-bg: #14213a;
+  --sidebar-ink: #c9d4e6;
+  --sidebar-active: #243b5c;
+  --sidebar-line: #26354f;
+
+  --autocomplete-surface: #ffffff;
+  --autocomplete-text: #172033;
+  --autocomplete-border: #b9c3d3;
+  --autocomplete-hover: #e7eff9;
+  --autocomplete-scrollbar: #9baec4;
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow: 0 1px 2px rgb(16 24 40 / .05), 0 1px 3px rgb(16 24 40 / .08);
+  --shadow-lg: 0 18px 48px rgb(10 20 40 / .28);
+
+  --sidebar-w: 264px;
+  --sidebar-w-collapsed: 72px;
+  --topbar-h: 58px;
+  --gutter: clamp(1rem, 2.4vw, 2rem);
+}
+
+html[data-theme="dark"], body[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e8eef9;
+  --muted: #aab6c9;
+  --surface: #0f1726;
+  --card: #172033;
+  --soft: #1c2840;
+  --line: #2f3d56;
+  --line-strong: #4a5b78;
+
+  --brand: #82b8f6;
+  --brand-strong: #a8cdfa;
+  --brand-soft: #1b2f4d;
+  --on-brand: #0d1a2e;
+  --focus: #8fc2ff;
+
+  --danger: #ff9b90;
+  --danger-soft: #3d2326;
+  --warning: #ffd27a;
+  --warning-soft: #3d3114;
+  --success: #7fe0b8;
+  --success-soft: #123a2b;
+  --info: #a9d2ff;
+  --info-soft: #173250;
+  --negotiation: #cfc6ff;
+  --negotiation-soft: #2b2656;
+
+  --sidebar-bg: #0b1424;
+  --sidebar-ink: #b9c5d9;
+  --sidebar-active: #1c3050;
+  --sidebar-line: #1b2a42;
+
+  --autocomplete-surface: #22324b;
+  --autocomplete-text: #e8eef9;
+  --autocomplete-border: #5f7290;
+  --autocomplete-hover: #2f4463;
+  --autocomplete-scrollbar: #7890aa;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4);
+}
