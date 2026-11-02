@@ -17,6 +17,12 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
      */
     @Query("select f from Flight f where f.aircraft.id = :aircraftId and f.estadoVuelo.codigo in ('PENDIENTE_CONFIRMACION_COMANDANTE','PENDIENTE_RESPUESTA_OPERACIONES','PLANIFICADO','EN_CURSO') and ((f.fechaPlanificadaSalida < :end and f.fechaPlanificadaLlegada > :start) or (f.fechaPlanificadaLlegada is null and f.fechaPlanificadaSalida >= :start and f.fechaPlanificadaSalida < :end))")
     List<Flight> aircraftBusyIn(@Param("aircraftId") Long aircraftId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    /**
+     * Aeronaves reservadas por vuelos sanitarios aprobados que todavía no tienen estado de vuelo (aeronave elegida y comandante pendiente): ocupan la aeronave en las mismas
+     * condiciones que aircraftBusyIn, para que no se reserve dos veces ni se ofrezca para horarios incompatibles.
+     */
+    @Query("select f from Flight f where f.aircraft.id = :aircraftId and f.estadoVuelo is null and exists (select 1 from SanitaryFlight s where s.flight = f and s.estadoSolicitud.codigo = 'APROBADO') and ((f.fechaPlanificadaSalida < :end and f.fechaPlanificadaLlegada > :start) or (f.fechaPlanificadaLlegada is null and f.fechaPlanificadaSalida >= :start and f.fechaPlanificadaSalida < :end))")
+    List<Flight> aircraftReservedIn(@Param("aircraftId") Long aircraftId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     @Query("select f from Flight f where f.comandante.id = :commanderId and f.fechaPlanificadaSalida < :end and f.fechaPlanificadaLlegada > :start and f.estadoVuelo.codigo in ('PENDIENTE_CONFIRMACION_COMANDANTE','PENDIENTE_RESPUESTA_OPERACIONES','PLANIFICADO','EN_CURSO')")
     List<Flight> overlappingCommander(@Param("commanderId") Long commanderId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     @Query("select f from Flight f where f.aircraft.id = :aircraftId and f.estadoVuelo.codigo in :states") List<Flight> activeAircraftAssignments(@Param("aircraftId") Long aircraftId,@Param("states") Collection<String> states);

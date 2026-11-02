@@ -37,6 +37,7 @@ class DocumentServiceTest {
   flight.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); FlightStatus status=new FlightStatus(); status.setCodigo("PLANIFICADO"); flight.setEstadoVuelo(status);
   actor.setId(actorId); type.setCodigo("AUTORIZACION"); type.setNombre("Autorización de vuelo");
   when(users.findById(actorId)).thenReturn(Optional.of(actor));
+  when(flights.lockById(flight.getId())).thenReturn(Optional.of(flight)); // replacePdf, acquireLock y deactivate bloquean el vuelo del documento
   doAnswer(invocation -> { FlightDocumentItem item=invocation.getArgument(0); if(item.getId()==null)item.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); return item; }).when(items).save(any());
   doAnswer(invocation -> { FlightDocument version=invocation.getArgument(0); if(version.getId()==null)version.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)); return version; }).when(versions).save(any());
  }
@@ -373,7 +374,7 @@ class DocumentServiceTest {
 
  // ---- compatibilidad de tipos documentales ----
  private DocumentType medical() { DocumentType t=new DocumentType(); t.setCodigo("PARTE_MEDICO"); t.setNombre("Parte médico"); t.setSoloVueloSanitario(true); return t; }
- private void makeSanitary() { flight.setSanitario(new com.vuelossanitarios.backend.domain.flight.SanitaryFlight()); }
+ private void makeSanitary() { com.vuelossanitarios.backend.domain.flight.SanitaryFlight request=new com.vuelossanitarios.backend.domain.flight.SanitaryFlight(); com.vuelossanitarios.backend.domain.catalog.SanitaryRequestStatus agreed=new com.vuelossanitarios.backend.domain.catalog.SanitaryRequestStatus(); agreed.setCodigo("APROBADO"); request.setEstadoSolicitud(agreed); flight.setSanitario(request); } // un vuelo sanitario con horario acordado: la gestión documental está habilitada
 
  @Test void aMedicalReportIsRejectedInANonSanitaryFlightBeforeAnythingIsPersisted() {
   when(flights.lockById(flight.getId())).thenReturn(Optional.of(flight)); when(types.findByCodigo("PARTE_MEDICO")).thenReturn(Optional.of(medical())); when(storage.storePdf(any())).thenReturn("p.pdf");

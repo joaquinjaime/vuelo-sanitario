@@ -28,10 +28,12 @@ class AircraftAssignmentFlightServiceTest {
  private final CancellationReasonRepository reasons=mock(CancellationReasonRepository.class);
  private final AuditService audit=mock(AuditService.class); private final NotificationService notifications=mock(NotificationService.class);
  private final CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class); private final CrewManagementService crewManagement=mock(CrewManagementService.class);
+ private final CommanderGeographicExceptionRepository geoExceptions=mock(CommanderGeographicExceptionRepository.class);
  private FlightService service;
- private User ops,commander,medic; private Province province,otherProvince; private Airport tuc,tuc2,aep,salta; private Aircraft oldPlane,newPlane; private Flight operational; private AuditEvent auditEvent;
+ private User ops,commander,medic; private Locality capital; private Province province,otherProvince; private Airport tuc,tuc2,aep,salta; private Aircraft oldPlane,newPlane; private Flight operational; private AuditEvent auditEvent;
 
  private static long id(){return java.util.concurrent.ThreadLocalRandom.current().nextLong(1,Long.MAX_VALUE);}
+ private static Locality locality(String name,Province p){Locality l=new Locality();l.setId(id());l.setNombre(name);l.setProvincia(p);l.setActivo(true);return l;}
  private static Airport airport(String name,Province p){Airport a=new Airport();a.setId(id());a.setNombre(name);a.setActivo(true);a.setProvinciaReferencial(p);return a;}
  private static Aircraft plane(String plate,Airport at,int crewCapacity){Aircraft a=new Aircraft();a.setId(id());a.setMatricula(plate);a.setActivo(true);a.setAeropuertoActual(at);a.setCapacidadTripulacion((short)crewCapacity);return a;}
  private static User user(String username,String role,Province p){User u=new User();u.setId(id());u.setUsername(username);u.setActivo(true);u.setEstadoCuenta("ACTIVO");Person person=new Person();person.setNombre(username);person.setApellido("X");CommanderProfile profile=new CommanderProfile();profile.setLicenseNumber("L");profile.setProvinciaActual(p);person.setCommanderProfile(profile);u.setPerson(person);Role r=new Role();r.setCodigo(role);UserRole link=new UserRole();link.setRole(r);u.setUserRoles(Set.of(link));return u;}
@@ -40,11 +42,11 @@ class AircraftAssignmentFlightServiceTest {
  private FlightCrew crew(long crewId,Flight f,User u,String role){CrewRole r=new CrewRole();r.setCodigo(role);r.setNombre(role);FlightCrew c=new FlightCrew();c.setId(crewId);c.setFlight(f);c.setUser(u);c.setCrewRole(r);return c;}
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),mock(AirportLocks.class),Clock.systemDefaultZone());
+  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),mock(AirportLocks.class),geoExceptions,Clock.systemDefaultZone());
   province=new Province();province.setId(id());province.setNombre("Tucumán");otherProvince=new Province();otherProvince.setId(id());otherProvince.setNombre("Salta");
   tuc=airport("TUC",province);tuc2=airport("TUC2",province);aep=airport("AEP",province);salta=airport("SLA",otherProvince);
   oldPlane=plane("LV-OLD",tuc,4);newPlane=plane("LV-NEW",tuc2,4);
-  ops=user("ops","OPERACIONES",null);commander=user("cmd","COMANDANTE",province);medic=user("medic","MEDICO",null);
+  capital=locality("San Miguel de Tucumán",province);ops=user("ops","OPERACIONES",null);commander=user("cmd","COMANDANTE",province);commander.getPerson().getCommanderProfile().setLocalidadActual(capital);medic=user("medic","MEDICO",null);
   for(User u:List.of(ops,commander,medic)){when(users.lockById(u.getId())).thenReturn(Optional.of(u));when(users.findById(u.getId())).thenReturn(Optional.of(u));when(users.findWithRolesByUsername(u.getUsername())).thenReturn(Optional.of(u));}
   auditEvent=mock(AuditEvent.class);when(auditEvent.getId()).thenReturn(900L);when(audit.record(any(),any(),any(),any(),any(),any(),any())).thenReturn(auditEvent);
   when(aircraft.lockById(oldPlane.getId())).thenReturn(Optional.of(oldPlane));when(aircraft.lockById(newPlane.getId())).thenReturn(Optional.of(newPlane));
@@ -120,7 +122,7 @@ class AircraftAssignmentFlightServiceTest {
 
  // ---------- Vuelo sanitario ----------
  private Flight sanitaryFlight(Airport plannedOrigin){
-  Locality requested=new Locality();requested.setProvincia(province);SanitaryRequestStatus approved=new SanitaryRequestStatus();approved.setCodigo("APROBADO");
+  Locality requested=capital;SanitaryRequestStatus approved=new SanitaryRequestStatus();approved.setCodigo("APROBADO");
   com.vuelossanitarios.backend.domain.patient.Patient patient=new com.vuelossanitarios.backend.domain.patient.Patient();Person patientPerson=new Person();patientPerson.setNombre("Paciente");patientPerson.setApellido("Prueba");patient.setPerson(patientPerson);SanitaryFlight s=new SanitaryFlight();s.setPatient(patient);s.setLocalidadOrigenSolicitada(requested);s.setLocalidadDestinoSolicitada(requested);s.setEstadoSolicitud(approved);
   Flight f=new Flight();f.setId(id());f.setCodigo("V-SAN");f.setTipoVuelo(type("SANITARIO"));f.setAircraft(oldPlane);f.setComandante(commander);f.setOrigen(plannedOrigin);f.setDestino(aep);f.setSanitario(s);
   f.setFechaPlanificadaSalida(LocalDateTime.now().plusDays(3));f.setEstadoVuelo(status("PLANIFICADO"));
@@ -169,6 +171,115 @@ class AircraftAssignmentFlightServiceTest {
    assertEquals(HttpStatus.CONFLICT,e.status());assertEquals(code,e.code());assertNull(f.getAircraft());assertNull(f.getComandante());assertNull(f.getEstadoVuelo(),"el vuelo no pasa a PLANIFICADO");
   }
   verify(audit,never()).record(any(),any(),eq("FLIGHT"),any(),eq("ASSIGN_RESOURCES"),any(),any());
+ }
+
+ // ---------- Regla geográfica, excepciones y reserva de recursos (V63) ----------
+ private User centro(){User co=user("co","CENTRO_OPERACIONES",null);when(users.lockById(co.getId())).thenReturn(Optional.of(co));when(users.findById(co.getId())).thenReturn(Optional.of(co));when(users.findWithRolesByUsername(co.getUsername())).thenReturn(Optional.of(co));return co;}
+ private Flight unassigned(){Flight f=sanitaryFlight(null);f.setAircraft(null);f.setComandante(null);f.setEstadoVuelo(null);newPlane.setAeropuertoActual(tuc);CrewRole role=new CrewRole();role.setCodigo("COMANDANTE");when(crewRoles.findByCodigo("COMANDANTE")).thenReturn(Optional.of(role));return f;}
+ private void commanderAt(Province p,Locality l){CommanderProfile profile=commander.getPerson().getCommanderProfile();profile.setProvinciaActual(p);profile.setLocalidadActual(l);}
+
+ @Test void aCommanderInAnotherLocalityOfTheSameProvinceIsNotOrdinarilyEligible(){
+  Flight f=unassigned();commanderAt(province,locality("Concepción",province));
+  ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId()),ops.getId()));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("COMMANDER_OUTSIDE_DEPARTURE_LOCALITY",e.code());assertEquals("OTRA_LOCALIDAD",e.details().get("tipo"));
+  assertNull(f.getComandante());assertNull(f.getAircraft());assertNull(f.getEstadoVuelo());verify(geoExceptions,never()).saveAndFlush(any());
+ }
+ @Test void aCommanderWithoutAnyRegisteredLocationOrWithOnlyAProvinceIsNotOrdinarilyEligible(){
+  Flight f=unassigned();commanderAt(null,null);
+  ApiException unknown=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId()),ops.getId()));
+  assertEquals(HttpStatus.CONFLICT,unknown.status());assertEquals("UBICACION_DESCONOCIDA",unknown.details().get("tipo"));
+  commanderAt(province,null);
+  ApiException partial=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId()),ops.getId()));
+  assertEquals("UBICACION_INCOMPLETA",partial.details().get("tipo"));assertNull(f.getComandante());
+ }
+ @Test void aCommanderInAnotherProvinceNeedsAnAuthorizedJustifiedException(){
+  Flight f=unassigned();Locality baires=locality("Ciudad de Buenos Aires",otherProvince);commanderAt(otherProvince,baires);User co=centro();
+  ApiException unauthorized=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("Traslado urgente sin otro comandante")),ops.getId()));
+  assertEquals(HttpStatus.FORBIDDEN,unauthorized.status());assertEquals("GEOGRAPHIC_EXCEPTION_NOT_AUTHORIZED",unauthorized.code());assertNull(f.getComandante());
+  ApiException short_=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("urgente")),co.getId()));
+  assertEquals(HttpStatus.BAD_REQUEST,short_.status());assertEquals("GEOGRAPHIC_EXCEPTION_REASON_REQUIRED",short_.code());assertNull(f.getComandante());
+  verify(geoExceptions,never()).saveAndFlush(any());
+  FlightView view=service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("  Traslado urgente sin otro comandante habilitado  ")),co.getId());
+  assertEquals("PLANIFICADO",view.estadoVuelo());assertSame(commander,f.getComandante());
+  ArgumentCaptor<CommanderGeographicException> saved=ArgumentCaptor.forClass(CommanderGeographicException.class);verify(geoExceptions).saveAndFlush(saved.capture());
+  CommanderGeographicException e=saved.getValue();assertEquals("OTRA_PROVINCIA",e.getType());assertEquals("Traslado urgente sin otro comandante habilitado",e.getReason());assertSame(co,e.getAuthorizedBy());assertSame(commander,e.getCommander());assertSame(f,e.getFlight());assertSame(capital,e.getDepartureLocality());assertSame(baires,e.getCommanderLocality());assertNotNull(e.getAuthorizedAt());
+  verify(audit).record(eq(f),eq(co),eq("COMMANDER_GEOGRAPHIC_EXCEPTION"),any(),eq("CREATE"),isNull(),contains("OTRA_PROVINCIA"));
+ }
+ @Test void theGeographicExceptionNeverSkipsTheOperationalChecks(){
+  Flight f=unassigned();commanderAt(otherProvince,locality("Salta",otherProvince));User co=centro();
+  when(crewManagement.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean(),any())).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_VENCIDA","Habilitación vencida",null));
+  ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("Traslado urgente sin otro comandante")),co.getId()));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_VENCIDA",e.code());assertNull(f.getComandante());verify(geoExceptions,never()).saveAndFlush(any());
+ }
+ @Test void anExceptionForACommanderInTheDepartureLocalityIsRejected(){
+  Flight f=unassigned();
+  ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("Justificación innecesaria aquí")),centro().getId()));
+  assertEquals(HttpStatus.BAD_REQUEST,e.status());assertEquals("GEOGRAPHIC_EXCEPTION_NOT_NEEDED",e.code());assertNull(f.getComandante());
+ }
+ @Test void aDeactivatedLocalityIsNotAnOrdinaryLocation(){
+  Flight f=unassigned();Locality closed=locality("Cerrada",province);closed.setActivo(false);commanderAt(province,closed);
+  ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId()),ops.getId()));
+  assertEquals("LOCALIDAD_DESHABILITADA",e.details().get("tipo"));
+ }
+
+ @Test void theCommanderChosenFirstIsReservedWithoutChangingTheFlightStateAndTheAircraftCompletesTheAssignment(){
+  Flight f=unassigned();
+  FlightView reserved=service.assignCommander(f.getId(),new AssignCommander(commander.getId(),null),ops.getId());
+  assertSame(commander,f.getComandante());assertNull(f.getEstadoVuelo(),"la reserva no cambia el estado del vuelo");assertNull(reserved.estadoVuelo());assertNull(f.getAircraft());
+  verify(audit).record(eq(f),eq(ops),eq("FLIGHT"),eq(f.getId()),eq("ASSIGN_FLIGHT_COMMANDER"),isNull(),contains("RESERVADO"));
+  verify(notifications,never()).create(any(),any(),eq("COMMANDER_ASSIGNED"),anyString());verify(crews,never()).saveAndFlush(any());
+  FlightView done=service.assignAircraft(f.getId(),new AssignAircraft(newPlane.getId(),null),ops.getId());
+  assertEquals("PLANIFICADO",done.estadoVuelo());assertSame(newPlane,f.getAircraft());assertSame(commander,f.getComandante());
+  verify(audit).record(eq(f),eq(ops),eq("FLIGHT"),eq(f.getId()),eq("ASSIGN_RESOURCES"),any(),contains(newPlane.getId().toString()));
+  verify(notifications).create(eq(commander),eq(f),eq("COMMANDER_ASSIGNED"),anyString());
+ }
+ @Test void theAircraftChosenFirstIsReservedAndTheCommanderCompletesTheAssignment(){
+  Flight f=unassigned();
+  FlightView reserved=service.assignAircraft(f.getId(),new AssignAircraft(newPlane.getId(),null),ops.getId());
+  assertSame(newPlane,f.getAircraft());assertNull(f.getEstadoVuelo());assertNull(reserved.estadoVuelo());assertNull(f.getComandante());
+  verify(audit).record(eq(f),eq(ops),eq("FLIGHT"),eq(f.getId()),eq("ASSIGN_FLIGHT_AIRCRAFT"),isNull(),contains("RESERVADO"));verify(notifications,never()).create(any(),any(),eq("COMMANDER_ASSIGNED"),anyString());
+  FlightView done=service.assignCommander(f.getId(),new AssignCommander(commander.getId(),null),ops.getId());
+  assertEquals("PLANIFICADO",done.estadoVuelo());assertSame(commander,f.getComandante());verify(notifications).create(eq(commander),eq(f),eq("COMMANDER_ASSIGNED"),anyString());
+ }
+ @Test void anAircraftReservedByAnotherApprovedRequestIsNotOfferedForAnIncompatibleSchedule(){
+  Flight f=unassigned();Flight other=new Flight();other.setId(id());other.setCodigo("V-RESERVA");
+  when(flights.aircraftReservedIn(eq(newPlane.getId()),any(),any())).thenReturn(List.of(other));
+  ApiException e=assertThrows(ApiException.class,()->service.assignAircraft(f.getId(),new AssignAircraft(newPlane.getId(),null),ops.getId()));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertTrue(e.getMessage().contains("V-RESERVA"));assertNull(f.getAircraft());
+ }
+ @Test void completingTheReservationFailsIfTheCommanderMovedOutOfTheDepartureLocality(){
+  Flight f=unassigned();service.assignCommander(f.getId(),new AssignCommander(commander.getId(),null),ops.getId());
+  commanderAt(otherProvince,locality("Salta",otherProvince));
+  ApiException e=assertThrows(ApiException.class,()->service.assignAircraft(f.getId(),new AssignAircraft(newPlane.getId(),null),ops.getId()));
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("COMMANDER_OUTSIDE_DEPARTURE_LOCALITY",e.code());
+ }
+ @Test void aFailedAssignmentLeavesTheRequestWithoutResourcesNorExceptions(){
+  Flight f=unassigned();commanderAt(otherProvince,locality("Salta",otherProvince));
+  when(aircraft.lockById(newPlane.getId())).thenReturn(Optional.empty());
+  assertThrows(ApiException.class,()->service.assignAircraft(f.getId(),new AssignAircraft(newPlane.getId(),null),ops.getId()));
+  assertNull(f.getAircraft());assertNull(f.getComandante());assertNull(f.getEstadoVuelo());verify(geoExceptions,never()).saveAndFlush(any());
+ }
+ @Test void candidatesSeparateOrdinaryFromExceptionalCommandersAndExplainWhyNoneIsOrdinary(){
+  Flight f=unassigned();Locality baires=locality("Ciudad de Buenos Aires",otherProvince);User far=user("lejos","COMANDANTE",otherProvince);far.getPerson().getCommanderProfile().setLocalidadActual(baires);
+  when(users.findActiveCommandersInLocality(capital.getId())).thenReturn(List.of());
+  when(users.findActiveCommandersOutsideLocality(eq(capital.getId()),eq(province.getId()),eq(""),any())).thenReturn(List.of(far));
+  when(users.countActiveCommandersOutsideLocality(capital.getId())).thenReturn(List.<Object[]>of(new Object[]{otherProvince.getId(),baires.getId(),true,1L},new Object[]{null,null,null,2L}));
+  when(users.findById(far.getId())).thenReturn(Optional.of(far));
+  User co=centro();
+  CommanderCandidates result=service.commanderCandidates(f.getId(),co.getId(),"");
+  assertTrue(result.ordinarios().isEmpty());assertEquals(1,result.excepcionales().size());assertEquals("EXCEPCION",result.excepcionales().get(0).elegibilidad());assertEquals("OTRA_PROVINCIA",result.excepcionales().get(0).codigoUbicacion());
+  assertEquals(1L,result.fueraDeLocalidad().get("OTRA_PROVINCIA"));assertEquals(2L,result.fueraDeLocalidad().get("UBICACION_DESCONOCIDA"));assertTrue(result.puedeAutorizarExcepcion());
+  assertTrue(result.mensaje().startsWith("No se encontraron comandantes disponibles en la localidad de salida"));assertTrue(result.mensaje().contains("2 sin ubicación registrada"));assertTrue(result.mensaje().contains("1 en otra provincia"));
+  assertTrue(service.availableCommanders(f.getId(),co.getId()).isEmpty());
+ }
+ @Test void aCommanderInTheDepartureLocalityIsOrdinaryAndOneWithAnOperationalConflictIsExplained(){
+  Flight f=unassigned();User busy=user("ocupado","COMANDANTE",province);busy.getPerson().getCommanderProfile().setLocalidadActual(capital);
+  when(users.findActiveCommandersInLocality(capital.getId())).thenReturn(List.of(commander,busy));
+  when(crewManagement.evaluate(any(),eq(busy),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CONFLICTO_ASIGNACION","Tiene el vuelo V-1 comprometido en un horario incompatible",null));
+  CommanderCandidates result=service.commanderCandidates(f.getId(),ops.getId(),"");
+  assertEquals(1,result.ordinarios().size());assertEquals(commander.getId(),result.ordinarios().get(0).id());assertEquals("ORDINARIA",result.ordinarios().get(0).elegibilidad());assertNull(result.mensaje());
+  assertEquals(1,result.noElegiblesEnLocalidad().size());assertEquals("NO_ELEGIBLE",result.noElegiblesEnLocalidad().get(0).elegibilidad());assertEquals("CONFLICTO_ASIGNACION",result.noElegiblesEnLocalidad().get(0).codigoOperativo());
+  assertFalse(result.puedeAutorizarExcepcion());
  }
 
  // ---------- Liberación al cancelar ----------

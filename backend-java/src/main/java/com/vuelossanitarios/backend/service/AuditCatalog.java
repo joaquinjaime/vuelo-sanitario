@@ -15,7 +15,7 @@ final class AuditCatalog {
   t.put("GEOGRAPHIC_PROVINCE","Provincia");t.put("GEOGRAPHIC_LOCALITY","Localidad");t.put("GEOGRAPHIC_AIRPORT","Aeropuerto");
   t.put("FLIGHT_ROUTE","Ruta del vuelo");t.put("DOCUMENT","Documento del vuelo");t.put("DOCUMENT_LOCK","Bloqueo de documento");t.put("HANGAR_INFO","Preparación en hangar");
   t.put("AA2000_COORDINATION","Coordinación aeroportuaria");t.put("FLIGHT_LOG","Bitácora operativa");t.put("WEATHER","Condiciones meteorológicas");
-  t.put("FINAL_REPORT","Informe final");t.put("FINAL_REPORT_OBLIGATION","Obligación de informe final");t.put("USER","Usuario");t.put("COMMANDER_PROFILE","Perfil de comandante");
+  t.put("FINAL_REPORT","Informe final");t.put("FINAL_REPORT_OBLIGATION","Obligación de informe final");t.put("USER","Usuario");t.put("COMMANDER_PROFILE","Perfil de comandante");t.put("COMMANDER_GEOGRAPHIC_EXCEPTION","Excepción geográfica de la asignación del comandante");
   t.put("CREW_QUALIFICATION","Clasificación de tripulación");t.put("USER_ROLE","Roles de usuario");t.put("PROFESSIONAL_CREDENTIAL","Habilitación profesional");t.put("CREDENTIAL_DOCUMENT","Documento de habilitación");t.put("CREDENTIAL_POLICY","Política de suficiencia de habilitaciones");t.put("PATIENT","Paciente");t.put("PATIENT_IDENTITY","Identidad de paciente");t.put("TRANSFER_CONTACT","Contacto de coordinación del traslado");t.put("FLIGHT_CREW_CONTACT","Contactos laborales de la tripulación");t.put("PERSON_EMAIL","Correo electrónico de la persona");t.put("PERSON_PHONE","Teléfono de la persona");
   Map<String,String> o=OPERATIONS;
   o.put("CREATE","Alta");o.put("UPDATE","Modificación");o.put("DELETE","Eliminación");o.put("REMOVE","Retiro");o.put("REPLACE","Reemplazo");
@@ -23,7 +23,7 @@ final class AuditCatalog {
   o.put("APPROVE","Aprobación");o.put("REJECT","Rechazo");o.put("COUNTERPROPOSE","Contrapropuesta de horario");o.put("REPLACE_COUNTERPROPOSAL","Reemplazo de la contrapropuesta");
   o.put("ACCEPT_COUNTERPROPOSAL","Aceptación de la contrapropuesta");o.put("COMMANDER_ASSIGNMENT_RESPONSE","Respuesta del comandante a la asignación");
   o.put("COMMANDER_SCHEDULE_RESPONSE","Respuesta de Operaciones a la propuesta del comandante");o.put("ASSIGN_RESOURCES","Asignación de aeronave y comandante");
-  o.put("CHANGE_AIRCRAFT","Cambio de aeronave");o.put("OPERATIONAL_PLANNING","Planificación operativa");o.put("START","Inicio del vuelo");o.put("FINISH","Finalización del vuelo");
+  o.put("CHANGE_AIRCRAFT","Cambio de aeronave");o.put("ASSIGN_FLIGHT_COMMANDER","Comandante reservado para el vuelo");o.put("ASSIGN_FLIGHT_AIRCRAFT","Aeronave reservada para el vuelo");o.put("COMMANDER_LOCATION_UPDATE","Ubicación operativa del comandante actualizada");o.put("OPERATIONAL_PLANNING","Planificación operativa");o.put("START","Inicio del vuelo");o.put("FINISH","Finalización del vuelo");
   o.put("COMPLETE","Cierre del vuelo");o.put("CANCEL","Cancelación");o.put("SET_ACTIVE","Cambio de estado activo");o.put("MANUAL_LOCATION_CHANGE","Cambio manual de ubicación");
   o.put("UPDATE_LOCATION_AFTER_FINISH","Ubicación actualizada al finalizar un vuelo");o.put("ACQUIRE","Bloqueo adquirido");o.put("RECOVER","Bloqueo recuperado");o.put("RELEASE","Bloqueo liberado");
   o.put("CREATE_VERSION","Nueva versión");o.put("SUBMIT","Presentación");o.put("RESUBMIT","Nueva presentación");o.put("RETURN","Devolución para corrección");o.put("OVERDUE","Plazo vencido");
@@ -46,7 +46,7 @@ final class AuditCatalog {
   f.put("adjuntoBytes","Tamaño del adjunto (bytes)");f.put("adjuntoSha256","Huella SHA-256 del adjunto");f.put("status","Estado");f.put("dueAt","Vencimiento");
   f.put("modelo","Modelo");f.put("capacidadPacientes","Capacidad de pacientes");f.put("capacidadTripulacion","Capacidad de tripulación");
   f.put("referenciasHistoricasConservadas","Referencias históricas conservadas");f.put("equipamientoMedico","Equipamiento médico");f.put("activo","Activo");f.put("aeropuertoActual","Ubicación");f.put("aeropuertoActualId","Ubicación");f.put("fecha","Fecha");
-  f.put("provinciaActualId","Provincia actual");f.put("profileCreated","Perfil creado");f.put("licenseChanged","Licencia modificada");f.put("temporaryPasswordIssued","Contraseña temporal emitida");
+  f.put("provinciaActualId","Provincia actual");f.put("provinciaActual","Provincia actual");f.put("localidadActualId","Localidad actual");f.put("localidadActual","Localidad actual");f.put("localidadSalida","Localidad de salida");f.put("excepcionGeograficaId","Excepción geográfica");f.put("profileCreated","Perfil creado");f.put("licenseChanged","Licencia modificada");f.put("temporaryPasswordIssued","Contraseña temporal emitida");
   f.put("reason","Razón");f.put("descripcion","Descripción");f.put("importancia","Importancia");f.put("origen","Origen del registro");f.put("responsable","Responsable");
   f.put("registrado","Registrado");f.put("ocurrido","Ocurrido");f.put("correccionDe","Corrige la entrada");f.put("motivoCorreccion","Motivo de la corrección");
   f.put("alternativo","Aeropuerto alternativo");f.put("alternativoId","Aeropuerto alternativo");f.put("altitudPies","Altitud (pies)");f.put("creadoPor","Creado por");

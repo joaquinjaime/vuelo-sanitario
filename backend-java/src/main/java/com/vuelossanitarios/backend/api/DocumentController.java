@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 @RestController @RequestMapping("/api") public class DocumentController {
  private final DocumentService service; public DocumentController(DocumentService s){service=s;}
+ /** Sólo informa si la documentación está habilitada (horario acordado); es lo único consultable antes del acuerdo. */
+ @GetMapping("/flights/{flightId}/documents/access") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public DocumentAccessView accessStatus(@PathVariable Long flightId,@AuthenticationPrincipal CurrentUser u){return service.accessStatus(flightId,u.id());}
  @GetMapping("/flights/{flightId}/documents") @PreAuthorize("hasAnyRole('DTS','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')") public List<DocumentView> list(@PathVariable Long flightId,@AuthenticationPrincipal CurrentUser u){return service.list(flightId,u.id());}
  @PostMapping(value="/flights/{flightId}/documents/pdf",consumes=MediaType.MULTIPART_FORM_DATA_VALUE) @PreAuthorize("hasAnyRole('COMANDANTE','OPERACIONES','CENTRO_OPERACIONES')") public DocumentView createPdf(@PathVariable Long flightId,@RequestParam String documentTypeCode,@RequestParam String nombreDocumento,@RequestPart MultipartFile file,@AuthenticationPrincipal CurrentUser u){return service.createPdf(flightId,documentTypeCode,nombreDocumento,file,u.id());}
  @GetMapping("/flights/{flightId}/documents/types") @PreAuthorize("hasAnyRole('COMANDANTE','OPERACIONES','CENTRO_OPERACIONES')") public List<DocumentTypeView> allowedTypes(@PathVariable Long flightId,@AuthenticationPrincipal CurrentUser u){return service.allowedTypes(flightId,u.id());}

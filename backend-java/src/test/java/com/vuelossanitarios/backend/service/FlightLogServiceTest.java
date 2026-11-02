@@ -31,4 +31,29 @@ class FlightLogServiceTest {
  @Test void correctionPreservesAndReferencesOriginal(){FlightAuditLog original=new FlightAuditLog();ReflectionTestUtils.setField(original,"id",9L);original.setFlight(flight);original.setOrigen("MANUAL");original.setUsuario(commander);when(entries.findById(9L)).thenReturn(Optional.of(original));var result=service.create(42L,2L,input(9L," dato corregido "));assertEquals(9L,result.correccionDe());assertEquals("dato corregido",result.motivoCorreccion());verify(audit).record(eq(flight),eq(operations),eq("FLIGHT_LOG"),eq(100L),eq("CORRECT"),notNull(),notNull());verify(entries,never()).delete(any());}
  @Test void permissionsAndMissingFlightAreChecked(){when(entries.history(eq(42L),any())).thenReturn(new SliceImpl<>(List.of()));assertFalse(service.history(42L,4L,0).puedeRegistrar());assertTrue(service.history(42L,2L,0).puedeRegistrar());assertThrows(ApiException.class,()->service.history(42L,3L,0));assertThrows(ApiException.class,()->service.create(42L,4L,input(null,null)));assertThrows(ApiException.class,()->service.create(999L,1L,input(null,null)));}
  @Test void automaticTransitionIsIdempotent(){when(entries.existsByFlightIdAndOrigenAndTipo(42L,"AUTOMATICO","INICIO")).thenReturn(false,true);service.automatic(flight,operations,"INICIO","Vuelo iniciado");service.automatic(flight,operations,"INICIO","Vuelo iniciado");verify(entries,times(1)).saveAndFlush(any());verify(audit,times(1)).record(eq(flight),eq(operations),eq("FLIGHT_LOG"),eq(100L),eq("CREATE_AUTO"),isNull(),anyString());}
+ @Test void aSanitaryRequestStillInNegotiationRejectsManualEntriesWith409AndLeavesNoRecord(){
+  flight.setEstadoVuelo(null);
+  for(String state:List.of("SOLICITADO","PENDIENTE_RESPUESTA_DTS")){
+   var request=new SanitaryFlight();var status=new com.vuelossanitarios.backend.domain.catalog.SanitaryRequestStatus();status.setCodigo(state);request.setEstadoSolicitud(status);flight.setSanitario(request);
+   when(entries.history(eq(42L),any())).thenReturn(new SliceImpl<>(List.of()));
+   var error=assertThrows(ApiException.class,()->service.create(42L,2L,input(null,null)));
+   assertEquals(org.springframework.http.HttpStatus.CONFLICT,error.status(),state);assertEquals(PreparationStageGate.CODE,error.code(),state);
+   assertFalse(service.history(42L,2L,0).puedeRegistrar(),state);assertEquals("Disponible cuando el horario de salida esté acordado",service.history(42L,2L,0).motivo());
+   // quien no tiene permiso sigue recibiendo 403, no el estado
+   assertEquals(org.springframework.http.HttpStatus.FORBIDDEN,assertThrows(ApiException.class,()->service.create(42L,3L,input(null,null))).status());
+  }
+  verify(entries,never()).saveAndFlush(any());
+  // con el horario acordado la bitácora se habilita
+  var agreed=new com.vuelossanitarios.backend.domain.catalog.SanitaryRequestStatus();agreed.setCodigo("APROBADO");flight.getSanitario().setEstadoSolicitud(agreed);
+  assertTrue(service.history(42L,2L,0).puedeRegistrar());
+ }
+ @Test void theStageGateOnlyAppliesToSanitaryRequestsInNegotiation(){
+  assertFalse(PreparationStageGate.pending(new Flight()));assertFalse(PreparationStageGate.pending(null));
+  assertDoesNotThrow(()->PreparationStageGate.require(new Flight(),"registrar"));
+  var request=new SanitaryFlight();var status=new com.vuelossanitarios.backend.domain.catalog.SanitaryRequestStatus();status.setCodigo("PENDIENTE_RESPUESTA_DTS");request.setEstadoSolicitud(status);var sanitary=new Flight();sanitary.setSanitario(request);
+  assertTrue(PreparationStageGate.pending(sanitary));
+  var error=assertThrows(ApiException.class,()->PreparationStageGate.require(sanitary,"registrar la preparación"));
+  assertEquals("SCHEDULE_NOT_AGREED",error.code());assertEquals("DTS",error.details().get("pendientePor"));
+  for(String closed:List.of("RECHAZADO","CANCELADO","APROBADO")){status.setCodigo(closed);assertFalse(PreparationStageGate.pending(sanitary),closed);}
+ }
 }

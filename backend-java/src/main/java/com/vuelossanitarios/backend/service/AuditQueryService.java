@@ -36,7 +36,7 @@ public class AuditQueryService {
  private static final Set<String> USER_KEYS=Set.of("userId","comandanteId","comandanteContextoId");
  private static final Set<String> AIRCRAFT_KEYS=Set.of("aeronaveId","aeronaveContextoId");
  private static final Set<String> AIRPORT_KEYS=Set.of("origenId","destinoId","origenContextoId","aeropuertoId","aeropuertoActualId","alternativoId");
- private static final Set<String> NEEDS_PREVIOUS=Set.of("UPDATE","SET_ACTIVE","MANUAL_LOCATION_CHANGE","CHANGE_AIRCRAFT","REMOVE","DELETE");
+ private static final Set<String> NEEDS_PREVIOUS=Set.of("UPDATE","SET_ACTIVE","MANUAL_LOCATION_CHANGE","COMMANDER_LOCATION_UPDATE","CHANGE_AIRCRAFT","REMOVE","DELETE");
 
  /** Parámetros de búsqueda ya recibidos del cliente; {@link #search} los valida. */
  public record Search(LocalDate from,LocalDate to,Long actorId,String entityType,String operation,Long flightId,Long entityId,String order,Integer page,Integer size){}

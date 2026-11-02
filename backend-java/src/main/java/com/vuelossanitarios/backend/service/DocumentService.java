@@ -57,8 +57,10 @@ public class DocumentService {
  @Transactional
  public DocumentView replacePdf(Long itemId, MultipartFile file, Long actorId) {
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento"));
-  mayChange(item.getFlight(),actorId);
-  requireActive(item); requireCompatible(item.getDocumentType(),item.getFlight(),false);
+  // El estado del horario se evalúa con el vuelo bloqueado: un cambio de estado concurrente espera a esta transacción (o ésta a aquél).
+  Flight flight=lockFlightOf(item);
+  mayChange(flight,actorId);
+  requireActive(item); requireCompatible(item.getDocumentType(),flight,false);
   requireEditableLock(item,actorId);
   String location=storage.storePdf(file);
   try {
@@ -78,6 +80,7 @@ public class DocumentService {
  public List<DocumentView> list(Long flightId, Long actorId) {
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayRead(flight,actorId);
+  DocumentScheduleGate.require(flight);
   return items.findByFlightIdAndActivoTrueOrderByCreatedAtDesc(flightId).stream().map(item -> {
    FlightDocument current=versions.findByDocumentItemIdAndEsVersionActualTrue(item.getId())
        .orElseThrow(()->conflict("El documento no tiene una versión vigente"));
@@ -85,11 +88,24 @@ public class DocumentService {
   }).toList();
  }
 
+ /**
+  * Disponibilidad documental del vuelo para quien puede verlo. Es lo único que se consulta sin horario acordado: permite mostrar la
+  * sección bloqueada y su motivo sin exponer documentos. Un usuario sin acceso al vuelo recibe 403, no el estado.
+  */
+ @Transactional(readOnly=true)
+ public DocumentAccessView accessStatus(Long flightId, Long actorId) {
+  Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
+  access.mayRead(flight,actorId);
+  DocumentScheduleGate.Access state=DocumentScheduleGate.of(flight);
+  return new DocumentAccessView(state.available(),state.code(),state.message(),state.requestState(),state.pendingParty());
+ }
+
  /** Documentos retirados del uso operativo (baja lógica) con su motivo y responsable; sólo Operaciones y el comandante del vuelo. */
  @Transactional(readOnly=true)
  public List<RetiredDocumentView> listRetired(Long flightId, Long actorId) {
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayReadRetired(flight,actorId);
+  DocumentScheduleGate.require(flight);
   return items.findByFlightIdAndActivoFalseOrderByFechaBajaDesc(flightId).stream().map(item -> {
    DocumentType type=item.getDocumentType();
    FlightDocument last=versions.findByDocumentItemIdAndEsVersionActualTrue(item.getId()).orElse(null);
@@ -104,6 +120,7 @@ public class DocumentService {
  public List<DocumentTypeView> allowedTypes(Long flightId, Long actorId) {
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayRead(flight,actorId);
+  DocumentScheduleGate.require(flight);
   return types.findAll().stream().filter(t->compatible(t,flight)).sorted(java.util.Comparator.comparing(DocumentType::getNombre))
       .map(t->new DocumentTypeView(t.getCodigo(),t.getNombre())).toList();
  }
@@ -115,8 +132,8 @@ public class DocumentService {
  @Transactional
  public void deactivate(Long flightId, Long itemId, String motivo, Long actorId) {
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento"));
-  Flight flight=item.getFlight();
-  if (!flight.getId().equals(flightId)) throw notFound("Documento"); // el documento debe pertenecer al vuelo indicado
+  if (!item.getFlight().getId().equals(flightId)) throw notFound("Documento"); // el documento debe pertenecer al vuelo indicado
+  Flight flight=lockFlightOf(item);
   mayChange(flight,actorId);
   if (!canRetire(flight,actorId,()->firstAuthor(item))) throw forbidden("No está autorizado a retirar este documento");
   if (!Boolean.TRUE.equals(item.getActivo())) throw conflict("El documento ya fue retirado");
@@ -145,8 +162,8 @@ public class DocumentService {
  @Transactional
  public DocumentLockView acquireLock(Long itemId,Long actorId){
   // La fila documental actúa como cerrojo breve y serializa incluso la primera inserción del lease.
-  FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento")); mayChange(item.getFlight(),actorId);
-  requireActive(item); requireCompatible(item.getDocumentType(),item.getFlight(),false);
+  FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento")); Flight flight=lockFlightOf(item); mayChange(flight,actorId);
+  requireActive(item); requireCompatible(item.getDocumentType(),flight,false);
   User actor=user(actorId); LocalDateTime now=now(); DocumentLock lock=locks.findByDocumentItemId(itemId).orElse(null);
   if(lock!=null && lock.getExpiresAt().isAfter(now) && !lock.getOwner().getId().equals(actorId)) throw conflict("El documento está bloqueado por otro usuario");
   boolean recovered=lock!=null && !lock.getOwner().getId().equals(actorId);
@@ -220,8 +237,10 @@ public class DocumentService {
   access.mayRead(flight,actorId);
   if (flight.getComandante()!=null && flight.getComandante().getId().equals(actorId)) commanderAccess.requireOperationalAccess(actorId);
  }
+ /** Orden de las respuestas: sin acceso al vuelo 403; sin horario acordado 409 (estado); vuelo cerrado 400 (sólo consulta). */
  private void mayChange(Flight flight, Long actorId) {
   mayOperate(flight,actorId);
+  DocumentScheduleGate.require(flight);
   if (readOnly(flight)) throw bad("El vuelo en estado "+stateCode(flight).toLowerCase(java.util.Locale.ROOT)+" es de sólo consulta documental");
  }
  /** Estado que gobierna el vuelo: el del vuelo o, mientras no lo tiene, el de su solicitud sanitaria (misma regla que hangar y coordinaciones). */
@@ -240,7 +259,10 @@ public class DocumentService {
  /** Un documento activo lo ve quien accede al vuelo; uno retirado, sólo Operaciones y el comandante del vuelo. */
  private void requireVisible(FlightDocumentItem item, Long actorId) {
   if (Boolean.TRUE.equals(item.getActivo())) access.mayRead(item.getFlight(),actorId); else access.mayReadRetired(item.getFlight(),actorId);
+  DocumentScheduleGate.require(item.getFlight());
  }
+ /** Bloquea el vuelo del documento (el documento ya está bloqueado: orden documento → vuelo, sin otro camino en sentido inverso). */
+ private Flight lockFlightOf(FlightDocumentItem item) { return flights.lockById(item.getFlight().getId()).orElseThrow(()->notFound("Vuelo")); }
  /** Política de baja: Operaciones retira cualquier documento del vuelo; el comandante, sólo los que él cargó y mientras no esté bloqueado. */
  private boolean canRetire(Flight flight, Long actorId, java.util.function.Supplier<Long> firstAuthor) {
   if (readOnly(flight)) return false;

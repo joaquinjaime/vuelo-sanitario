@@ -106,17 +106,17 @@ public class HangarInfoService {
         boolean beforeDeparture=f.getFechaSalidaReal()==null&&f.getFechaCancelacion()==null;
         boolean locationMismatch=current!=null&&Boolean.TRUE.equals(current.getRequiereHangar())&&Boolean.TRUE.equals(current.getPreparacionCompleta())&&beforeDeparture&&(f.getAircraft()==null||f.getOrigen()==null||f.getAircraft().getAeropuertoActual()==null||!Objects.equals(id(f.getOrigen()),id(f.getAircraft().getAeropuertoActual())));
         String state=current==null?"SIN_REGISTRO":current.getRequiereHangar()==null||!contextMatches(f,current)||locationMismatch?"REQUIERE_REVISION":!current.getRequiereHangar()?"NO_REQUERIDO":Boolean.TRUE.equals(current.getPreparacionCompleta())?"PREPARACION_COMPLETA":"PREPARACION_PENDIENTE";
-        boolean mutable=mutable(f);
+        boolean mutable=mutable(f)&&!PreparationStageGate.pending(f);
         String aircraft=f.getAircraft()==null?null:f.getAircraft().getMatricula();
         String origin=f.getOrigen()==null?null:f.getOrigen().getNombre();
         String location=f.getAircraft()==null||f.getAircraft().getAeropuertoActual()==null?null:f.getAircraft().getAeropuertoActual().getNombre();
-        return new View(state,operations(u)&&mutable,commander(f,u)&&mutable&&current!=null&&current.getRequiereHangar()!=null&&contextMatches(f,current),mutable?null:"La información se conserva sin cambios tras la cancelación o finalización",aircraft,origin,location,history.stream().map(this::snapshot).toList());
+        return new View(state,operations(u)&&mutable,commander(f,u)&&mutable&&current!=null&&current.getRequiereHangar()!=null&&contextMatches(f,current),mutable?null:PreparationStageGate.pending(f)?"Disponible cuando el horario de salida esté acordado":"La información se conserva sin cambios tras la cancelación o finalización",aircraft,origin,location,history.stream().map(this::snapshot).toList());
     }
     private Version snapshot(HangarInfo r) {return new Version(r.getId(),r.getVersion(),r.getRequiereHangar(),r.getPreparacionCompleta(),r.getObservaciones(),r.getObservacionesComandante(),r.getCombustibleLitros(),id(r.getAeronaveContexto()),id(r.getOrigenContexto()),id(r.getComandanteContexto()),r.getRegistradoPor().getUsername(),r.getCreatedAt(),Boolean.TRUE.equals(r.getEsVersionActual()));}
     private Long id(com.vuelossanitarios.backend.domain.common.BaseEntity e){return e==null?null:e.getId();}
     private boolean contextMatches(Flight f,HangarInfo r){return Objects.equals(id(f.getAircraft()),id(r.getAeronaveContexto()))&&Objects.equals(id(f.getOrigen()),id(r.getOrigenContexto()))&&Objects.equals(id(f.getComandante()),id(r.getComandanteContexto()));}
     private boolean mutable(Flight f){if(f.getEstadoVuelo()!=null)return !Set.of("CANCELADO","FINALIZADO","COMPLETADO").contains(f.getEstadoVuelo().getCodigo());return f.getSanitario()!=null&&f.getSanitario().getEstadoSolicitud()!=null&&!"RECHAZADO".equals(f.getSanitario().getEstadoSolicitud().getCodigo());}
-    private void requireMutable(Flight f){if(!mutable(f))throw bad("El vuelo no admite cambios en su estado actual");}
+    private void requireMutable(Flight f){PreparationStageGate.require(f,"registrar la preparación terrestre");if(!mutable(f))throw bad("El vuelo no admite cambios en su estado actual");}
     private void checkVersion(HangarInfo r,Integer version){if(version==null||version!=(r==null?0:r.getVersion()))throw new ApiException(HttpStatus.CONFLICT,"La información cambió; vuelva a cargarla antes de guardar");}
     private HangarInfo current(Long id){return records.findByFlightIdAndEsVersionActualTrue(id).orElse(null);}
     private Flight flight(Long id,boolean lock){return (lock?flights.lockById(id):flights.findById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));}

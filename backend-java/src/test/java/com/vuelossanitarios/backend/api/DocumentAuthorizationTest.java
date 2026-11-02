@@ -65,6 +65,25 @@ class DocumentAuthorizationTest {
   verify(documents,never()).deactivate(any(),any(),any(),any());
  }
 
+ @Test void documentAvailabilityIsVisibleToEveryFlightRoleButAdministratorAndAnonymous() throws Exception {
+  for(String role:READERS)expect(role,true,get("/api/flights/1/documents/access"));
+  expect("ADMINISTRADOR",false,get("/api/flights/1/documents/access"));
+  mvc.perform(get("/api/flights/1/documents/access")).andExpect(status().isUnauthorized());
+  verify(documents,times(READERS.size())).accessStatus(1L,7L);
+ }
+
+ /** Un horario sin acordar es un conflicto de estado (409 con código estable para la interfaz), distinto de la falta de permisos (403). */
+ @Test void anUnagreedScheduleIsReportedAsAStateConflictWithAStableCodeNotAsForbiddenOrServerError() throws Exception {
+  var locked=new ApiException(org.springframework.http.HttpStatus.CONFLICT,DocumentScheduleGate.LOCKED_CODE,DocumentScheduleGate.MESSAGE,java.util.Map.of("estadoSolicitud","SOLICITADO","pendientePor","OPERACIONES"));
+  when(documents.list(eq(1L),anyLong())).thenThrow(locked); when(documents.createPdf(eq(1L),any(),any(),any(),anyLong())).thenThrow(locked); when(documents.replacePdf(eq(3L),any(),anyLong())).thenThrow(locked);
+  when(documents.download(eq(9L),anyLong())).thenThrow(locked);
+  for(var request:List.of(get("/api/flights/1/documents"),create(),newVersion(),get("/api/document-versions/9/download")))
+   mvc.perform(request.with(as("OPERACIONES"))).andExpect(status().isConflict())
+    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value(DocumentScheduleGate.LOCKED_CODE))
+    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.pendientePor").value("OPERACIONES"))
+    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.error").value(DocumentScheduleGate.MESSAGE));
+ }
+
  @Test void administratorHasNoAccessToFlightDocumentsAndAnonymousCallsAreRejected() throws Exception {
   expect("ADMINISTRADOR",false,get("/api/flights/1/documents"));expect("ADMINISTRADOR",false,get("/api/documents/3/versions"));expect("ADMINISTRADOR",false,get("/api/documents/3/lock"));
   expect("ADMINISTRADOR",false,get("/api/document-versions/9/download"));expect("ADMINISTRADOR",false,create());expect("ADMINISTRADOR",false,newVersion());expect("ADMINISTRADOR",false,post("/api/documents/3/lock"));

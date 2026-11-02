@@ -27,7 +27,12 @@ public final class FlightDtos { private FlightDtos(){}
  /** propuestaId identifica la propuesta que el usuario vio y responde; si ya fue reemplazada o respondida la respuesta se rechaza como obsoleta. */
  public record NegotiationResponse(@NotNull Boolean aceptar,@NotNull Long propuestaId,Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado,@Size(max=10000) String motivo){}
  public record CommanderResponse(@NotNull Boolean aceptar,@Size(max=10000) String motivo,LocalDateTime salidaPropuesta,LocalDateTime llegadaPropuesta){}
- public record AssignResources(@NotNull Long aircraftId,@NotNull Long comandanteId){}
+ /** Justificación de una asignación excepcional de comandante (fuera de la localidad de salida); la autorización depende del rol de quien la envía. */
+ public record GeographicExceptionRequest(@NotBlank @Size(min=15,max=500) String motivo){}
+ /** Asignación combinada de aeronave y comandante (contrato original); excepcionGeografica sólo se informa si el comandante no está en la localidad de salida. */
+ public record AssignResources(@NotNull Long aircraftId,@NotNull Long comandanteId,@jakarta.validation.Valid GeographicExceptionRequest excepcionGeografica){ public AssignResources(Long aircraftId,Long comandanteId){this(aircraftId,comandanteId,null);} }
+ public record AssignCommander(@NotNull Long comandanteId,@jakarta.validation.Valid GeographicExceptionRequest excepcionGeografica){}
+ public record AssignAircraft(@NotNull Long aircraftId,@Size(max=500) String motivo){}
  public record Plan(@NotNull Long origenId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
  public record OperationalPlan(@NotNull Long origenId,@NotNull Long destinoId,@NotNull LocalDateTime llegada){}
  public record Cancel(@NotNull Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
@@ -43,7 +48,7 @@ public final class FlightDtos { private FlightDtos(){}
  public record FinalReport(@DecimalMin("0.0") BigDecimal horasVuelo,@DecimalMin("0.0") BigDecimal combustibleConsumidoLitros,@Size(max=10000) String incidentes,@Size(max=10000) String resumen){}
  public record LocalityView(Long id,String nombre,String provincia,Long provinciaId){}
  public record FlightTypeView(String codigo,String nombre){}
- public record SanitaryDataView(Long patientId,String paciente,String prioridad,LocalityView localidadOrigenSolicitada,LocalityView localidadDestinoSolicitada,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,String estadoSolicitud,String motivoRechazo){}
+ public record SanitaryDataView(Long patientId,String paciente,String prioridad,LocalityView localidadOrigenSolicitada,LocalityView localidadDestinoSolicitada,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,String estadoSolicitud,String motivoRechazo,LocalDateTime fechaRecepcion){}
  /** Lugar estructurado de un aeropuerto planificado (mismo formato que las localidades solicitadas: nombre y provincia). */
  public record CancellationView(String motivo,String codigoMotivo,LocalDateTime fecha,String canceladoPor){}
  public record PlaceView(Long id,String nombre,String provincia,Long provinciaId){}
@@ -53,7 +58,15 @@ public final class FlightDtos { private FlightDtos(){}
  public record AvailableAircraftView(Long id,String matricula,String modelo,String tipo,Long aeropuertoActualId,String aeropuertoActual,boolean disponible,String motivoNoDisponible,List<AircraftDtos.FlightSummary> conflictos){}
  public record ChangeAircraft(@NotNull Long aircraftId,@Size(max=500) String motivo){}
  public record AvailableCommanderView(Long id,String username,String nombre,String apellido,String licencia,String provinciaActual){}
+ /**
+  * Comandante evaluado para la localidad de salida del vuelo. elegibilidad: ORDINARIA (en la localidad y apto), EXCEPCION (apto, pero fuera de la localidad: requiere
+  * excepción justificada y autorizada) o NO_ELEGIBLE (no cumple una condición operativa; ninguna excepción geográfica lo habilita). codigoUbicacion es MISMA_LOCALIDAD o el
+  * tipo de excepción necesario; codigoOperativo/motivoOperativo, la causa si no es apto.
+  */
+ public record CommanderCandidateView(Long id,String username,String nombre,String apellido,String licencia,Long localidadId,String localidad,Long provinciaId,String provincia,LocalDateTime ubicacionActualizadaEn,String elegibilidad,String codigoUbicacion,String motivoUbicacion,String codigoOperativo,String motivoOperativo){}
+ public record CommanderCandidates(Long localidadSalidaId,String localidadSalida,String provinciaSalida,Long comandanteAsignadoId,List<CommanderCandidateView> ordinarios,List<CommanderCandidateView> noElegiblesEnLocalidad,List<CommanderCandidateView> excepcionales,boolean excepcionalesIncompletos,Map<String,Long> fueraDeLocalidad,boolean puedeAutorizarExcepcion,String mensaje){}
+ public record GeographicExceptionView(Long id,String tipo,String motivo,String autorizadaPor,LocalDateTime fecha,String localidadComandante,String localidadSalida){}
  public record NegotiationEventView(Long id,Long respondeA,String tipo,LocalDateTime fechaHoraPropuesta,LocalDateTime fechaHoraLlegadaPropuesta,String motivo,String actor,LocalDateTime fechaOcurrencia){}
- public record ResourceAssignment(Long aircraftId,String aircraftMatricula,String aircraftModelo,String aircraftTipo,String aircraftUbicacion,Short aircraftCapacidadTripulacion,Long commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia,String commanderProvinciaActual){}
+ public record ResourceAssignment(Long aircraftId,String aircraftMatricula,String aircraftModelo,String aircraftTipo,String aircraftUbicacion,Short aircraftCapacidadTripulacion,Long commanderId,String commanderUsername,String commanderNombre,String commanderApellido,String commanderLicencia,String commanderProvinciaActual,String commanderLocalidadActual,LocalDateTime commanderUbicacionActualizadaEn,GeographicExceptionView excepcionGeografica){}
  public record FlightDetailView(FlightView vuelo,PatientDetail paciente,Medical medical,ResourceAssignment recursos,List<NegotiationEventView> negociacion,FinalReportDtos.ClosureView cierre){}
 }

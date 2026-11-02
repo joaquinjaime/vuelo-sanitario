@@ -16,6 +16,8 @@ public final class DocumentDtos {
  public record DeactivateRequest(String motivo) {}
  public record DocumentHistoryView(String id, String nombreDocumento, DocumentTypeView tipoDocumento,
                                    java.util.List<DocumentVersionView> versiones) {}
+ /** Disponibilidad documental del vuelo: el servidor decide si hay horario acordado; {@code pendientePor} nombra a quien debe responder la negociación. */
+ public record DocumentAccessView(boolean disponible, String codigo, String mensaje, String estadoSolicitud, String pendientePor) {}
  public record DocumentLockView(String documentId, Long ownerId, String ownerUsername,
                                 LocalDateTime acquiredAt, LocalDateTime expiresAt, boolean mine, boolean active,
                                 Long remainingSeconds) {}
