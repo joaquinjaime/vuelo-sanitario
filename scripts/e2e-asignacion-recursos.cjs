@@ -139,13 +139,14 @@ const crewRows = (flightId, user) => count(`SELECT COUNT(*) FROM vuelos_tripulan
   assert.equal(detail.recursos.commanderProvinciaActual, bsas.nombre); assert.equal(detail.recursos.excepcionGeografica.provinciaSalida, province.nombre);
   pass('caso 5: la excepción exige rol de Centro de Operaciones y justificación, queda registrada con quién/cuándo/por qué y auditada; sin autorización o sin motivo se rechaza sin persistir');
 
-  // La excepción no omite las demás validaciones: C sin clasificación de comandante no es apta aunque se justifique.
+  // La excepción no omite las demás validaciones (V66: cuenta activa, rol, licencia, informes, disponibilidad): una cuenta desactivada no es apta aunque se justifique.
   const unqualified = await createUser(admin, 'COMANDANTE', 'acmX');
   await locate(unqualified, bsas, co.token);
-  const notApt = await putCommander(f1, unqualified, { excepcionGeografica: { motivo: 'Intento de omitir las validaciones de habilitación' } }, co.token, [409]);
-  assert.match(String(notApt.data.code), /CLASIFICACION|HABILITACION|POLITICA/);
+  await ok(`/auth/users/${unqualified.id}/deactivate`, { method: 'PATCH', token: admin, body: { motivo: 'E2E: la excepción no omite la cuenta activa' } });
+  const notApt = await putCommander(f1, unqualified, { excepcionGeografica: { motivo: 'Intento de omitir las validaciones operativas' } }, co.token, [400, 409]);
+  assert.ok([400, 409].includes(notApt.status));
   assert.equal(count(`SELECT COUNT(*) FROM excepciones_geograficas_comandante WHERE id_usuario_comandante=${unqualified.id}`), 0);
-  pass('la excepción geográfica no omite la clasificación ni la habilitación (409, sin excepción registrada)');
+  pass('la excepción geográfica no omite las demás validaciones operativas (rechazo, sin excepción registrada)');
 
   // ---------- Caso 13: el comandante reservado no ve el vuelo; negociación pendiente bloquea ----------
   assert.ok(!(await ok('/flights', { token: cmd.B.token })).some((x) => x.id === f1), 'el comandante reservado todavía no ve el vuelo');

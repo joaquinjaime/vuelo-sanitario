@@ -105,16 +105,8 @@ function makePdf(label = 'E2E', { catalogExtra = '', comment = '' } = {}) {
   return Buffer.from(out, 'latin1');
 }
 const PDF = makePdf('E2E');
-const ensuredFor = new Set();
-async function provision(admin, user) {
-  if (!ensuredFor.has(admin)) { await ensureCredentialPolicies(admin); ensuredFor.add(admin); }
-  await call(`/crew-qualifications/${user.id}/COMANDANTE`, { method: 'PUT', token: admin, expect: [204] });
-  const credential = await ok(`/users/${user.id}/professional-credentials`, { method: 'POST', token: admin, body: { roleCode: 'COMANDANTE', type: 'Documento de prueba', number: 'E2E-' + user.id, issuer: 'Organismo de prueba', expires: null, noExpiry: true, notes: 'Pruebas aisladas' } });
-  const form = new FormData(); form.append('file', new Blob([PDF], { type: 'application/pdf' }), 'credencial.pdf');
-  const up = await fetch(`${BASE}/professional-credentials/${credential.id}/documents`, { method: 'POST', headers: { Authorization: 'Bearer ' + admin }, body: form });
-  assert.equal(up.status, 200, 'carga de credencial');
-  await call(`/professional-credentials/${credential.id}/decision/VERIFICADA`, { method: 'POST', token: admin, body: { notes: 'Revisión manual de datos de prueba', confirmsSufficiency: true } });
-}
+/** V66: un comandante recién creado queda asignable sin trámites (cuenta activa + rol COMANDANTE + licencia registrada + ubicación). Se conserva por compatibilidad de las pruebas. */
+async function provision(_admin, _user) { /* sin clasificación, política de suficiencia ni habilitación documentada */ }
 
 // ---- Bandeja de pruebas (Mailpit) del stack aislado: un servidor SMTP real que retiene los mensajes y no los entrega a nadie. ----
 const MAILBOX = process.env.E2E_MAILBOX || 'http://127.0.0.1:18025';
@@ -165,25 +157,6 @@ async function waitHealthy() {
 }
 
 
-/** I-5.6: sin política de suficiencia nadie es elegible. Los E2E que necesitan tripulación habilitada cargan, por la API pública, la política mínima
- *  para sus tipos de documento de prueba (configuración interna de la prueba, no un requisito regulatorio). Idempotente (409 POLITICA_DUPLICADA se tolera). */
-const E2E_CREDENTIAL_TYPES = ['Documento de prueba', 'Documento E2E', 'Documento E2E UI', 'Documento de independencia'];
-async function ensureCredentialPolicies(admin, types = E2E_CREDENTIAL_TYPES) {
-  for (const roleCode of ['COMANDANTE', 'COPILOTO', 'MEDICO', 'ENFERMERO']) for (const credentialType of types) {
-    const r = await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode, credentialType, notes: 'Política mínima de las pruebas E2E aisladas' }, expect: [200, 404, 409] });
-    if (r.status === 404) return; // backend anterior a V59 (siembra del ensayo de migración con el contrato V47): no existen políticas
-  }
-}
 
-/** Ejecuta `fn` sin ninguna política activa para `roleCode` (para comprobar POLITICA_HABILITACION_NO_CONFIGURADA con exactitud) y las restablece al terminar, aun si falla.
- *  Las pruebas de la suite corren de a una; las políticas restablecidas son nuevas filas con los mismos datos (las dadas de baja se conservan como historial). */
-async function withoutPolicies(admin, roleCode, fn) {
-  const active = (await ok('/credential-policies', { token: admin })).filter((p) => p.active && p.roleCode === roleCode);
-  for (const p of active) await call(`/credential-policies/${p.id}/deactivate`, { method: 'POST', token: admin, body: { reason: 'E2E: se comprueba la ausencia de política' } });
-  try { return await fn(); }
-  finally {
-    for (const p of active) await call('/credential-policies', { method: 'POST', token: admin, body: { roleCode: p.roleCode, flightTypeCode: p.flightTypeCode, aircraftCategory: p.aircraftCategory, credentialType: p.credentialType, requiresJurisdiction: p.requiresJurisdiction, requiresExternalCheck: p.requiresExternalCheck, origin: p.origin, sourceReference: p.sourceReference, notes: p.notes }, expect: [200, 409] });
-  }
-}
 
-module.exports = { applyDbPermissions, backendEnv, withoutPolicies, makePdf, ensureCredentialPolicies, E2E_CREDENTIAL_TYPES, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, placeCommander, provision, waitHealthy, approveRoute };
+module.exports = { applyDbPermissions, backendEnv, makePdf, confirmEmail, MAILBOX, mailboxMessages, mailboxCode, verifyEmail, PDF, ROOT, BASE, PROJECT, DB_NAME, SQL_CONTAINER, BACKEND, MARK, PASSWORD, sleep, sql, one, count, call, ok, fmt, futureSlot, createUser, placeCommander, provision, waitHealthy, approveRoute };

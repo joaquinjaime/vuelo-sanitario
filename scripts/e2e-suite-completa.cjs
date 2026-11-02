@@ -25,25 +25,21 @@ const SUITE = [
   'e2e-patient-directory', 'e2e-patient-directory-ui',
   'e2e-contactos', 'e2e-contactos-ui',
   'e2e-contactos-solicitud', 'e2e-contactos-solicitud-ui', 'e2e-migracion-contactos', 'e2e-migracion-historica',
-  'e2e-contactos-tripulacion', 'e2e-contactos-tripulacion-ui',
   'e2e-verificacion-correo', 'e2e-telefonos-internacionales', 'e2e-verificacion-contactos-ui',
   'e2e-auditoria', 'e2e-auditoria-ui',
   'e2e-solicitudes', 'e2e-solicitudes-ui',
-  'e2e-aeronaves-tripulacion', 'e2e-aeronaves-tripulacion-ui',
-  'e2e-elegibilidad-tripulacion', 'e2e-elegibilidad-tripulacion-ui',
   'e2e-cierre', 'e2e-cierre-ui',
   'e2e-documentos', 'e2e-documentos-horario', 'e2e-documentos-integracion-ui',
   'e2e-rutas-revision', 'e2e-rutas-revision-ui', 'e2e-rutas-estabilizacion',
   'e2e-geografia-catalogos', 'e2e-geografia-integridad', 'e2e-i53-operativo-ui', 'e2e-sanitario-replanificacion-ui',
-  'e2e-perfiles-comandante', 'e2e-asignacion-recursos', 'e2e-asignacion-recursos-ui', 'e2e-jurisdiccion-aeropuertos', 'e2e-requisitos-comandante', 'e2e-requisitos-comandante-ui', 'e2e-roles-clasificaciones', 'e2e-roles-clasificaciones-ui',
-  'e2e-habilitaciones', 'e2e-habilitaciones-vuelos', 'e2e-habilitaciones-ui', 'e2e-tripulacion-actualizacion-ui',
-  // I-5.7: V60, procedimiento de políticas, documentos heredados, lista de preparación y antivirus con la exigencia de producción (este último recrea el backend E2E y lo restablece).
-  'e2e-politicas-documentos-v60', 'e2e-politicas-documentos-ui', 'e2e-antimalware-produccion',
+  'e2e-perfiles-comandante', 'e2e-asignacion-recursos', 'e2e-asignacion-recursos-ui', 'e2e-jurisdiccion-aeropuertos',
+  // V66: comandante asignable sin trámites, copiloto, itinerario encadenado, personal sanitario del DTS (API y Chrome).
+  'e2e-simplificacion-tripulacion', 'e2e-personal-sanitario-ui',
   // I-5.8: separación de cuentas SQL Server (mínimo privilegio, instalación desde cero con escenario descartable) y barrido de seguridad de la API.
   'e2e-privilegios-bd', 'e2e-seguridad-i58',
 ];
 /** Tiempo máximo en minutos de los scripts que históricamente tardan más (el resto usa --timeout-min, 25 por defecto). */
-const LONG = { 'e2e-usuarios-aislado': 30, 'e2e-geografia-integridad': 40, 'e2e-i53-operativo-ui': 40, 'e2e-roles-clasificaciones': 35, 'e2e-roles-clasificaciones-ui': 35, 'e2e-habilitaciones': 35, 'e2e-habilitaciones-ui': 35, 'e2e-habilitaciones-vuelos': 45, 'e2e-politicas-documentos-v60': 40, 'e2e-politicas-documentos-ui': 40, 'e2e-antimalware-produccion': 30 };
+const LONG = { 'e2e-usuarios-aislado': 30, 'e2e-geografia-integridad': 40, 'e2e-i53-operativo-ui': 40, 'e2e-simplificacion-tripulacion': 35, 'e2e-personal-sanitario-ui': 35 };
 const API = process.env.E2E_API || 'http://127.0.0.1:18080';
 const LOGS = path.join(__dirname, 'e2e-logs');
 

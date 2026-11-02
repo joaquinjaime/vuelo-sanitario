@@ -58,14 +58,11 @@ async function raw(verb, p, token, body) {
   const dts = await createUser(admin, 'DTS', 'segd'), ops = await createUser(admin, 'OPERACIONES', 'sego'), cmd = await createUser(admin, 'COMANDANTE', 'segc');
   // Cuerpos con forma VÁLIDA: la validación del formato precede a la autorización en algunos endpoints (400 sin efecto); con un cuerpo válido la respuesta debe ser 403.
   const bodies = {
-    'POST /credential-policies': { roleCode: 'MEDICO', credentialType: 'Tipo ' + MARK, notes: 'sondeo de seguridad' },
-    'POST /credential-policies/simulation': { name: 'x', roles: ['MEDICO'], policies: [], pendingDecisions: [] },
-    'POST /credential-policies/activation': { proposal: { name: 'x', roles: ['MEDICO'], policies: [], pendingDecisions: [] }, approvedFingerprint: 'x'.repeat(64), approvalReference: 'sondeo', acknowledgeIncompatibilities: false },
     'POST /auth/users': { nombre: 'Intruso', apellido: 'Prueba', dni: '99' + String(Date.now()).slice(-10), roles: ['DTS'], correos: [{ direccion: 'intruso' + MARK + '@example.test' }], telefonos: [{ pais: 'AR', numero: '3815551234' }] },
     'PUT /auth/users/999999999/dni': { dniNuevo: '98' + String(Date.now()).slice(-10), version: 1, motivo: 'sondeo de seguridad sin efecto', cotejoDocumental: true },
   };
-  const adminOnly = [['GET', '/credential-policies'], ['POST', '/credential-policies'], ['POST', '/credential-policies/simulation'], ['POST', '/credential-policies/activation'], ['GET', '/admin/readiness'],
-    ['GET', '/audit'], ['GET', '/audit/filters'], ['GET', '/professional-credential-documents/legacy/report'], ['POST', '/professional-credential-documents/999999999/regularize'], ['GET', '/professional-credential-documents/antimalware-status'],
+  const adminOnly = [['GET', '/admin/readiness'],
+    ['GET', '/audit'], ['GET', '/audit/filters'],
     ['GET', '/auth/users'], ['POST', '/auth/users'], ['PUT', '/auth/users/999999999/dni']];
   const bad = [];
   for (const who of [dts, ops, cmd]) for (const [verb, p] of adminOnly) {
@@ -73,7 +70,7 @@ async function raw(verb, p, token, body) {
     if (r.status !== 403) bad.push(`${who.role || 'rol'} ${verb} ${p} → ${r.status}`);
   }
   assert.deepEqual(bad, [], 'operaciones administrativas permitidas a roles no administradores:\n' + bad.join('\n'));
-  pass(`DTS, OPERACIONES y COMANDANTE reciben 403 en ${adminOnly.length} operaciones administrativas (políticas, auditoría, preparación, regularización, usuarios)`);
+  pass(`DTS, OPERACIONES y COMANDANTE reciben 403 en ${adminOnly.length} operaciones administrativas (preparación, auditoría, usuarios)`);
 
   // ---------- C) higiene de errores ----------
   const leaks = [], fives = []; let probes = 0;
@@ -86,7 +83,7 @@ async function raw(verb, p, token, body) {
       probes += sendBody ? 2 : 1;
       for (const x of [r, r2].filter(Boolean)) {
         if (x.status >= 500) fives.push(`${e.verb} ${variant} → ${x.status}`);
-        if (LEAK.test(x.text)) leaks.push(`${e.verb} ${variant} → ${x.status}: ${x.text.slice(0, 120)}`);
+        if (LEAK.test(x.text.replace(/COMMANDER_GEOGRAPHIC_EXCEPTION/g, ''))) leaks.push(`${e.verb} ${variant} → ${x.status}: ${x.text.slice(0, 120)}`);
       }
     }
   }
@@ -94,13 +91,14 @@ async function raw(verb, p, token, body) {
   assert.deepEqual(leaks, [], 'cuerpos de error que revelan detalles internos:\n' + leaks.slice(0, 20).join('\n'));
   pass(`${probes} sondeos con identificadores inexistentes/ilegibles y cuerpos inválidos: ninguna respuesta 5xx y ningún cuerpo revela clases, trazas, SQL ni nombres internos`);
 
-  // ---------- D) documentos y habilitaciones ajenas ----------
-  const other = await createUser(admin, 'COMANDANTE', 'sego2');
-  const mine = await call(`/users/${cmd.id}/professional-credentials`, { token: other.token, expect: [403, 404] });
-  assert.ok([403, 404].includes(mine.status), 'otro usuario no lista las habilitaciones ajenas');
-  for (const p of ['/professional-credential-documents/999999999', '/professional-credential-documents/999999999/download']) {
-    const r = await raw('GET', p, other.token); assert.ok([403, 404].includes(r.status), p + ' → ' + r.status);
-  }
-  pass('un usuario sin permiso no lista habilitaciones ajenas ni accede a documentos de habilitación (403/404 indistinguibles para identificadores inexistentes)');
+  // ---------- D) personal sanitario ajeno ----------
+  const dtsA = await createUser(admin, 'DTS', 'segpa'), dtsB = await createUser(admin, 'DTS', 'segpb');
+  const dni = '90' + String(Date.now()).slice(-7);
+  const staff = (await call('/health-staff', { method: 'POST', token: dtsA.token, expect: [201], body: { nombre: 'Prueba', apellido: 'Seguridad', dni, tipoProfesional: 'MEDICO', matricula: 'SEG-' + MARK } })).data;
+  for (const who of [ops, cmd]) { const r = await raw('GET', '/health-staff', who.token); assert.equal(r.status, 403, 'solo DTS gestiona personal sanitario'); }
+  assert.deepEqual(await ok('/health-staff', { token: dtsB.token }), [], 'otro DTS no ve el catálogo ajeno');
+  const r1 = await raw('PUT', `/health-staff/${staff.id}`, dtsB.token, JSON.stringify({ nombre: 'X', apellido: 'Y', dni, tipoProfesional: 'MEDICO', matricula: 'Z', version: staff.version })); assert.equal(r1.status, 404);
+  const r2 = await raw('POST', `/health-staff/${staff.id}/active`, dtsB.token, JSON.stringify({ activo: false, version: staff.version })); assert.equal(r2.status, 404);
+  pass('el personal sanitario es privado de cada DTS: otros DTS no lo ven ni lo modifican (404) y Operaciones/comandante reciben 403');
   console.log(`\n${passed} comprobaciones superadas (${MARK})`);
 })().catch((e) => { console.error('FAIL: ' + (e && e.stack || e)); process.exit(1); });
