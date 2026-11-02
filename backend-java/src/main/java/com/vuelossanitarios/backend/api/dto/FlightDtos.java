@@ -44,13 +44,10 @@ public final class FlightDtos { private FlightDtos(){}
  public record Cancel(@NotNull Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado){}
  public record Weather(@NotBlank @Size(max=10000) String condiciones,@NotNull Boolean favorable,@Size(max=10000) String observaciones){}
  public record WeatherView(Long id,String condiciones,Boolean favorable,String observaciones,LocalDateTime fechaRegistro,String registradoPor){}
- public record Crew(@NotNull Long userId,@NotBlank String crewRoleCode){}
+ /** Asignación del copiloto (único tipo de tripulante con cuenta además del comandante). {@code excepcionGeografica}: sólo Centro de Operaciones, con justificación, si está fuera de la jurisdicción de salida. */
+ public record Crew(@NotNull Long userId,@NotBlank String crewRoleCode,@jakarta.validation.Valid GeographicExceptionRequest excepcionGeografica){ public Crew(Long userId,String crewRoleCode){this(userId,crewRoleCode,null);} }
  /** vigente=false: asignación dada de baja (retiro, reemplazo o cambio de comandante), conservada como historial. */
- public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante,boolean vigente,LocalDateTime asignadoEn,String asignadoPor,LocalDateTime fechaBaja,String bajaPor,String motivoBaja,String elegibilidadCodigo,String elegibilidadMotivo,java.time.LocalDate habilitacionVence){}
- public record CrewCandidateView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean disponible,String motivoNoDisponible){}
- public record AvailableCrewView(Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName){}
- /** Clasificación administrativa de una persona para una función: vigente o retirada (historial), con su elegibilidad actual cuando está vigente. */
- public record QualificationView(Long userId,String crewRoleCode,String crewRoleName,boolean vigente,String clasificadoPor,LocalDateTime fechaClasificacion,String retiradoPor,LocalDateTime fechaBaja,String motivoBaja,Boolean elegible,String elegibilidadCodigo,String elegibilidadMotivo,java.time.LocalDate habilitacionVence){}
+ public record CrewView(Long id,Long userId,String username,String nombre,String apellido,String crewRoleCode,String crewRoleName,boolean comandante,boolean vigente,LocalDateTime asignadoEn,String asignadoPor,LocalDateTime fechaBaja,String bajaPor,String motivoBaja,String elegibilidadCodigo,String elegibilidadMotivo){}
  public record FinalReport(@DecimalMin("0.0") BigDecimal horasVuelo,@DecimalMin("0.0") BigDecimal combustibleConsumidoLitros,@Size(max=10000) String incidentes,@Size(max=10000) String resumen){}
  public record LocalityView(Long id,String nombre,String provincia,Long provinciaId){}
  public record FlightTypeView(String codigo,String nombre){}
@@ -69,7 +66,7 @@ public final class FlightDtos { private FlightDtos(){}
   * jurisdicción o sin ubicación: requiere excepción justificada y autorizada) o NO_ELEGIBLE (no cumple una condición operativa; ninguna excepción geográfica lo habilita).
   * codigoUbicacion es MISMA_JURISDICCION o el tipo de excepción necesario; codigoOperativo/motivoOperativo, la causa si no es apto.
   */
- public record CommanderCandidateView(Long id,String username,String nombre,String apellido,String licencia,Long provinciaId,String provincia,LocalDateTime ubicacionActualizadaEn,String elegibilidad,String codigoUbicacion,String motivoUbicacion,String codigoOperativo,String motivoOperativo,java.util.List<CrewRequirementDtos.RequirementView> requisitosFaltantes){}
+ public record CommanderCandidateView(Long id,String username,String nombre,String apellido,String licencia,Long provinciaId,String provincia,String ubicacionPrevistaTrasVuelo,LocalDateTime ubicacionActualizadaEn,String elegibilidad,String codigoUbicacion,String motivoUbicacion,String codigoOperativo,String motivoOperativo,java.util.List<CrewRequirementDtos.RequirementView> requisitosFaltantes){}
  /** Jurisdicción contra la que se evalúa: fuente = AEROPUERTO_CONFIRMADO, AEROPUERTO_PROPUESTO o PROVINCIA_DEL_PACIENTE; preliminar si el aeropuerto de salida todavía no está confirmado. */
  public record DepartureView(Long provinciaId,String provincia,Long aeropuertoId,String aeropuerto,String fuente,boolean preliminar){}
  public record CommanderCandidates(DepartureView salida,Long comandanteAsignadoId,List<CommanderCandidateView> ordinarios,List<CommanderCandidateView> noElegiblesEnJurisdiccion,List<CommanderCandidateView> excepcionales,boolean excepcionalesIncompletos,Map<String,Long> fueraDeJurisdiccion,boolean puedeAutorizarExcepcion,String mensaje,String advertencia){}

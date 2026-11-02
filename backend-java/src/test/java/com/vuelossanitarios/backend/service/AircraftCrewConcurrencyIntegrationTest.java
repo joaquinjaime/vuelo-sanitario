@@ -38,9 +38,9 @@ import org.springframework.http.HttpStatus;
 class AircraftCrewConcurrencyIntegrationTest {
  @Autowired FlightService flightService; @Autowired CrewManagementService crewService; @Autowired AircraftAdminService aircraftAdmin;
  @Autowired AircraftRepository aircraft; @Autowired AirportRepository airports; @Autowired ProvinceRepository provinces; @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roleRepository; @Autowired UserRoleRepository userRoles; @Autowired CommanderProfileRepository commanderProfiles;
- @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CrewQualificationRepository qualifications; @Autowired FlightCrewRepository crews; @Autowired CancellationReasonRepository reasons;
+ @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired FlightCrewRepository crews; @Autowired CancellationReasonRepository reasons;
  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager; private org.springframework.transaction.support.TransactionTemplate tx; private String stateOf(Long flightId){return tx.execute(st->flights.findById(flightId).orElseThrow().getEstadoVuelo().getCodigo());}
- @MockBean ProfessionalCredentialService credentials; @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
+ @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
 
  private static final AtomicSeq SEQ=new AtomicSeq();
  static final class AtomicSeq{private int n;synchronized int next(){return ++n;}}
@@ -55,20 +55,20 @@ class AircraftCrewConcurrencyIntegrationTest {
   User u=new User();u.setUsername(prefix+n);u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("ACTIVO");users.save(u);
   userRoles.save(new UserRole(u,role(roleCode)));return users.findById(u.getId()).orElseThrow();
  }
- private User qualified(User u,String code){CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(crewRole(code));q.setClassifier(ops);qualifications.save(q);return u;}
+ private User qualified(User u,String code){return u;}
  private Airport airport(String name){int n=SEQ.next();Airport a=new Airport();a.setNombre(name+n);a.setActivo(true);a.setProvinciaReferencial(province);a.setCodigoOaci(String.format("C%03d",n));a.setCodigoIata(String.format("%03d",n));return airports.save(a);}
  private Aircraft plane(Airport at){int n=SEQ.next();Aircraft a=new Aircraft();a.setMatricula("LV-C"+n);a.setModelo("M");a.setTipo("T");a.setCapacidadPacientes((short)1);a.setCapacidadTripulacion((short)4);a.setActivo(true);a.setAeropuertoActual(at);return aircraft.save(a);}
  private User commander(){return qualified(user("cmd","COMANDANTE",true),"COMANDANTE");}
  private CreateOperationalFlight create(Aircraft plane,User cmd,Airport destination,LocalDateTime from,LocalDateTime to){return new CreateOperationalFlight("REGRESO_BASE","Prueba concurrente",plane.getId(),cmd.getId(),destination.getId(),from,to);}
 
- @BeforeEach void stubCredentials(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
+ @BeforeEach void stubCredentials(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   Province p=new Province();p.setCodigoOficial("C1");p.setNombre("Provincia concurrencia");p.setActivo(true);province=provinces.save(p);
   ops=user("ops","CENTRO_OPERACIONES",false);
   FlightType t=new FlightType();t.setCodigo("REGRESO_BASE");t.setNombre("Regreso");types.save(t);
   for(String s:List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PLANIFICADO","CANCELADO","EN_CURSO","FINALIZADO"))status(s);
-  crewRole("COMANDANTE");crewRole("MEDICO");
+  crewRole("COMANDANTE");crewRole("COPILOTO");
   CancellationReason r=new CancellationReason();r.setCodigo("CLIMA");r.setNombre("Clima");r.setCategoria("AERONAUTICO");r.setOrden((short)1);reasons.save(r);
 
  }
@@ -116,16 +116,16 @@ class AircraftCrewConcurrencyIntegrationTest {
  @Test void theSameCrewMemberCannotBeAssignedToTwoIncompatibleFlightsSimultaneously() throws Exception {
 
   for(int round=0;round<4;round++){
-   User member=qualified(user("med","MEDICO",false),"MEDICO");LocalDateTime from=LocalDateTime.now().plusDays(60+round*3).withNano(0);
+   User member=qualified(user("med","COMANDANTE",true),"COPILOTO");LocalDateTime from=LocalDateTime.now().plusDays(60+round*3).withNano(0);
    Flight f1=plannedFlight(from,from.plusHours(3)),f2=plannedFlight(from.plusHours(1),from.plusHours(4));
-   List<Object> results=race(List.of(()->{crewService.assign(f1.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());return "f1";},()->{crewService.assign(f2.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());return "f2";}));
+   List<Object> results=race(List.of(()->{crewService.assign(f1.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());return "f1";},()->{crewService.assign(f2.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());return "f2";}));
    assertEquals(1,successes(results),"ronda "+round+": "+results);assertConflicts(results,HttpStatus.CONFLICT);
    assertEquals(1,crews.findByUserIdAndFechaBajaIsNull(member.getId()).size());
   }
  }
  @Test void doubleSubmissionOfTheSameAssignmentCreatesOneActiveRow() throws Exception {
-  User member=qualified(user("med","MEDICO",false),"MEDICO");LocalDateTime from=LocalDateTime.now().plusDays(90).withNano(0);Flight f=plannedFlight(from,from.plusHours(2));
-  List<Object> results=race(List.of(()->{crewService.assign(f.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());return 1;},()->{crewService.assign(f.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());return 2;},()->{crewService.assign(f.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());return 3;}));
+  User member=qualified(user("med","COMANDANTE",true),"COPILOTO");LocalDateTime from=LocalDateTime.now().plusDays(90).withNano(0);Flight f=plannedFlight(from,from.plusHours(2));
+  List<Object> results=race(List.of(()->{crewService.assign(f.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());return 1;},()->{crewService.assign(f.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());return 2;},()->{crewService.assign(f.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());return 3;}));
   assertEquals(1,successes(results),results.toString());assertConflicts(results,HttpStatus.CONFLICT);
   assertEquals(1,crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()).size());
  }
@@ -142,32 +142,32 @@ class AircraftCrewConcurrencyIntegrationTest {
   assertEquals(1,aircraft.findAll().stream().filter(a->a.getMatricula().equalsIgnoreCase(plate)).count());
  }
  @Test void cancellingAFlightReleasesTheAircraftTheCommanderAndTheCrewForReuseKeepingTheirHistory() throws Exception {
-  Airport origin=airport("Origen"),destination=airport("Destino");Aircraft shared=plane(origin);User cmd=commander();User member=qualified(user("med","MEDICO",false),"MEDICO");
+  Airport origin=airport("Origen"),destination=airport("Destino");Aircraft shared=plane(origin);User cmd=commander();User member=qualified(user("med","COMANDANTE",true),"COPILOTO");
   LocalDateTime from=LocalDateTime.now().plusDays(150).withNano(0);
   FlightView first=flightService.createOperational(create(shared,cmd,destination,from,from.plusHours(3)),ops.getId());
-  crewService.assign(first.id(),new Crew(member.getId(),"MEDICO"),ops.getId());
+  crewService.assign(first.id(),new Crew(member.getId(),"COPILOTO"),ops.getId());
   ApiException busy=assertThrows(ApiException.class,()->flightService.createOperational(create(shared,cmd,destination,from.plusHours(1),from.plusHours(2)),ops.getId()));assertEquals(HttpStatus.CONFLICT,busy.status());
   Long reason=reasons.findAll().get(0).getId();
   flightService.cancel(first.id(),new Cancel(reason,null),ops.getId());
   FlightView second=flightService.createOperational(create(shared,cmd,destination,from.plusHours(1),from.plusHours(2)),ops.getId());
-  crewService.assign(second.id(),new Crew(member.getId(),"MEDICO"),ops.getId());
+  crewService.assign(second.id(),new Crew(member.getId(),"COPILOTO"),ops.getId());
   assertEquals("CANCELADO",stateOf(first.id()));
   List<FlightCrew> history=crews.findByFlightIdOrderByIdAsc(first.id());
   assertTrue(history.stream().anyMatch(c->c.getUser().getId().equals(member.getId())),"la participación histórica se conserva");
   assertEquals(1L,(long)tx.execute(st->crews.findByUserIdAndFechaBajaIsNull(member.getId()).stream().filter(c->c.getFlight().getEstadoVuelo().getCodigo().equals("PENDIENTE_CONFIRMACION_COMANDANTE")).count()));
  }
  @Test void aRemovedCrewMemberKeepsTheHistoryAndCanBeAssignedAgainOrToAnotherFlight() throws Exception {
-  User member=qualified(user("med","MEDICO",false),"MEDICO");LocalDateTime from=LocalDateTime.now().plusDays(200).withNano(0);
+  User member=qualified(user("med","COMANDANTE",true),"COPILOTO");LocalDateTime from=LocalDateTime.now().plusDays(200).withNano(0);
   Flight f1=plannedFlight(from,from.plusHours(3)),f2=plannedFlight(from.plusHours(1),from.plusHours(2));
-  crewService.assign(f1.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());
-  ApiException clash=assertThrows(ApiException.class,()->crewService.assign(f2.getId(),new Crew(member.getId(),"MEDICO"),ops.getId()));assertEquals(HttpStatus.CONFLICT,clash.status());
+  crewService.assign(f1.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());
+  ApiException clash=assertThrows(ApiException.class,()->crewService.assign(f2.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId()));assertEquals(HttpStatus.CONFLICT,clash.status());
   Long rowId=crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f1.getId()).get(0).getId();
   crewService.remove(f1.getId(),rowId,ops.getId());
   assertEquals(1,crews.findByFlightIdOrderByIdAsc(f1.getId()).size());assertEquals(0,crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f1.getId()).size());
   FlightCrew removed=crews.findById(rowId).orElseThrow();assertEquals("RETIRO",removed.getMotivoBaja());assertNotNull(removed.getFechaBaja());
-  crewService.assign(f2.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());
+  crewService.assign(f2.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());
   crewService.remove(f2.getId(),crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f2.getId()).get(0).getId(),ops.getId());
-  crewService.assign(f1.getId(),new Crew(member.getId(),"MEDICO"),ops.getId());
+  crewService.assign(f1.getId(),new Crew(member.getId(),"COPILOTO"),ops.getId());
   assertEquals(2,crews.findByFlightIdOrderByIdAsc(f1.getId()).size());
  }
 

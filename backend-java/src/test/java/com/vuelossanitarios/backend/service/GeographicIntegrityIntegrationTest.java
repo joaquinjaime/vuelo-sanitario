@@ -41,9 +41,9 @@ import org.springframework.http.HttpStatus;
 class GeographicIntegrityIntegrationTest {
  @Autowired GeographicCatalogService geography; @Autowired FlightService flightService; @Autowired FlightRouteService routeService; @Autowired AircraftAdminService aircraftAdmin;
  @Autowired FlightRouteRepository routes; @Autowired AuditEventRepository auditEvents; @Autowired AircraftRepository aircraft; @Autowired AirportRepository airports; @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roleRepository; @Autowired UserRoleRepository userRoles; @Autowired CommanderProfileRepository commanderProfiles;
- @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CrewQualificationRepository qualifications; @Autowired CancellationReasonRepository reasons; @Autowired PatientRepository patients; @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightPriorityRepository priorities;
+ @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CancellationReasonRepository reasons; @Autowired PatientRepository patients; @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightPriorityRepository priorities;
  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager; private org.springframework.transaction.support.TransactionTemplate tx;
- @MockBean ProfessionalCredentialService credentials; @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
+ @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
 
  private static int seq; private static synchronized int next(){return ++seq;}
  private static Province province; private static User ops,admin,dts; private static Long reasonId; private static String priorityCode;
@@ -56,14 +56,14 @@ class GeographicIntegrityIntegrationTest {
   User u=new User();u.setUsername(prefix+n);u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("ACTIVO");users.save(u);
   userRoles.save(new UserRole(u,role(roleCode)));return users.findById(u.getId()).orElseThrow();
  }
- private User qualified(User u,String code){CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(crewRole(code));q.setClassifier(ops);qualifications.save(q);return u;}
+ private User qualified(User u,String code){return u;}
  private Airport airport(String name){return airport(name,province,null);}
  private Airport airport(String name,Province p,Locality l){int n=next();Airport a=new Airport();a.setNombre(name+n);a.setActivo(true);a.setProvinciaReferencial(p);a.setLocalidad(l);a.setCodigoOaci(String.format("G%03d",n));a.setCodigoIata(String.format("%03d",n));return airports.save(a);}
  private Aircraft plane(Airport at){int n=next();Aircraft a=new Aircraft();a.setMatricula("LV-G"+n);a.setModelo("M");a.setTipo("T");a.setCapacidadPacientes((short)1);a.setCapacidadTripulacion((short)4);a.setActivo(true);a.setAeropuertoActual(at);return aircraft.save(a);}
  private Province newProvince(String name){int n=next();Province p=new Province();p.setCodigoOficial("G"+n);p.setNombre(name+n);p.setActivo(true);return provinces.save(p);}
  private Locality newLocality(Province p){int n=next();Locality l=new Locality();l.setCodigoOficial("LG"+n);l.setNombre("Localidad"+n);l.setProvincia(p);l.setActivo(true);return localities.save(l);}
 
- @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
+ @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   province=newProvince("Provincia integridad");

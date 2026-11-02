@@ -18,8 +18,9 @@ import org.springframework.transaction.annotation.*;
 
 /** State machine for common operational flights and their optional sanitary request. */
 @Service public class FlightService {
- private final FlightRepository flights; private final SanitaryFlightRepository sanitaryFlights; private final FlightTypeRepository types; private final SanitaryRequestStatusRepository sanitaryStatuses; private final PatientRepository patients; private final UserRepository users; private final FlightStatusRepository statuses; private final FlightPriorityRepository priorities; private final AircraftRepository aircraft; private final AirportRepository airports; private final LocalityRepository localities; private final CrewRoleRepository crewRoles; private final FlightCrewRepository crews; private final FlightMedicalInfoRepository medical; private final FlightFinalReportRepository reports; private final FlightScheduleNegotiationRepository negotiations; private final CancellationReasonRepository cancellationReasons; private final WeatherSnapshotRepository weather; private final AuditService audit; private final FlightAuthorizationService access; private final NotificationService notifications; private final FlightUrgencyPolicy urgencyPolicy; private final FinalReportWorkflowService reportWorkflow; private final CommanderReportAccessService commanderAccess; private final CrewManagementService crewManagement; private final FlightLogService flightLog; private final FlightRouteService routeReview; private final AirportLocks airportLocks; private final CommanderGeographicExceptionRepository geoExceptions; private final Clock clock;
- public FlightService(FlightRepository f,SanitaryFlightRepository sf,FlightTypeRepository t,SanitaryRequestStatusRepository ss,PatientRepository p,UserRepository u,FlightStatusRepository s,FlightPriorityRepository pr,AircraftRepository a,AirportRepository ap,LocalityRepository l,CrewRoleRepository cr,FlightCrewRepository c,FlightMedicalInfoRepository m,FlightFinalReportRepository r,FlightScheduleNegotiationRepository n,CancellationReasonRepository cancelReasons,WeatherSnapshotRepository w,AuditService au,FlightAuthorizationService ac,NotificationService ns,FlightUrgencyPolicy up,FinalReportWorkflowService rw,CommanderReportAccessService ca,CrewManagementService cm,FlightLogService log,FlightRouteService rr,AirportLocks al,CommanderGeographicExceptionRepository ge,Clock clock){flights=f;sanitaryFlights=sf;types=t;sanitaryStatuses=ss;patients=p;users=u;statuses=s;priorities=pr;aircraft=a;airports=ap;localities=l;crewRoles=cr;crews=c;medical=m;reports=r;negotiations=n;cancellationReasons=cancelReasons;weather=w;audit=au;access=ac;notifications=ns;urgencyPolicy=up;reportWorkflow=rw;commanderAccess=ca;crewManagement=cm;flightLog=log;routeReview=rr;airportLocks=al;geoExceptions=ge;this.clock=clock;}
+ private final FlightRepository flights; private final SanitaryFlightRepository sanitaryFlights; private final FlightTypeRepository types; private final SanitaryRequestStatusRepository sanitaryStatuses; private final PatientRepository patients; private final UserRepository users; private final FlightStatusRepository statuses; private final FlightPriorityRepository priorities; private final AircraftRepository aircraft; private final AirportRepository airports; private final LocalityRepository localities; private final CrewRoleRepository crewRoles; private final FlightCrewRepository crews; private final FlightMedicalInfoRepository medical; private final FlightFinalReportRepository reports; private final FlightScheduleNegotiationRepository negotiations; private final CancellationReasonRepository cancellationReasons; private final WeatherSnapshotRepository weather; private final AuditService audit; private final FlightAuthorizationService access; private final NotificationService notifications; private final FlightUrgencyPolicy urgencyPolicy; private final FinalReportWorkflowService reportWorkflow; private final CommanderReportAccessService commanderAccess; private final CrewManagementService crewManagement; private final FlightLogService flightLog; private final FlightRouteService routeReview; private final AirportLocks airportLocks; private final CommanderGeographicExceptionRepository geoExceptions; private final CrewItineraryService itinerary; private final Clock clock;
+ @org.springframework.beans.factory.annotation.Autowired(required=false) private FlightHealthStaffRepository healthStaff;
+ public FlightService(FlightRepository f,SanitaryFlightRepository sf,FlightTypeRepository t,SanitaryRequestStatusRepository ss,PatientRepository p,UserRepository u,FlightStatusRepository s,FlightPriorityRepository pr,AircraftRepository a,AirportRepository ap,LocalityRepository l,CrewRoleRepository cr,FlightCrewRepository c,FlightMedicalInfoRepository m,FlightFinalReportRepository r,FlightScheduleNegotiationRepository n,CancellationReasonRepository cancelReasons,WeatherSnapshotRepository w,AuditService au,FlightAuthorizationService ac,NotificationService ns,FlightUrgencyPolicy up,FinalReportWorkflowService rw,CommanderReportAccessService ca,CrewManagementService cm,FlightLogService log,FlightRouteService rr,AirportLocks al,CommanderGeographicExceptionRepository ge,CrewItineraryService it,Clock clock){flights=f;sanitaryFlights=sf;types=t;sanitaryStatuses=ss;patients=p;users=u;statuses=s;priorities=pr;aircraft=a;airports=ap;localities=l;crewRoles=cr;crews=c;medical=m;reports=r;negotiations=n;cancellationReasons=cancelReasons;weather=w;audit=au;access=ac;notifications=ns;urgencyPolicy=up;reportWorkflow=rw;commanderAccess=ca;crewManagement=cm;flightLog=log;routeReview=rr;airportLocks=al;geoExceptions=ge;itinerary=it;this.clock=clock;}
 
  @Transactional public FlightView create(CreateFlight req,Long actorId){
   urgencyPolicy.validate(req.fechaSolicitada(),req.extremaUrgencia(),req.justificacionExtremaUrgencia(),req.fechaLimiteTraslado()); validateMedical(req.medical()); User actor=user(actorId); requireRole(actor,"DTS"); Patient patient=patients.findById(req.patientId()).orElseThrow(()->notFound("Paciente")); lockLocalities(req.localidadOrigenId(),req.localidadDestinoId());Locality origin=locality(req.localidadOrigenId(),"origen"), destination=locality(req.localidadDestinoId(),"destino"); if(origin.getId().equals(destination.getId()))throw bad("La localidad de origen y destino deben ser distintas.");
@@ -30,12 +31,12 @@ import org.springframework.transaction.annotation.*;
  }
 
  @Transactional(isolation=Isolation.SERIALIZABLE) public FlightView createOperational(CreateOperationalFlight req,Long actorId){
-  User actor=user(actorId);requireOperationsOrAdmin(actor); FlightType type=type(req.tipoVueloCode());if("SANITARIO".equals(type.getCodigo()))throw bad("DTS es el único canal para crear vuelos sanitarios");if(!req.llegada().isAfter(req.salida()))throw bad("La llegada debe ser posterior a la salida");Aircraft plane=activeAircraft(req.aircraftId());airportLocks.lockAll(req.destinoId());Airport destination=activeAirport(req.destinoId(),"destino");Airport origin=plane.getAeropuertoActual();if(origin.getId().equals(destination.getId()))throw bad("Origen y destino deben ser distintos");User commander=eligibleCommander(req.comandanteId());{Flight probe=new Flight();probe.setTipoVuelo(type);assertCommanderEligible(probe,commander,req.salida().toLocalDate(),plane);}if(commander.getPerson().getCommanderProfile().getProvinciaActual()==null||!commander.getPerson().getCommanderProfile().getProvinciaActual().getId().equals(origin.getProvinciaReferencial().getId()))throw bad("El comandante debe encontrarse en la provincia de origen");
+  User actor=user(actorId);requireOperationsOrAdmin(actor); FlightType type=type(req.tipoVueloCode());if("SANITARIO".equals(type.getCodigo()))throw bad("DTS es el único canal para crear vuelos sanitarios");if(!req.llegada().isAfter(req.salida()))throw bad("La llegada debe ser posterior a la salida");Aircraft plane=activeAircraft(req.aircraftId());airportLocks.lockAll(req.destinoId());Airport destination=activeAirport(req.destinoId(),"destino");Airport origin=plane.getAeropuertoActual();if(origin.getId().equals(destination.getId()))throw bad("Origen y destino deben ser distintos");User commander=eligibleCommander(req.comandanteId());{Flight probe=new Flight();probe.setTipoVuelo(type);assertCommanderEligible(probe,commander,req.salida().toLocalDate(),plane);}assertCommanderInProvince(commander,req.salida(),origin,null);
   Flight f=new Flight();f.setCodigo(code());f.setTipoVuelo(type);f.setMotivoVuelo(required(req.motivoVuelo(),"El motivo del vuelo es obligatorio"));f.setCreadoPor(actor);f.setAircraft(plane);f.setComandante(commander);f.setOrigen(origin);f.setDestino(destination);f.setFechaPlanificadaSalida(req.salida());f.setFechaPlanificadaLlegada(req.llegada());f.setEstadoVuelo(status("PENDIENTE_CONFIRMACION_COMANDANTE"));assertNoOverlap(f);assertCrewNoOverlap(f);flights.save(f);ensureCommanderCrew(f,commander,actor);audit.record(f,actor,"FLIGHT",f.getId(),"CREATE_OPERATIONAL",null,"{\"tipo\":"+json(type.getCodigo())+"}");notifications.create(commander,f,"COMMANDER_ASSIGNMENT_PENDING","Fue asignado al vuelo "+f.getCodigo()+". Debe aceptar, rechazar o proponer horario.");return view(f);
  }
 
  @Transactional(isolation=Isolation.SERIALIZABLE) public FlightView replanOperational(Long id,ReplanOperationalFlight req,Long actorId){
-  Flight f=locked(id);requireOperations(actorId);requireOperationalStatus(f,"PENDIENTE_REPLANIFICACION");if(f.getSanitario()!=null)throw bad("La replanificación operacional no aplica a vuelos sanitarios");if(!req.llegada().isAfter(req.salida()))throw bad("La llegada debe ser posterior a la salida");Aircraft plane=activeAircraft(req.aircraftId());airportLocks.lockAll(req.destinoId());Airport origin=plane.getAeropuertoActual();Airport destination=activeAirport(req.destinoId(),"destino");if(origin.getId().equals(destination.getId()))throw bad("Origen y destino deben ser distintos");User commander=eligibleCommander(req.comandanteId());assertCommanderEligible(f,commander,req.salida().toLocalDate(),plane);if(commander.getPerson().getCommanderProfile().getProvinciaActual()==null||!commander.getPerson().getCommanderProfile().getProvinciaActual().getId().equals(origin.getProvinciaReferencial().getId()))throw bad("El comandante debe encontrarse en la provincia de origen");f.setAircraft(plane);f.setComandante(commander);f.setOrigen(origin);f.setDestino(destination);f.setFechaPlanificadaSalida(req.salida());f.setFechaPlanificadaLlegada(req.llegada());f.setEstadoVuelo(status("PENDIENTE_CONFIRMACION_COMANDANTE"));assertNoOverlap(f);assertCrewNoOverlap(f);ensureCommanderCrew(f,commander,user(actorId));routeReview.reassess(f,user(actorId));audit.record(f,user(actorId),"FLIGHT",f.getId(),"REPLAN_OPERATIONAL",null,"{\"aeronaveId\":"+json(plane.getId().toString())+"}");notifications.create(commander,f,"COMMANDER_ASSIGNMENT_PENDING","Fue asignado nuevamente al vuelo "+f.getCodigo()+". Debe aceptar, rechazar o proponer horario.");return view(f);
+  Flight f=locked(id);requireOperations(actorId);requireOperationalStatus(f,"PENDIENTE_REPLANIFICACION");if(f.getSanitario()!=null)throw bad("La replanificación operacional no aplica a vuelos sanitarios");if(!req.llegada().isAfter(req.salida()))throw bad("La llegada debe ser posterior a la salida");Aircraft plane=activeAircraft(req.aircraftId());airportLocks.lockAll(req.destinoId());Airport origin=plane.getAeropuertoActual();Airport destination=activeAirport(req.destinoId(),"destino");if(origin.getId().equals(destination.getId()))throw bad("Origen y destino deben ser distintos");User commander=eligibleCommander(req.comandanteId());assertCommanderEligible(f,commander,req.salida().toLocalDate(),plane);assertCommanderInProvince(commander,req.salida(),origin,id);f.setAircraft(plane);f.setComandante(commander);f.setOrigen(origin);f.setDestino(destination);f.setFechaPlanificadaSalida(req.salida());f.setFechaPlanificadaLlegada(req.llegada());f.setEstadoVuelo(status("PENDIENTE_CONFIRMACION_COMANDANTE"));assertNoOverlap(f);assertCrewNoOverlap(f);ensureCommanderCrew(f,commander,user(actorId));routeReview.reassess(f,user(actorId));audit.record(f,user(actorId),"FLIGHT",f.getId(),"REPLAN_OPERATIONAL",null,"{\"aeronaveId\":"+json(plane.getId().toString())+"}");notifications.create(commander,f,"COMMANDER_ASSIGNMENT_PENDING","Fue asignado nuevamente al vuelo "+f.getCodigo()+". Debe aceptar, rechazar o proponer horario.");return view(f);
  }
 
  @Transactional public FlightView evaluate(Long id,Evaluation req,Long actor){return Boolean.TRUE.equals(req.aprobar())?acceptRequestedSchedule(id,actor):rejectDirectly(id,new Cancel(req.motivoCancelacionId(),req.motivoCancelacionPersonalizado()),actor);}
@@ -145,7 +146,7 @@ import org.springframework.transaction.annotation.*;
  /** Vuelos comprometidos de la aeronave en la ventana del vuelo: [salida, llegada) o, sin llegada planificada, el instante de salida. */
  private List<Flight> aircraftBusy(Aircraft a,Flight f){if(f.getFechaPlanificadaSalida()==null)return List.of();LocalDateTime end=f.getFechaPlanificadaLlegada()!=null&&f.getFechaPlanificadaLlegada().isAfter(f.getFechaPlanificadaSalida())?f.getFechaPlanificadaLlegada():f.getFechaPlanificadaSalida().plusMinutes(1);List<Flight> busy=new ArrayList<>(flights.aircraftBusyIn(a.getId(),f.getFechaPlanificadaSalida(),end));busy.addAll(flights.aircraftReservedIn(a.getId(),f.getFechaPlanificadaSalida(),end));return busy.stream().filter(x->!x.getId().equals(f.getId())).distinct().toList();}
  private void assertAircraftFree(Aircraft a,Flight f){List<Flight> busy=aircraftBusy(a,f);if(!busy.isEmpty())throw new ApiException(HttpStatus.CONFLICT,"La aeronave "+a.getMatricula()+" tiene un vuelo comprometido en ese horario ("+busy.get(0).getCodigo()+")");}
- private int crewSize(Flight f){if(f.getId()==null)return f.getComandante()==null?0:1;int n=0;boolean commander=false;for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId())){n++;if(f.getComandante()!=null&&c.getUser().getId().equals(f.getComandante().getId()))commander=true;}return n+(f.getComandante()!=null&&!commander?1:0);}
+ private int crewSize(Flight f){if(f.getId()==null)return f.getComandante()==null?0:1;int n=0;boolean commander=false;for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId())){n++;if(f.getComandante()!=null&&c.getUser().getId().equals(f.getComandante().getId()))commander=true;}if(healthStaff!=null)n+=healthStaff.findCurrentByFlightId(f.getId()).size();return n+(f.getComandante()!=null&&!commander?1:0);}
  private void assertAircraftCapacity(Aircraft a,Flight f){int size=crewSize(f);if(a.getCapacidadTripulacion()!=null&&size>a.getCapacidadTripulacion())throw new ApiException(HttpStatus.CONFLICT,"La aeronave "+a.getMatricula()+" admite "+a.getCapacidadTripulacion()+" tripulantes y el vuelo tiene "+size+" asignados");}
  /** La aeronave sólo se asigna o cambia mientras el vuelo no haya iniciado: solicitud sanitaria aprobada (vuelo sin estado o PLANIFICADO) o vuelo operativo pendiente de confirmación / planificado. */
  private void requireAircraftAssignable(Flight f){SanitaryFlight s=f.getSanitario()!=null?f.getSanitario():sanitaryFlights.findByFlightId(f.getId()).orElse(null);String state=f.getEstadoVuelo()==null?null:f.getEstadoVuelo().getCodigo();if(s!=null){requireSanitaryStatus(s,"APROBADO");if(state!=null&&!"PLANIFICADO".equals(state))throw bad("El vuelo ya no admite cambios de aeronave en su estado actual");}else if(state==null||!Set.of("PENDIENTE_CONFIRMACION_COMANDANTE","PLANIFICADO").contains(state))throw bad("El vuelo operativo sólo admite cambio de aeronave pendiente de confirmación o planificado; en otros estados corresponde cancelar o replanificar");}
@@ -183,27 +184,47 @@ import org.springframework.transaction.annotation.*;
   * Igual que {@link #commanderCandidates(Long,Long,String)}, pero evaluando contra un aeropuerto de salida hipotético ({@code airportId}, tratado como propuesto): sirve para elegir de antemano
   * al comandante que corresponde a un aeropuerto que todavía no se propuso. No modifica nada.
   */
- @Transactional(readOnly=true) public CommanderCandidates commanderCandidates(Long id,Long actorId,String q,Long airportId){
-  Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));requireOperations(actorId);SanitaryFlight s=sanitary(f);requireAssignableSanitary(f,s);
-  var departure=airportId==null?departure(f,s):proposedDeparture(activeAirport(airportId,"de salida"));String text=q==null?"":q.trim().toLowerCase(Locale.ROOT).replace("%","").replace("_","");
-  List<CommanderCandidateView> ordinary=new ArrayList<>(),blocked=new ArrayList<>(),exceptional=new ArrayList<>();
-  for(User u:users.findActiveCommandersInProvince(departure.provinceId())){
-   var geo=CommanderGeography.assess(u.getPerson().getCommanderProfile(),departure);var result=crewManagement.evaluate(f,u,"COMANDANTE",true);
-   (result.eligible()?ordinary:blocked).add(candidate(f,u,geo,result.eligible()?"ORDINARIA":"NO_ELEGIBLE",result));
+ @Transactional(readOnly=true) public CommanderCandidates commanderCandidates(Long id,Long actorId,String q,Long airportId){return commanderCandidates(id,actorId,q,airportId,CommanderGeographicException.FUNCTION_COMMANDER);}
+ /**
+  * Candidatos para la función indicada (COMANDANTE o COPILOTO): el copiloto se elige del mismo conjunto de usuarios COMANDANTE. Cada uno se ubica donde se prevé que estará al despegar el vuelo
+  * (su ubicación registrada o, si ya tiene un vuelo anterior que termina antes de la salida, la jurisdicción de llegada de ese vuelo). Ordinarios: en la jurisdicción del aeropuerto de salida y aptos
+  * con la misma evaluación que la asignación (cuenta, perfil, informes y disponibilidad horaria). Los de la jurisdicción que no lo son se informan con su causa. Fuera de la jurisdicción sólo se
+  * evalúan (y devuelven, como candidatos a excepción) los primeros {@value #EXCEPTION_CANDIDATES} que coinciden con {@code q}; el resto se resume por situación.
+  */
+ @Transactional(readOnly=true) public CommanderCandidates commanderCandidates(Long id,Long actorId,String q,Long airportId,String function){
+  Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));requireOperations(actorId);
+  boolean copilot=CommanderGeographicException.FUNCTION_COPILOT.equals(function);String role=copilot?"COPILOTO":"COMANDANTE";
+  SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);if(s!=null)requireAssignableSanitary(f,s);else if(!copilot)throw bad("El vuelo no posee solicitud sanitaria");
+  var departure=airportId==null?departureOf(f,s):proposedDeparture(activeAirport(airportId,"de salida"));String text=q==null?"":q.trim().toLowerCase(Locale.ROOT).replace("%","").replace("_","");
+  Set<Long> taken=new HashSet<>();if(copilot){if(f.getComandante()!=null)taken.add(f.getComandante().getId());for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))taken.add(c.getUser().getId());}
+  Map<Long,CrewItineraryService.Position> projections=itinerary.projectionsAt(f.getFechaPlanificadaSalida(),f.getId());
+  List<User> inside=new ArrayList<>(),outside=new ArrayList<>();
+  for(User u:users.findActiveCommanderAccounts("",org.springframework.data.domain.PageRequest.of(0,5000))){
+   if(taken.contains(u.getId()))continue;
+   var pos=projections.get(u.getId());Province province=pos!=null?pos.province():u.getPerson().getCommanderProfile()==null?null:u.getPerson().getCommanderProfile().getProvinciaActual();
+   (province!=null&&province.getId().equals(departure.provinceId())?inside:outside).add(u);
   }
-  List<User> outside=users.findActiveCommandersOutsideProvince(departure.provinceId(),text,org.springframework.data.domain.PageRequest.of(0,EXCEPTION_CANDIDATES+1));
-  boolean incomplete=outside.size()>EXCEPTION_CANDIDATES;
-  for(User u:outside.stream().limit(EXCEPTION_CANDIDATES).toList()){
-   var result=crewManagement.evaluate(f,u,"COMANDANTE",true);
-   if(result.eligible())exceptional.add(candidate(f,u,CommanderGeography.assess(u.getPerson().getCommanderProfile(),departure),"EXCEPCION",result));
+  List<CommanderCandidateView> ordinary=new ArrayList<>(),blocked=new ArrayList<>(),exceptional=new ArrayList<>();
+  for(User u:inside){
+   var pos=projections.get(u.getId());var geo=geoOf(u,pos,departure);var result=crewManagement.evaluate(f,u,role,true);
+   (result.eligible()?ordinary:blocked).add(candidate(f,u,geo,pos,result.eligible()?"ORDINARIA":"NO_ELEGIBLE",result,role));
+  }
+  List<User> matching=outside.stream().filter(u->text.isEmpty()||(u.getPerson().getApellido()+" "+u.getPerson().getNombre()).toLowerCase(Locale.ROOT).contains(text)||(u.getPerson().getNombre()+" "+u.getPerson().getApellido()).toLowerCase(Locale.ROOT).contains(text)||(u.getUsername()!=null&&u.getUsername().toLowerCase(Locale.ROOT).contains(text))).toList();
+  boolean incomplete=matching.size()>EXCEPTION_CANDIDATES;
+  for(User u:matching.stream().limit(EXCEPTION_CANDIDATES).toList()){
+   var result=crewManagement.evaluate(f,u,role,true);
+   if(result.eligible()){var pos=projections.get(u.getId());exceptional.add(candidate(f,u,geoOf(u,pos,departure),pos,"EXCEPCION",result,role));}
   }
   Map<String,Long> outsideCounts=new LinkedHashMap<>();
-  for(Object[] row:users.countActiveCommandersOutsideProvince(departure.provinceId())){
-   outsideCounts.merge(row[0]==null?CommanderGeographicException.UNKNOWN:CommanderGeographicException.OTHER_PROVINCE,((Number)row[1]).longValue(),Long::sum);
-  }
+  for(User u:outside){var pos=projections.get(u.getId());boolean known=pos!=null||(u.getPerson().getCommanderProfile()!=null&&u.getPerson().getCommanderProfile().getProvinciaActual()!=null);outsideCounts.merge(known?CommanderGeographicException.OTHER_PROVINCE:CommanderGeographicException.UNKNOWN,1L,Long::sum);}
   boolean canAuthorize=hasRole(user(actorId),"CENTRO_OPERACIONES");
   return new CommanderCandidates(departureView(departure),f.getComandante()==null?null:f.getComandante().getId(),ordinary,blocked,exceptional,incomplete,outsideCounts,canAuthorize,
    ordinary.isEmpty()?noCandidatesMessage(departure,blocked.size(),outsideCounts,!exceptional.isEmpty(),canAuthorize):null,departure.warning());
+ }
+ private CommanderGeography.Assessment geoOf(User u,CrewItineraryService.Position pos,CommanderGeography.Departure departure){
+  if(pos!=null)return CommanderGeography.assess(pos.provinceId(),pos.provinceName(),departure,pos.afterFlight());
+  var profile=u.getPerson().getCommanderProfile();var province=profile==null?null:profile.getProvinciaActual();
+  return CommanderGeography.assess(province==null?null:province.getId(),province==null?null:province.getNombre(),departure,null);
  }
  private String noCandidatesMessage(CommanderGeography.Departure departure,int blocked,Map<String,Long> outside,boolean exceptionsAvailable,boolean canAuthorize){
   StringBuilder m=new StringBuilder("No se encontraron comandantes disponibles en ").append(departure.province()).append(departure.preliminary()?" (jurisdicción prevista para la salida).":", jurisdicción del aeropuerto de salida.");
@@ -215,9 +236,9 @@ import org.springframework.transaction.annotation.*;
   if(exceptionsAvailable)m.append(canAuthorize?" Puede asignar uno de ellos como excepción geográfica, con una justificación.":" Asignar un comandante fuera de la jurisdicción requiere la autorización de Centro de Operaciones.");
   return m.toString();
  }
- private CommanderCandidateView candidate(Flight f,User u,CommanderGeography.Assessment geo,String eligibility,CrewManagementService.Eligibility result){
+ private CommanderCandidateView candidate(Flight f,User u,CommanderGeography.Assessment geo,CrewItineraryService.Position pos,String eligibility,CrewManagementService.Eligibility result,String role){
   CommanderProfile p=u.getPerson().getCommanderProfile();
-  return new CommanderCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),p.getLicenseNumber(),geo.provinceId(),geo.province(),p.getUbicacionActualizadaEn(),eligibility,geo.code(),geo.message(),result.eligible()?null:result.code(),result.eligible()?null:result.message(),result.eligible()?java.util.List.of():crewManagement.requirements(f,u,"COMANDANTE",f.getFechaPlanificadaSalida()==null?null:f.getFechaPlanificadaSalida().toLocalDate(),null).stream().filter(r->!r.cumplido()).toList());
+  return new CommanderCandidateView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),p.getLicenseNumber(),geo.provinceId(),geo.province(),pos==null?null:pos.afterFlight(),p.getUbicacionActualizadaEn(),eligibility,geo.code(),geo.message(),result.eligible()?null:result.code(),result.eligible()?null:result.message(),result.eligible()?java.util.List.of():crewManagement.requirements(f,u,role).stream().filter(r->!r.cumplido()).toList());
  }
  /** Estado de la solicitud y del vuelo que admiten reservar o asignar recursos: solicitud aprobada con horario definitivo y vuelo aún sin iniciar (sin estado o PLANIFICADO). */
  private void requireAssignableSanitary(Flight f,SanitaryFlight s){
@@ -236,32 +257,38 @@ import org.springframework.transaction.annotation.*;
   * autorizada por Centro de Operaciones, que se registra; ninguna excepción omite las demás validaciones (cuenta, clasificación, habilitación, disponibilidad), que se comprueban antes.
   * Devuelve la excepción a registrar (null si la asignación es ordinaria o ya la cubre una excepción vigente para esta misma jurisdicción).
   */
- private CommanderGeographicException decideGeography(Flight f,SanitaryFlight s,User commander,GeographicExceptionRequest request,User actor){
-  var departure=departure(f,s);var geo=CommanderGeography.assess(commander.getPerson().getCommanderProfile(),departure);
+ private CommanderGeographicException decideGeography(Flight f,SanitaryFlight s,User commander,GeographicExceptionRequest request,User actor){return decideGeography(f,s,commander,request,actor,CommanderGeographicException.FUNCTION_COMMANDER);}
+ /** Ubicación de la persona al despegar este vuelo según su itinerario (véase {@link CrewItineraryService}), no necesariamente la registrada en su perfil. */
+ private CommanderGeography.Assessment geoFor(Flight f,User u,CommanderGeography.Departure departure){var pos=itinerary.positionAt(u,f.getFechaPlanificadaSalida(),f.getId());return CommanderGeography.assess(pos.provinceId(),pos.provinceName(),departure,pos.afterFlight());}
+ /** Jurisdicción de salida de cualquier vuelo: la del sanitario (aeropuerto o provincia del paciente) o, en un vuelo operativo, la de su aeropuerto de origen. */
+ private CommanderGeography.Departure departureOf(Flight f,SanitaryFlight s){if(s!=null)return departure(f,s);Airport a=f.getOrigen();if(a==null)throw bad("El vuelo no tiene aeropuerto de salida definido");if(a.getProvinciaReferencial()==null)throw airportProvinceUnknown(a);return confirmedDeparture(a);}
+ private CommanderGeographicException decideGeography(Flight f,SanitaryFlight s,User commander,GeographicExceptionRequest request,User actor,String function){
+  var departure=departureOf(f,s);var pos=itinerary.positionAt(commander,f.getFechaPlanificadaSalida(),f.getId());var geo=CommanderGeography.assess(pos.provinceId(),pos.provinceName(),departure,pos.afterFlight());
   if(geo.ordinary()){
-   if(request!=null)throw new ApiException(HttpStatus.BAD_REQUEST,"GEOGRAPHIC_EXCEPTION_NOT_NEEDED","El comandante está en la jurisdicción del aeropuerto de salida: no corresponde una excepción geográfica",Map.of("tipo",geo.code()));
+   if(request!=null)throw new ApiException(HttpStatus.BAD_REQUEST,"GEOGRAPHIC_EXCEPTION_NOT_NEEDED","La persona está (o estará) en la jurisdicción del aeropuerto de salida: no corresponde una excepción geográfica",Map.of("tipo",geo.code()));
    return null;
   }
-  Map<String,Object> details=Map.of("tipo",geo.code(),"provinciaSalida",departure.province(),"comandanteId",commander.getId());
+  Map<String,Object> details=Map.of("tipo",geo.code(),"provinciaSalida",departure.province(),"comandanteId",commander.getId(),"funcion",function);
   if(request==null){
-   if(coveredByException(f,commander,departure))return null;
+   if(coveredByException(f,commander,departure,function))return null;
    throw new ApiException(HttpStatus.CONFLICT,"COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION",geo.message()+". Sólo puede asignarse mediante una excepción geográfica justificada y autorizada por Centro de Operaciones.",details);
   }
-  if(!hasRole(actor,"CENTRO_OPERACIONES"))throw new ApiException(HttpStatus.FORBIDDEN,"GEOGRAPHIC_EXCEPTION_NOT_AUTHORIZED","Sólo Centro de Operaciones puede autorizar la asignación de un comandante fuera de la jurisdicción del aeropuerto de salida",details);
+  if(!hasRole(actor,"CENTRO_OPERACIONES"))throw new ApiException(HttpStatus.FORBIDDEN,"GEOGRAPHIC_EXCEPTION_NOT_AUTHORIZED","Sólo Centro de Operaciones puede autorizar la asignación de una persona fuera de la jurisdicción del aeropuerto de salida",details);
   String reason=request.motivo()==null?"":request.motivo().trim();
   if(reason.length()<15)throw new ApiException(HttpStatus.BAD_REQUEST,"GEOGRAPHIC_EXCEPTION_REASON_REQUIRED","La excepción geográfica requiere una justificación de al menos 15 caracteres",details);
-  CommanderGeographicException e=new CommanderGeographicException();e.setCommander(commander);e.setDepartureProvince(departureProvinceEntity(f,s));e.setType(geo.code());e.setReason(reason);e.setAuthorizedBy(actor);
+  CommanderGeographicException e=new CommanderGeographicException();e.setCommander(commander);e.setDepartureProvince(departureProvinceEntity(f,s));e.setType(geo.code());e.setReason(reason);e.setAuthorizedBy(actor);e.setFunction(function);
   if(f.getOrigen()!=null)e.setDepartureAirport(f.getOrigen());
-  e.setCommanderProvince(commander.getPerson().getCommanderProfile().getProvinciaActual());return e;
+  e.setCommanderProvince(pos.province());return e;
  }
  private Province departureProvinceEntity(Flight f,SanitaryFlight s){return f.getOrigen()!=null?f.getOrigen().getProvinciaReferencial():s.getLocalidadOrigenSolicitada().getProvincia();}
  /** Una excepción vigente del mismo comandante, autorizada para esta misma jurisdicción de salida, lo cubre; si el aeropuerto pasa a otra provincia la excepción deja de aplicar. */
- private boolean coveredByException(Flight f,User commander,CommanderGeography.Departure departure){
-  return f.getId()!=null&&geoExceptions.findCurrentByFlightId(f.getId()).stream().anyMatch(e->e.getCommander().getId().equals(commander.getId())&&e.getDepartureProvince()!=null&&e.getDepartureProvince().getId().equals(departure.provinceId()));
+ private boolean coveredByException(Flight f,User commander,CommanderGeography.Departure departure){return coveredByException(f,commander,departure,CommanderGeographicException.FUNCTION_COMMANDER);}
+ private boolean coveredByException(Flight f,User person,CommanderGeography.Departure departure,String function){
+  return f.getId()!=null&&geoExceptions.findCurrentByFlightId(f.getId()).stream().anyMatch(e->e.getCommander().getId().equals(person.getId())&&function.equals(e.getFunction())&&e.getDepartureProvince()!=null&&e.getDepartureProvince().getId().equals(departure.provinceId()));
  }
  /** Al completar una reserva: si el comandante ya no está en la jurisdicción de salida y no tiene una excepción vigente para ella, la ubicación cambió desde que se lo eligió. */
  private void requireGeographyStillValid(Flight f,SanitaryFlight s,User commander){
-  var departure=departure(f,s);var geo=CommanderGeography.assess(commander.getPerson().getCommanderProfile(),departure);
+  var departure=departureOf(f,s);var geo=geoFor(f,commander,departure);
   if(geo.ordinary()||coveredByException(f,commander,departure))return;
   throw new ApiException(HttpStatus.CONFLICT,"COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION",geo.message()+". La ubicación cambió desde que se eligió al comandante; vuelva a seleccionarlo.",Map.of("tipo",geo.code(),"comandanteId",commander.getId()));
  }
@@ -269,16 +296,24 @@ import org.springframework.transaction.annotation.*;
   * Cierra las excepciones vigentes de comandantes reemplazados, las del mismo comandante que ya no aplican (otra jurisdicción de salida o reemplazadas por una nueva) y registra (con su
   * auditoría) la nueva, si la hay. Se invoca dentro de la transacción de la asignación.
   */
- private void recordGeography(Flight f,User actor,User commander,CommanderGeographicException exception){
-  LocalDateTime now=LocalDateTime.now(clock);SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);Long province=s==null?null:departure(f,s).provinceId();
+ private void recordGeography(Flight f,User actor,User commander,CommanderGeographicException exception){recordGeography(f,actor,commander,exception,CommanderGeographicException.FUNCTION_COMMANDER);}
+ private void recordGeography(Flight f,User actor,User commander,CommanderGeographicException exception,String function){
+  LocalDateTime now=LocalDateTime.now(clock);SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);Long province=null;
+  try{province=departureOf(f,s).provinceId();}catch(ApiException unknown){province=null;}
   for(CommanderGeographicException old:geoExceptions.findCurrentByFlightId(f.getId())){
+   if(!function.equals(old.getFunction()))continue;
    boolean sameCommander=old.getCommander().getId().equals(commander.getId());
    boolean stale=!sameCommander||exception!=null||old.getDepartureProvince()==null||province==null||!old.getDepartureProvince().getId().equals(province);
    if(stale){old.setReplacedAt(now);geoExceptions.save(old);}
   }
   if(exception==null)return;
   exception.setFlight(f);exception.setAuthorizedAt(now);geoExceptions.saveAndFlush(exception);
-  audit.record(f,actor,"COMMANDER_GEOGRAPHIC_EXCEPTION",exception.getId(),"CREATE",null,"{\"comandanteId\":"+commander.getId()+",\"tipo\":"+json(exception.getType())+",\"provinciaSalida\":"+json(exception.getDepartureProvince().getNombre())+",\"aeropuertoSalida\":"+json(exception.getDepartureAirport()==null?null:exception.getDepartureAirport().getNombre())+",\"provinciaActual\":"+json(exception.getCommanderProvince()==null?null:exception.getCommanderProvince().getNombre())+",\"motivo\":"+json(exception.getReason())+"}");
+  audit.record(f,actor,"COMMANDER_GEOGRAPHIC_EXCEPTION",exception.getId(),"CREATE",null,"{\"comandanteId\":"+commander.getId()+",\"funcion\":"+json(function)+",\"tipo\":"+json(exception.getType())+",\"provinciaSalida\":"+json(exception.getDepartureProvince().getNombre())+",\"aeropuertoSalida\":"+json(exception.getDepartureAirport()==null?null:exception.getDepartureAirport().getNombre())+",\"provinciaActual\":"+json(exception.getCommanderProvince()==null?null:exception.getCommanderProvince().getNombre())+",\"motivo\":"+json(exception.getReason())+"}");
+ }
+ /** Cierra las excepciones vigentes de una persona para una función (al retirarla del vuelo, una excepción pasada no debe cubrir una asignación futura). */
+ private void closeExceptions(Flight f,Long userId,String function){
+  LocalDateTime now=LocalDateTime.now(clock);
+  for(CommanderGeographicException old:geoExceptions.findCurrentByFlightId(f.getId()))if(old.getCommander().getId().equals(userId)&&function.equals(old.getFunction())){old.setReplacedAt(now);geoExceptions.save(old);}
  }
  /** Pasa el vuelo a PLANIFICADO con aeronave y comandante ya fijados: revalida a toda la tripulación, vincula al comandante, reevalúa la ruta, audita y avisa. */
  private FlightView completeAssignment(Flight f,SanitaryFlight s,User actor,User commander,Aircraft previousPlane,User previousCommander,CommanderGeographicException exception){
@@ -310,7 +345,7 @@ import org.springframework.transaction.annotation.*;
   String before=airportsJson(f);User commander=f.getComandante();boolean replacing=commander!=null&&req.nuevoComandanteId()!=null&&!req.nuevoComandanteId().equals(commander.getId());
   if(originChanged&&commander!=null&&!replacing){
    // Se verifica antes de modificar nada: un cambio que deja inelegible al comandante asignado no se acepta en silencio.
-   var next=proposedDeparture(origin);var geo=CommanderGeography.assess(commander.getPerson().getCommanderProfile(),next);
+   var next=proposedDeparture(origin);var geo=geoFor(f,commander,next);
    if(!geo.ordinary()&&req.excepcionGeografica()==null&&!coveredByException(f,commander,next))
     throw new ApiException(HttpStatus.CONFLICT,"AIRPORT_CHANGE_REQUIRES_COMMANDER_REVALIDATION","La modificación del aeropuerto requiere volver a verificar la elegibilidad del comandante: "+geo.message()+". Indique otro comandante elegible para "+next.province()+" o autorice una excepción geográfica justificada.",Map.of("tipo",geo.code(),"provinciaSalida",next.province(),"comandanteId",commander.getId()));
   }
@@ -325,6 +360,7 @@ import org.springframework.transaction.annotation.*;
   routeReview.reassess(f,actor);
   AuditEvent event=audit.record(f,actor,"FLIGHT",f.getId(),"SET_AIRPORTS",before,airportsJson(f).replaceFirst("\\}$",",\"justificacion\":"+json(reason)+",\"comandanteReemplazado\":"+commanderReplaced+"}"));
   if(commander!=null&&!commanderReplaced&&event!=null)notifications.createOnce(commander,f,"AIRPORTS_PROPOSED","Centro de Operaciones propuso aeropuertos para el vuelo "+f.getCodigo()+": salida "+(f.getOrigen()==null?"sin definir":f.getOrigen().getNombre())+", llegada "+(f.getDestino()==null?"sin definir":f.getDestino().getNombre())+". Revíselos y confírmelos en su planificación.","AIRPORTS_PROPOSED:"+event.getId());
+  itinerary.revalidate(crewIds(f),actor);
   return view(f);
  }
  private String airportsJson(Flight f){return "{\"origenId\":"+json(f.getOrigen()==null?null:f.getOrigen().getId().toString())+",\"origen\":"+json(f.getOrigen()==null?null:f.getOrigen().getNombre())+",\"estadoOrigen\":"+json(f.getEstadoAeropuertoOrigen())+",\"destinoId\":"+json(f.getDestino()==null?null:f.getDestino().getId().toString())+",\"destino\":"+json(f.getDestino()==null?null:f.getDestino().getNombre())+",\"estadoDestino\":"+json(f.getEstadoAeropuertoDestino())+"}";}
@@ -344,7 +380,7 @@ import org.springframework.transaction.annotation.*;
   if(f.getDestino()==null){if(open)pending.add("Aeropuerto de llegada sin definir");}
   else{if(f.getDestino().getProvinciaReferencial()==null)pending.add("No se pudo determinar la provincia del aeropuerto de llegada");else if(!f.destinoConfirmado())pending.add("Aeropuerto de llegada propuesto: falta la confirmación del comandante");}
   if(open&&f.getOrigen()!=null&&f.getAircraft()!=null&&f.getAircraft().getAeropuertoActual()!=null&&!f.getAircraft().getAeropuertoActual().getId().equals(f.getOrigen().getId()))pending.add("La aeronave asignada está en "+f.getAircraft().getAeropuertoActual().getNombre()+", no en el aeropuerto de salida: asigne una aeronave ubicada allí");
-  if(open&&f.getComandante()!=null&&departure!=null){var geo=CommanderGeography.assess(f.getComandante().getPerson().getCommanderProfile(),departure);if(!geo.ordinary()&&!coveredByException(f,f.getComandante(),departure))pending.add("El comandante asignado se encuentra en una jurisdicción diferente a la del aeropuerto de salida: "+geo.message());}
+  if(open&&f.getComandante()!=null&&departure!=null){var geo=geoFor(f,f.getComandante(),departure);if(!geo.ordinary()&&!coveredByException(f,f.getComandante(),departure))pending.add("El comandante asignado se encuentra en una jurisdicción diferente a la del aeropuerto de salida: "+geo.message());}
   if(departure!=null&&departure.preliminary()&&open)warning=departure.warning();
   User by=f.getAeropuertosFijadosPor();
   return new AirportPlanView(slot(f.getOrigen(),f.getEstadoAeropuertoOrigen()),slot(f.getDestino(),f.getEstadoAeropuertoDestino()),by==null?null:by.getPerson().getNombre()+" "+by.getPerson().getApellido(),f.getAeropuertosFijadosEn(),departure!=null&&departure.preliminary()&&open,warning,pending);
@@ -439,7 +475,7 @@ import org.springframework.transaction.annotation.*;
   if(s!=null){
    boolean outsidePatient=!provinceId(origin).equals(s.getLocalidadOrigenSolicitada().getProvincia().getId())||!provinceId(destination).equals(s.getLocalidadDestinoSolicitada().getProvincia().getId());
    if(outsidePatient&&(reason==null||reason.length()<10))throw new ApiException(HttpStatus.BAD_REQUEST,"AIRPORT_OUTSIDE_PATIENT_PROVINCE_REASON_REQUIRED","El aeropuerto elegido está en una provincia distinta de la que figura en la solicitud del paciente: indique la justificación operativa (al menos 10 caracteres)",Map.of());
-   var departure=confirmedDeparture(origin);var geo=CommanderGeography.assess(f.getComandante().getPerson().getCommanderProfile(),departure);
+   var departure=confirmedDeparture(origin);var geo=geoFor(f,f.getComandante(),departure);
    if(!geo.ordinary()&&!coveredByException(f,f.getComandante(),departure))throw new ApiException(HttpStatus.CONFLICT,"COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION","El aeropuerto de salida "+origin.getNombre()+" está en "+departure.province()+" y usted figura en otra jurisdicción: "+geo.message()+". La modificación del aeropuerto requiere volver a verificar la elegibilidad del comandante: solicite a Centro de Operaciones que lo reasigne o autorice una excepción geográfica.",Map.of("tipo",geo.code(),"provinciaSalida",departure.province(),"comandanteId",f.getComandante().getId()));
   }else if(f.getAircraft()!=null&&!origin.getId().equals(f.getAircraft().getAeropuertoActual().getId()))throw bad("El origen debe coincidir con la ubicación actual de la aeronave");
   String before=airportsJson(f);
@@ -451,17 +487,15 @@ import org.springframework.transaction.annotation.*;
   return view(f);
  }
  @Transactional public FlightView start(Long id,Long actor){Flight f=locked(id);requireOperations(actor);requireOperationalStatus(f,"PLANIFICADO");if(f.getAircraft()==null||f.getOrigen()==null||f.getDestino()==null||f.getFechaPlanificadaSalida()==null||f.getFechaPlanificadaLlegada()==null)throw bad("Faltan datos de planificación operativa");if(f.getComandante()==null)throw bad("El vuelo no tiene comandante asignado");if((f.getSanitario()!=null||sanitaryFlights.findByFlightId(f.getId()).isPresent())&&(!f.origenConfirmado()||!f.destinoConfirmado()))throw new ApiException(HttpStatus.CONFLICT,"AEROPUERTOS_SIN_CONFIRMAR","Los aeropuertos de salida y llegada deben estar confirmados por el comandante antes de iniciar el vuelo",Map.of());commanderAccess.requireOperationalAccess(f.getComandante().getId());assertCurrentCrew(f);Aircraft plane=activeAircraft(f.getAircraft().getId());if(!plane.getAeropuertoActual().getId().equals(f.getOrigen().getId()))throw new ApiException(HttpStatus.CONFLICT,"La aeronave ya no se encuentra en el aeropuerto de origen planificado");routeReview.requireApprovedForStart(f);f.setFechaSalidaReal(LocalDateTime.now(clock));f.setEstadoVuelo(status("EN_CURSO"));flightLog.automatic(f,user(actor),"INICIO","Inicio efectivo del vuelo");audit.record(f,user(actor),"FLIGHT",f.getId(),"START","{\"estado\":\"PLANIFICADO\"}","{\"estado\":\"EN_CURSO\",\"salidaReal\":"+json(f.getFechaSalidaReal().toString())+"}");return view(f);}
- /** El vuelo ya está bloqueado. Las mismas filas de usuario son bloqueadas por revocar, verificar y cambiar clasificaciones. */
+ /** El vuelo ya está bloqueado. Las filas de usuario se bloquean en el mismo orden que al asignar la tripulación. */
  private void assertCurrentCrew(Flight f){
   Map<Long,String> assigned=new TreeMap<>();assigned.put(f.getComandante().getId(),"COMANDANTE");
   for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))if(!"COMANDANTE".equals(c.getCrewRole().getCodigo()))assigned.put(c.getUser().getId(),c.getCrewRole().getCodigo());
   for(Long id:assigned.keySet())users.lockById(id).orElseThrow(()->notFound("Usuario"));
   for(var entry:assigned.entrySet()){
    User member=user(entry.getKey());String role=entry.getValue();
-   for(java.time.LocalDate date:List.of(f.getFechaPlanificadaSalida().toLocalDate(),LocalDateTime.now(clock).toLocalDate())){
-    var result=crewManagement.evaluateOn(f,member,role,date,true);
-    if(!result.eligible())throw result.conflict(member.getId(),role);
-   }
+   var result=crewManagement.evaluate(f,member,role,true);
+   if(!result.eligible())throw result.conflict(member.getId(),role);
   }
  }
  /** El inicio rechazado por la ruta revirtió su transacción; el rechazo se registra en una propia. */
@@ -470,7 +504,7 @@ import org.springframework.transaction.annotation.*;
   Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));requireOperations(actor);
   audit.record(f,user(actor),"FLIGHT",id,"START_REJECTED_ELIGIBILITY",null,"{\"code\":"+json(code)+",\"userId\":"+details.get("userId")+",\"crewRoleCode\":"+json(String.valueOf(details.get("crewRoleCode")))+"}");
  }
- @Transactional public FlightView finish(Long id,Long actorId){Flight f=locked(id);requireOperations(actorId);requireOperationalStatus(f,"EN_CURSO");if(f.getAircraft()==null||f.getDestino()==null)throw bad("Faltan datos de planificación operativa");Aircraft plane=aircraft.lockById(f.getAircraft().getId()).orElseThrow(()->notFound("Aeronave"));if(!Boolean.TRUE.equals(plane.getActivo())||plane.getAeropuertoActual()==null)throw bad("La aeronave no está activa o no tiene ubicación");airportLocks.lockAll(f.getDestino().getId());Airport before=plane.getAeropuertoActual();plane.setAeropuertoActual(f.getDestino());CommanderProfile profile=f.getComandante().getPerson().getCommanderProfile();if(profile!=null){profile.setProvinciaActual(f.getDestino().getProvinciaReferencial());profile.setUbicacionActualizadaEn(LocalDateTime.now(clock));profile.setUbicacionActualizadaPor(user(actorId));}f.setFechaLlegadaReal(LocalDateTime.now(clock));f.setEstadoVuelo(status("FINALIZADO"));User actor=user(actorId);reportWorkflow.createObligationAfterFinish(f,actor);flightLog.automatic(f,actor,"FINALIZACION","Finalización efectiva del vuelo");audit.record(f,actor,"FLIGHT",f.getId(),"FINISH","{\"estado\":\"EN_CURSO\"}","{\"estado\":\"FINALIZADO\",\"llegadaReal\":"+json(f.getFechaLlegadaReal().toString())+"}");audit.record(f,actor,"AIRCRAFT",plane.getId(),"UPDATE_LOCATION_AFTER_FINISH","{\"aeropuertoActualId\":"+json(before.getId().toString())+"}","{\"aeropuertoActualId\":"+json(f.getDestino().getId().toString())+"}");return view(f);}
+ @Transactional public FlightView finish(Long id,Long actorId){Flight f=locked(id);requireOperations(actorId);requireOperationalStatus(f,"EN_CURSO");if(f.getAircraft()==null||f.getDestino()==null)throw bad("Faltan datos de planificación operativa");Aircraft plane=aircraft.lockById(f.getAircraft().getId()).orElseThrow(()->notFound("Aeronave"));if(!Boolean.TRUE.equals(plane.getActivo())||plane.getAeropuertoActual()==null)throw bad("La aeronave no está activa o no tiene ubicación");airportLocks.lockAll(f.getDestino().getId());Airport before=plane.getAeropuertoActual();plane.setAeropuertoActual(f.getDestino());relocateAfterFinish(f,user(actorId));f.setFechaLlegadaReal(LocalDateTime.now(clock));f.setEstadoVuelo(status("FINALIZADO"));User actor=user(actorId);reportWorkflow.createObligationAfterFinish(f,actor);flightLog.automatic(f,actor,"FINALIZACION","Finalización efectiva del vuelo");audit.record(f,actor,"FLIGHT",f.getId(),"FINISH","{\"estado\":\"EN_CURSO\"}","{\"estado\":\"FINALIZADO\",\"llegadaReal\":"+json(f.getFechaLlegadaReal().toString())+"}");audit.record(f,actor,"AIRCRAFT",plane.getId(),"UPDATE_LOCATION_AFTER_FINISH","{\"aeropuertoActualId\":"+json(before.getId().toString())+"}","{\"aeropuertoActualId\":"+json(f.getDestino().getId().toString())+"}");return view(f);}
  /** Cancelación antes de la ejecución: Operaciones en cualquier vuelo; el DTS sólo su propia solicitud. El comandante rechaza asignaciones, no cancela vuelos. */
  @Transactional public FlightView cancel(Long id,Cancel req,Long actorId){
   Flight f=locked(id);User actor=user(actorId);SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);
@@ -480,7 +514,8 @@ import org.springframework.transaction.annotation.*;
   boolean cancellable=s!=null?Set.of("SOLICITADO","PENDIENTE_RESPUESTA_DTS","APROBADO").contains(s.getEstadoSolicitud().getCodigo())&&(flightState==null||"PLANIFICADO".equals(flightState)):flightState!=null&&Set.of("PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION","PLANIFICADO").contains(flightState);
   if(!cancellable)throw bad("El vuelo no puede cancelarse en su estado actual");
   String label=cancellationLabel(req);String before="{\"estado\":"+json(flightState!=null?flightState:s==null?null:s.getEstadoSolicitud().getCodigo())+"}";
-  cancelFlight(f,s,actor,req,before);
+  Set<Long> released=crewIds(f);cancelFlight(f,s,actor,req,before);
+  itinerary.revalidate(released,actor);
   Map<Long,User> recipients=new LinkedHashMap<>();if(s!=null)recipients.put(s.getSolicitadoPor().getId(),s.getSolicitadoPor());if(f.getComandante()!=null&&flightState!=null)recipients.put(f.getComandante().getId(),f.getComandante());for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))recipients.putIfAbsent(c.getUser().getId(),c.getUser());recipients.remove(actorId);
   for(User u:recipients.values())notifications.createOnce(u,f,"FLIGHT_CANCELLED","El vuelo "+f.getCodigo()+" fue cancelado: "+label,"FLIGHT_CANCELLED:"+f.getId());
   if(!hasOperationsRole(actor))notifyOps(f,"FLIGHT_CANCELLED","El DTS canceló la solicitud "+f.getCodigo()+": "+label,"FLIGHT_CANCELLED:"+f.getId());
@@ -493,9 +528,70 @@ import org.springframework.transaction.annotation.*;
  @Transactional(readOnly=true) public List<CrewView> crew(Long id,Long actor,boolean history){Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));User u=user(actor);boolean operations=hasOperationsRole(u);if(!operations)requireCommander(f,actor);return (history?crews.findByFlightIdOrderByIdAsc(id):crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(id)).stream().map(c->{
   boolean commander=c.isVigente()&&f.getComandante()!=null&&f.getComandante().getId().equals(c.getUser().getId());
   boolean inspect=c.isVigente()&&(f.getEstadoVuelo()==null||!FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo()));
-  CrewManagementService.Eligibility status=inspect&& (operations||commander||c.getUser().getId().equals(actor))?crewManagement.evaluate(f,c.getUser(),c.getCrewRole().getCodigo(),false):null;
-  return new CrewView(c.getId(),c.getUser().getId(),c.getUser().getUsername(),c.getUser().getPerson().getNombre(),c.getUser().getPerson().getApellido(),c.getCrewRole().getCodigo(),c.getCrewRole().getNombre(),commander,c.isVigente(),c.getCreatedAt(),c.getAsignadoPor()==null?null:c.getAsignadoPor().getUsername(),c.getFechaBaja(),c.getBajaPor()==null?null:c.getBajaPor().getUsername(),c.getMotivoBaja(),status==null?null:status.code(),status==null?null:status.message(),status==null?null:status.expires());}).toList();}
- @Transactional public void removeCrew(Long id,Long crewId,Long actor){requireOperations(actor);crewManagement.remove(id,crewId,actor);}
+  CrewManagementService.Eligibility status=inspect&& (operations||commander||c.getUser().getId().equals(actor))?withItinerary(f,c.getUser(),crewManagement.evaluate(f,c.getUser(),c.getCrewRole().getCodigo(),false)):null;
+  return new CrewView(c.getId(),c.getUser().getId(),c.getUser().getUsername(),c.getUser().getPerson().getNombre(),c.getUser().getPerson().getApellido(),c.getCrewRole().getCodigo(),c.getCrewRole().getNombre(),commander,c.isVigente(),c.getCreatedAt(),c.getAsignadoPor()==null?null:c.getAsignadoPor().getUsername(),c.getFechaBaja(),c.getBajaPor()==null?null:c.getBajaPor().getUsername(),c.getMotivoBaja(),status==null?null:status.code(),status==null?null:status.message());}).toList();}
+ /** Una persona apta sigue marcada para revisión si, según su itinerario, ya no estará en la jurisdicción del aeropuerto de salida (y ninguna excepción lo cubre). No modifica la asignación. */
+ private CrewManagementService.Eligibility withItinerary(Flight f,User u,CrewManagementService.Eligibility base){
+  if(base==null||!base.eligible()||f.getOrigen()==null||f.getFechaPlanificadaSalida()==null||f.getOrigen().getProvinciaReferencial()==null)return base;
+  var dep=confirmedDeparture(f.getOrigen());var geo=geoFor(f,u,dep);
+  if(geo.ordinary()||coveredByException(f,u,dep,CrewItineraryService.functionIn(f,u.getId())))return base;
+  return new CrewManagementService.Eligibility(false,"ITINERARIO_INCOHERENTE",geo.message()+": revise la asignación");
+ }
+ private Set<Long> crewIds(Flight f){Set<Long> ids=new TreeSet<>();if(f.getComandante()!=null)ids.add(f.getComandante().getId());for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))ids.add(c.getUser().getId());return ids;}
+ /** Tras terminar un vuelo, el comandante y el copiloto quedan ubicados en la jurisdicción del aeropuerto de llegada (ubicación real, con su auditoría). */
+ private void relocateAfterFinish(Flight f,User actor){
+  Map<Long,User> people=new LinkedHashMap<>();if(f.getComandante()!=null)people.put(f.getComandante().getId(),f.getComandante());
+  for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))if("COPILOTO".equals(c.getCrewRole().getCodigo()))people.putIfAbsent(c.getUser().getId(),c.getUser());
+  Province arrival=f.getDestino().getProvinciaReferencial();
+  for(User u:people.values()){
+   CommanderProfile profile=u.getPerson().getCommanderProfile();if(profile==null)continue;
+   String before=profile.getProvinciaActual()==null?null:profile.getProvinciaActual().getNombre();
+   profile.setProvinciaActual(arrival);profile.setUbicacionActualizadaEn(LocalDateTime.now(clock));profile.setUbicacionActualizadaPor(actor);
+   audit.record(f,actor,"COMMANDER_PROFILE",u.getPerson().getId(),"UPDATE_LOCATION_AFTER_FINISH","{\"provincia\":"+json(before)+"}","{\"provincia\":"+json(arrival==null?null:arrival.getNombre())+"}");
+  }
+ }
+ private void assertCommanderInProvince(User commander,LocalDateTime departure,Airport origin,Long excludeFlight){
+  var pos=itinerary.positionAt(commander,departure,excludeFlight);
+  if(pos.provinceId()==null||!pos.provinceId().equals(origin.getProvinciaReferencial().getId()))throw bad("El comandante debe encontrarse en la provincia de origen"+(pos.projected()?" (según su itinerario estará en "+pos.provinceName()+" al terminar el vuelo "+pos.afterFlight()+")":""));
+ }
+ /**
+  * Asigna al copiloto: un usuario COMANDANTE distinto del comandante principal. La elegibilidad (cuenta, perfil, disponibilidad horaria) se verifica antes que la geográfica, que es la misma del
+  * comandante: jurisdicción del aeropuerto de salida según la ubicación prevista por el itinerario, con la excepción justificada de Centro de Operaciones. No crea ningún rol ni cuenta nueva.
+  */
+ @Transactional(isolation=Isolation.SERIALIZABLE) public void assignCopilot(Long id,Crew req,Long actorId){
+  requireCopilotRole(req);Flight f=locked(id);requireOperations(actorId);User actor=user(actorId);SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);if(s!=null)requireAssignableSanitary(f,s);
+  User copilot=eligibleCopilot(f,req.userId());
+  CommanderGeographicException exception=decideGeography(f,s,copilot,req.excepcionGeografica(),actor,CommanderGeographicException.FUNCTION_COPILOT);
+  crewManagement.assign(id,new Crew(req.userId(),"COPILOTO"),actorId);
+  recordGeography(f,actor,copilot,exception,CommanderGeographicException.FUNCTION_COPILOT);
+  itinerary.revalidate(List.of(copilot.getId()),actor);
+ }
+ /** Sustituye al copiloto de la asignación indicada por otro usuario COMANDANTE (o actualiza su excepción), con las mismas reglas que la asignación. */
+ @Transactional(isolation=Isolation.SERIALIZABLE) public void replaceCopilot(Long id,Long crewId,Crew req,Long actorId){
+  requireCopilotRole(req);Flight f=locked(id);requireOperations(actorId);User actor=user(actorId);SanitaryFlight s=sanitaryFlights.findByFlightId(f.getId()).orElse(null);if(s!=null)requireAssignableSanitary(f,s);
+  FlightCrew old=crews.findById(crewId).filter(x->x.getFlight().getId().equals(id)).orElseThrow(()->bad("Asignación inexistente"));
+  if(!"COPILOTO".equals(old.getCrewRole().getCodigo()))throw bad("Sólo el copiloto se sustituye por este medio; el comandante se cambia mediante recursos");
+  User copilot=eligibleCopilot(f,req.userId());
+  CommanderGeographicException exception=decideGeography(f,s,copilot,req.excepcionGeografica(),actor,CommanderGeographicException.FUNCTION_COPILOT);
+  Long previous=old.getUser().getId();
+  crewManagement.replace(id,crewId,new Crew(req.userId(),"COPILOTO"),actorId);
+  if(!previous.equals(copilot.getId()))closeExceptions(f,previous,CommanderGeographicException.FUNCTION_COPILOT);
+  recordGeography(f,actor,copilot,exception,CommanderGeographicException.FUNCTION_COPILOT);
+  itinerary.revalidate(List.of(previous,copilot.getId()),actor);
+ }
+ /** Sólo el copiloto se asigna como tripulación con cuenta (junto al comandante): médicos y enfermeros son registros del DTS sin cuenta y se asignan por el catálogo sanitario. */
+ private void requireCopilotRole(Crew req){if(!"COPILOTO".equals(req.crewRoleCode()))throw bad("Sólo el copiloto se asigna como tripulación con cuenta; el personal sanitario lo asigna el DTS");}
+ private User eligibleCopilot(Flight f,Long userId){
+  users.lockById(userId);User u=user(userId);
+  if(f.getComandante()!=null&&f.getComandante().getId().equals(userId))throw new ApiException(HttpStatus.CONFLICT,"COPILOT_IS_COMMANDER","El comandante principal del vuelo no puede ser también su copiloto",Map.of("userId",userId));
+  var result=crewManagement.evaluate(f,u,"COPILOTO",true);if(!result.eligible())throw result.conflict(userId,"COPILOTO");
+  return u;
+ }
+ @Transactional public void removeCrew(Long id,Long crewId,Long actor){
+  requireOperations(actor);FlightCrew row=crews.findById(crewId).filter(x->x.getFlight().getId().equals(id)).orElse(null);
+  crewManagement.remove(id,crewId,actor);
+  if(row!=null&&"COPILOTO".equals(row.getCrewRole().getCodigo())){closeExceptions(row.getFlight(),row.getUser().getId(),CommanderGeographicException.FUNCTION_COPILOT);itinerary.revalidate(List.of(row.getUser().getId()),user(actor));}
+ }
 
  @Transactional(readOnly=true) public FlightDetailView get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));access.mayRead(f,actor);return detail(f);}
  /** Orden de atención: solicitudes de extrema urgencia abiertas primero (por horario límite), luego el resto, más recientes primero. */
@@ -552,7 +648,7 @@ import org.springframework.transaction.annotation.*;
  private SanitaryFlight sanitary(Flight f){return sanitaryFlights.findByFlightId(f.getId()).orElseThrow(()->bad("El vuelo no posee solicitud sanitaria"));}
  private void setCancellation(Flight f,Cancel req){CancellationReason r=cancellationReason(req);f.setMotivoCancelacion(r);f.setMotivoCancelacionPersonalizado(blank(req.motivoCancelacionPersonalizado()));} private CancellationReason cancellationReason(Cancel req){CancellationReason r=cancellationReasons.findByIdAndActivoTrue(req.motivoCancelacionId()).orElseThrow(()->bad("Seleccione un motivo de cancelación válido"));String custom=blank(req.motivoCancelacionPersonalizado());if("OTRO".equals(r.getCodigo())&&custom==null)throw bad("Especifique el motivo personalizado");if(!"OTRO".equals(r.getCodigo())&&custom!=null)throw bad("El motivo personalizado sólo se permite para OTRO");return r;} private String cancellationLabel(Cancel req){CancellationReason r=cancellationReason(req);String custom=blank(req.motivoCancelacionPersonalizado());return "OTRO".equals(r.getCodigo())?custom:r.getNombre();} private String cancellationLabel(Flight f){return "OTRO".equals(f.getMotivoCancelacion().getCodigo())?f.getMotivoCancelacionPersonalizado():f.getMotivoCancelacion().getNombre();}private String cancellationAudit(Flight f){return "{\"motivo\":"+json(cancellationLabel(f))+"}";}
  private Aircraft activeAircraft(Long id){Aircraft a=aircraft.lockById(id).orElseThrow(()->notFound("Aeronave"));if(!Boolean.TRUE.equals(a.getActivo())||a.getAeropuertoActual()==null)throw bad("La aeronave no está activa o no tiene ubicación");if(!flights.activeAircraftAssignments(a.getId(),List.of("EN_CURSO")).isEmpty())throw new ApiException(HttpStatus.CONFLICT,"La aeronave seleccionada se encuentra en vuelo");return a;} /** Clasificación como COMANDANTE y habilitación verificada y vigente: la misma evaluación que la tripulación, el panel de disponibilidad y el inicio (no hay una segunda regla). La disponibilidad horaria la comprueba assertCrewNoOverlap. */
-private void assertCommanderEligible(Flight f,User commander,java.time.LocalDate on,Aircraft aircraft){var result=crewManagement.evaluateOn(f,commander,"COMANDANTE",on,false,aircraft);if(!result.eligible())throw result.conflict(commander.getId(),"COMANDANTE");}private User eligibleCommander(Long id){users.lockById(id);User u=user(id);CommanderProfile p=u.getPerson().getCommanderProfile();if(!Boolean.TRUE.equals(u.getActivo())||!"ACTIVO".equals(u.getEstadoCuenta()))throw bad("El comandante debe tener una cuenta activa");if(!hasRole(u,"COMANDANTE")||p==null||p.getLicenseNumber()==null||p.getLicenseNumber().isBlank())throw bad("El comandante debe tener licencia registrada");if(commanderAccess.isBlocked(u.getId()))throw new ApiException(HttpStatus.CONFLICT,"El comandante tiene informes finales vencidos y no puede recibir nuevas asignaciones");return u;}
+private void assertCommanderEligible(Flight f,User commander,java.time.LocalDate on,Aircraft aircraft){var result=crewManagement.evaluate(f,commander,"COMANDANTE",false);if(!result.eligible())throw result.conflict(commander.getId(),"COMANDANTE");}private User eligibleCommander(Long id){users.lockById(id);User u=user(id);CommanderProfile p=u.getPerson().getCommanderProfile();if(!Boolean.TRUE.equals(u.getActivo())||!"ACTIVO".equals(u.getEstadoCuenta()))throw bad("El comandante debe tener una cuenta activa");if(!hasRole(u,"COMANDANTE")||p==null||p.getLicenseNumber()==null||p.getLicenseNumber().isBlank())throw bad("El comandante debe tener licencia registrada");if(commanderAccess.isBlocked(u.getId()))throw new ApiException(HttpStatus.CONFLICT,"El comandante tiene informes finales vencidos y no puede recibir nuevas asignaciones");return u;}
  /** La solicitud pasa a referenciar las localidades: se bloquean (en orden de id) antes de leer su estado, como la baja administrativa lo hace antes de contar solicitudes abiertas. */
 private void lockLocalities(Long... ids){Arrays.stream(ids).filter(Objects::nonNull).distinct().sorted().forEach(localities::lockById);}private Locality locality(Long id,String label){return localities.findByIdAndActivoTrue(id).orElseThrow(()->bad("Seleccione una localidad de "+label+" válida."));}private Airport activeAirport(Long id,String label){Airport a=airports.findById(id).orElseThrow(()->notFound("Aeropuerto "+label));if(!Boolean.TRUE.equals(a.getActivo()))throw bad("El aeropuerto "+label+" debe estar activo");if(a.getProvinciaReferencial()==null)throw airportProvinceUnknown(a);return a;}private Long provinceId(Airport a){return a.getProvinciaReferencial().getId();}
  private FlightType type(String code){return types.findByCodigoAndActivoTrue(code).orElseThrow(()->types.findByCodigo(code).isPresent()?new ApiException(HttpStatus.CONFLICT,"TIPO_VUELO_INACTIVO","El tipo de vuelo está inactivo y no puede usarse en vuelos nuevos",Map.of()):new ApiException(HttpStatus.BAD_REQUEST,"TIPO_VUELO_INEXISTENTE","Tipo de vuelo inexistente",Map.of()));}private SanitaryRequestStatus sanitaryStatus(String code){return sanitaryStatuses.findByCodigo(code).orElseThrow(()->new IllegalStateException("Catálogo sanitario incompleto"));}private FlightStatus status(String code){return statuses.findByCodigo(code).orElseThrow(()->new IllegalStateException("Catálogo operativo incompleto"));}private FlightPriority priority(String code){return priorities.findByCodigoAndActivoTrue(code).orElseThrow(()->bad("Prioridad inexistente"));}

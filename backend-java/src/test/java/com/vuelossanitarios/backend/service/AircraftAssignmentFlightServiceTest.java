@@ -29,6 +29,7 @@ class AircraftAssignmentFlightServiceTest {
  private final AuditService audit=mock(AuditService.class); private final NotificationService notifications=mock(NotificationService.class);
  private final CommanderReportAccessService commanderAccess=mock(CommanderReportAccessService.class); private final CrewManagementService crewManagement=mock(CrewManagementService.class);
  private final CommanderGeographicExceptionRepository geoExceptions=mock(CommanderGeographicExceptionRepository.class);
+ private final FlightRepository itFlights=mock(FlightRepository.class); private final FlightCrewRepository itCrews=mock(FlightCrewRepository.class);
  private FlightService service;
  private User ops,commander,medic; private Locality capital; private Province province,otherProvince; private Airport tuc,tuc2,aep,salta; private Aircraft oldPlane,newPlane; private Flight operational; private AuditEvent auditEvent;
 
@@ -42,7 +43,7 @@ class AircraftAssignmentFlightServiceTest {
  private FlightCrew crew(long crewId,Flight f,User u,String role){CrewRole r=new CrewRole();r.setCodigo(role);r.setNombre(role);FlightCrew c=new FlightCrew();c.setId(crewId);c.setFlight(f);c.setUser(u);c.setCrewRole(r);return c;}
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),mock(AirportLocks.class),geoExceptions,Clock.systemDefaultZone());
+  service=new FlightService(flights,sanitary,mock(FlightTypeRepository.class),mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),crewRoles,crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,mock(WeatherSnapshotRepository.class),audit,mock(FlightAuthorizationService.class),notifications,mock(FlightUrgencyPolicy.class),mock(FinalReportWorkflowService.class),commanderAccess,crewManagement,mock(FlightLogService.class),mock(FlightRouteService.class),mock(AirportLocks.class),geoExceptions,new CrewItineraryService(itFlights,itCrews,users,geoExceptions,notifications,audit),Clock.systemDefaultZone());
   province=new Province();province.setId(id());province.setNombre("Tucumán");otherProvince=new Province();otherProvince.setId(id());otherProvince.setNombre("Salta");
   tuc=airport("TUC",province);tuc2=airport("TUC2",province);aep=airport("AEP",province);salta=airport("SLA",otherProvince);
   for(Airport a:List.of(tuc,tuc2,aep,salta))when(airports.findById(a.getId())).thenReturn(Optional.of(a));
@@ -53,8 +54,7 @@ class AircraftAssignmentFlightServiceTest {
   when(aircraft.lockById(oldPlane.getId())).thenReturn(Optional.of(oldPlane));when(aircraft.lockById(newPlane.getId())).thenReturn(Optional.of(newPlane));
   when(flights.activeAircraftAssignments(any(),any())).thenReturn(List.of());when(flights.aircraftBusyIn(any(),any(),any())).thenReturn(List.of());when(flights.overlappingAircraft(any(),any(),any())).thenReturn(List.of());
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(any())).thenReturn(List.of());
-  when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
-  when(crewManagement.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean(),any())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
+  when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente"));
   status("PLANIFICADO");status("PENDIENTE_CONFIRMACION_COMANDANTE");
   LocalDateTime from=LocalDateTime.now().plusDays(3);
   operational=new Flight();operational.setId(id());operational.setCodigo("V-OP");operational.setTipoVuelo(type("REGRESO_BASE"));operational.setAircraft(oldPlane);operational.setComandante(commander);operational.setOrigen(tuc);operational.setDestino(aep);
@@ -166,8 +166,8 @@ class AircraftAssignmentFlightServiceTest {
  @Test void aManipulatedAssignmentOfACommanderWithoutValidEligibilityIsRejectedBeforeAnythingChanges(){
   Flight f=sanitaryFlight(null);f.setAircraft(null);f.setComandante(null);f.setEstadoVuelo(null);newPlane.setAeropuertoActual(tuc);
   CrewRole role=new CrewRole();role.setCodigo("COMANDANTE");when(crewRoles.findByCodigo("COMANDANTE")).thenReturn(Optional.of(role));
-  for(String code:List.of("CLASIFICACION_INCOMPATIBLE","HABILITACION_VENCIDA","HABILITACION_REVOCADA","HABILITACION_NO_VERIFICADA")){
-   when(crewManagement.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean(),any())).thenReturn(new CrewManagementService.Eligibility(false,code,"No elegible",null));
+  for(String code:List.of("PERFIL_COMANDANTE_INCOMPLETO","CUENTA_INACTIVA","INFORME_FINAL_VENCIDO","CONFLICTO_ASIGNACION")){
+   when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,code,"No elegible"));
    ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId()),ops.getId()));
    assertEquals(HttpStatus.CONFLICT,e.status());assertEquals(code,e.code());assertNull(f.getAircraft());assertNull(f.getComandante());assertNull(f.getEstadoVuelo(),"el vuelo no pasa a PLANIFICADO");
   }
@@ -181,13 +181,13 @@ class AircraftAssignmentFlightServiceTest {
  private Flight withDepartureAirport(Flight f,Airport a,String state){f.setOrigen(a);f.setEstadoAeropuertoOrigen(state);return f;}
 
  @Test void aCommanderInTheProvinceOfThePatientIsOrdinarilyEligibleWithoutAnAirportYetButThePreliminaryWarningAppears(){
-  Flight f=unassigned();commanderAt(province);when(users.findActiveCommandersInProvince(province.getId())).thenReturn(List.of(commander));
+  Flight f=unassigned();commanderAt(province);when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of(commander));
   CommanderCandidates result=service.commanderCandidates(f.getId(),ops.getId(),"");
   assertTrue(result.salida().preliminar());assertEquals("PROVINCIA_DEL_PACIENTE",result.salida().fuente());assertEquals(province.getId(),result.salida().provinciaId());assertNull(result.salida().aeropuertoId());
   assertEquals(1,result.ordinarios().size());assertEquals("MISMA_JURISDICCION",result.ordinarios().get(0).codigoUbicacion());assertTrue(result.advertencia().contains("preliminares"));
  }
  @Test void anAirportInTheSameProvinceMakesTheCandidatesDefinitiveOnceConfirmedAndPreliminaryWhileOnlyProposed(){
-  Flight f=withDepartureAirport(unassigned(),tuc,Flight.PROPOSED);commanderAt(province);when(users.findActiveCommandersInProvince(province.getId())).thenReturn(List.of(commander));
+  Flight f=withDepartureAirport(unassigned(),tuc,Flight.PROPOSED);commanderAt(province);when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of(commander));
   CommanderCandidates proposed=service.commanderCandidates(f.getId(),ops.getId(),"");
   assertTrue(proposed.salida().preliminar());assertEquals("AEROPUERTO_PROPUESTO",proposed.salida().fuente());assertEquals(tuc.getId(),proposed.salida().aeropuertoId());assertNotNull(proposed.advertencia());
   f.setEstadoAeropuertoOrigen(Flight.CONFIRMED);
@@ -196,10 +196,9 @@ class AircraftAssignmentFlightServiceTest {
  }
  @Test void theProvinceOfTheDepartureAirportDecidesNotTheLocalityOfThePatient(){
   Flight f=withDepartureAirport(unassigned(),salta,Flight.PROPOSED);Locality other=locality("Salta capital",otherProvince);
-  when(users.findActiveCommandersInProvince(otherProvince.getId())).thenReturn(List.of());when(users.findActiveCommandersOutsideProvince(eq(otherProvince.getId()),eq(""),any())).thenReturn(List.of());when(users.countActiveCommandersOutsideProvince(otherProvince.getId())).thenReturn(List.<Object[]>of());
+  when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of());
   CommanderCandidates result=service.commanderCandidates(f.getId(),ops.getId(),"");
   assertEquals(otherProvince.getId(),result.salida().provinciaId());assertEquals("Salta",result.salida().provincia());assertNotNull(other);
-  verify(users,never()).findActiveCommandersInProvince(province.getId());
  }
  @Test void aCommanderInAnotherProvinceIsNotOrdinarilyEligible(){
   Flight f=unassigned();commanderAt(otherProvince);
@@ -244,9 +243,9 @@ class AircraftAssignmentFlightServiceTest {
  }
  @Test void theGeographicExceptionNeverSkipsTheOperationalChecks(){
   Flight f=unassigned();commanderAt(otherProvince);User co=centro();
-  when(crewManagement.evaluateOn(any(),any(),eq("COMANDANTE"),any(),anyBoolean(),any())).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_VENCIDA","Habilitación vencida",null));
+  when(crewManagement.evaluate(any(),any(),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"INFORME_FINAL_VENCIDO","El comandante tiene informes finales vencidos"));
   ApiException e=assertThrows(ApiException.class,()->service.assign(f.getId(),new AssignResources(newPlane.getId(),commander.getId(),new GeographicExceptionRequest("Traslado urgente sin otro comandante")),co.getId()));
-  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_VENCIDA",e.code());assertNull(f.getComandante());verify(geoExceptions,never()).saveAndFlush(any());
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("INFORME_FINAL_VENCIDO",e.code());assertNull(f.getComandante());verify(geoExceptions,never()).saveAndFlush(any());
  }
  @Test void anExceptionForACommanderInTheDepartureJurisdictionIsRejected(){
   Flight f=unassigned();commanderAt(province);
@@ -367,9 +366,9 @@ class AircraftAssignmentFlightServiceTest {
  }
  @Test void candidatesSeparateOrdinaryFromExceptionalCommandersAndExplainWhyNoneIsOrdinary(){
   Flight f=unassigned();User far=user("lejos","COMANDANTE",otherProvince);
-  when(users.findActiveCommandersInProvince(province.getId())).thenReturn(List.of());
-  when(users.findActiveCommandersOutsideProvince(eq(province.getId()),eq(""),any())).thenReturn(List.of(far));
-  when(users.countActiveCommandersOutsideProvince(province.getId())).thenReturn(List.<Object[]>of(new Object[]{otherProvince.getId(),1L},new Object[]{null,2L}));
+  User unknown1=user("sin1","COMANDANTE",null),unknown2=user("sin2","COMANDANTE",null);
+  for(User u:List.of(unknown1,unknown2))when(crewManagement.evaluate(any(),eq(u),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"PERFIL_COMANDANTE_INCOMPLETO","Sin licencia"));
+  when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of(far,unknown1,unknown2));
   when(users.findById(far.getId())).thenReturn(Optional.of(far));
   User co=centro();
   CommanderCandidates result=service.commanderCandidates(f.getId(),co.getId(),"");
@@ -380,8 +379,8 @@ class AircraftAssignmentFlightServiceTest {
  }
  @Test void aCommanderInTheDepartureJurisdictionIsOrdinaryAndOneWithAnOperationalConflictIsExplained(){
   Flight f=unassigned();User busy=user("ocupado","COMANDANTE",province);
-  when(users.findActiveCommandersInProvince(province.getId())).thenReturn(List.of(commander,busy));
-  when(crewManagement.evaluate(any(),eq(busy),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CONFLICTO_ASIGNACION","Tiene el vuelo V-1 comprometido en un horario incompatible",null));
+  when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of(commander,busy));
+  when(crewManagement.evaluate(any(),eq(busy),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CONFLICTO_ASIGNACION","Tiene el vuelo V-1 comprometido en un horario incompatible"));
   CommanderCandidates result=service.commanderCandidates(f.getId(),ops.getId(),"");
   assertEquals(1,result.ordinarios().size());assertEquals(commander.getId(),result.ordinarios().get(0).id());assertEquals("ORDINARIA",result.ordinarios().get(0).elegibilidad());assertNull(result.mensaje());
   assertEquals(1,result.noElegiblesEnJurisdiccion().size());assertEquals("NO_ELEGIBLE",result.noElegiblesEnJurisdiccion().get(0).elegibilidad());assertEquals("CONFLICTO_ASIGNACION",result.noElegiblesEnJurisdiccion().get(0).codigoOperativo());
@@ -406,4 +405,87 @@ class AircraftAssignmentFlightServiceTest {
   // La disponibilidad sólo cuenta estados comprometidos: tras cancelar, la consulta no devuelve el vuelo y la misma aeronave puede asignarse.
   assertFalse(FlightStates.COMMITTED.contains("CANCELADO"));assertTrue(FlightStates.TERMINAL.contains("CANCELADO"));assertFalse(FlightStates.MUTABLE_BEFORE_START.contains("EN_CURSO"));
  }
+
+ // ---------- Copiloto y ubicación prevista por el itinerario (V66) ----------
+ private User copilotAt(Province p){User c=user("cop"+id(),"COMANDANTE",p);when(users.lockById(c.getId())).thenReturn(Optional.of(c));when(users.findById(c.getId())).thenReturn(Optional.of(c));when(users.findWithRolesByUsername(c.getUsername())).thenReturn(Optional.of(c));return c;}
+ private Flight copilotFlight(Airport origin){Flight f=unassigned();f.setComandante(commander);f.setOrigen(origin);f.setEstadoAeropuertoOrigen(Flight.CONFIRMED);f.setFechaPlanificadaSalida(LocalDateTime.of(2031,3,10,12,0));
+  when(crewManagement.evaluate(any(),any(),eq("COPILOTO"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente"));return f;}
+ private Flight earlierFlight(User person,Airport from,Airport to,String role){Flight a=new Flight();a.setId(id());a.setCodigo("V-ANTES");a.setOrigen(from);a.setDestino(to);a.setEstadoVuelo(status("PLANIFICADO"));a.setFechaPlanificadaSalida(LocalDateTime.of(2031,3,10,6,0));a.setFechaPlanificadaLlegada(LocalDateTime.of(2031,3,10,9,0));
+  if("COPILOTO".equals(role))when(itCrews.findByUserIdAndFechaBajaIsNull(person.getId())).thenReturn(List.of(crew(id(),a,person,"COPILOTO")));else when(itFlights.openOfCommander(person.getId())).thenReturn(List.of(a));return a;}
+
+ @Test void aCommanderInTheDepartureJurisdictionIsAssignedAsCopilotWithoutCreatingAnyRoleOrAccount(){
+  Flight f=copilotFlight(tuc);User copilot=copilotAt(province);
+  service.assignCopilot(f.getId(),new Crew(copilot.getId(),"COPILOTO"),ops.getId());
+  verify(crewManagement).assign(eq(f.getId()),argThat((Crew c)->c.userId().equals(copilot.getId())&&"COPILOTO".equals(c.crewRoleCode())),eq(ops.getId()));
+  verify(geoExceptions,never()).saveAndFlush(any());
+ }
+ @Test void theMainCommanderOfTheFlightCannotBeItsCopilot(){
+  Flight f=copilotFlight(tuc);
+  ApiException e=assertThrows(ApiException.class,()->service.assignCopilot(f.getId(),new Crew(commander.getId(),"COPILOTO"),ops.getId()));
+  assertEquals("COPILOT_IS_COMMANDER",e.code());verify(crewManagement,never()).assign(any(),any(),any());
+ }
+ @Test void aCopilotOutsideTheDepartureJurisdictionNeedsTheJustifiedExceptionOfCentroDeOperacionesAndItIsRecordedForTheCopilotFunction(){
+  Flight f=copilotFlight(tuc);User far=copilotAt(otherProvince);
+  ApiException e=assertThrows(ApiException.class,()->service.assignCopilot(f.getId(),new Crew(far.getId(),"COPILOTO"),ops.getId()));
+  assertEquals("COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION",e.code());verify(crewManagement,never()).assign(any(),any(),any());
+  User co=centro();
+  assertEquals("GEOGRAPHIC_EXCEPTION_REASON_REQUIRED",assertThrows(ApiException.class,()->service.assignCopilot(f.getId(),new Crew(far.getId(),"COPILOTO",new GeographicExceptionRequest("corto")),co.getId())).code());
+  service.assignCopilot(f.getId(),new Crew(far.getId(),"COPILOTO",new GeographicExceptionRequest("Traslado urgente sin otro copiloto en la provincia")),co.getId());
+  ArgumentCaptor<CommanderGeographicException> saved=ArgumentCaptor.forClass(CommanderGeographicException.class);verify(geoExceptions).saveAndFlush(saved.capture());
+  assertEquals("COPILOTO",saved.getValue().getFunction());assertSame(far,saved.getValue().getCommander());assertSame(otherProvince,saved.getValue().getCommanderProvince());
+  verify(crewManagement).assign(eq(f.getId()),any(Crew.class),eq(co.getId()));
+ }
+ @Test void operationsCannotAuthorizeAGeographicExceptionForACopilot(){
+  Flight f=copilotFlight(tuc);User far=copilotAt(otherProvince);
+  ApiException e=assertThrows(ApiException.class,()->service.assignCopilot(f.getId(),new Crew(far.getId(),"COPILOTO",new GeographicExceptionRequest("Traslado urgente sin otro copiloto en la provincia")),ops.getId()));
+  assertEquals(HttpStatus.FORBIDDEN,e.status());verify(crewManagement,never()).assign(any(),any(),any());
+ }
+ @Test void aPersonWhoWillBeInTheDepartureJurisdictionAfterAnEarlierFlightIsEligibleEvenIfHerRegisteredLocationDiffers(){
+  // Registrada en Tucumán, copiloto de un vuelo Tucumán → Salta que termina antes: al despegar este vuelo desde Salta estará allí.
+  Flight f=copilotFlight(salta);User maria=copilotAt(province);earlierFlight(maria,tuc,salta,"COPILOTO");
+  service.assignCopilot(f.getId(),new Crew(maria.getId(),"COPILOTO"),ops.getId());
+  verify(crewManagement).assign(eq(f.getId()),any(Crew.class),eq(ops.getId()));verify(geoExceptions,never()).saveAndFlush(any());
+  assertSame(province,maria.getPerson().getCommanderProfile().getProvinciaActual(),"su ubicación actual no se adelantó");
+ }
+ @Test void aPersonWhoWillBeElsewhereAfterTheEarlierFlightIsNotOrdinarilyEligibleForADepartureFromWhereSheStartedFrom(){
+  // Tucumán → Salta como comandante; el vuelo siguiente sale de Tucumán: por el itinerario estará en Salta.
+  Flight f=copilotFlight(tuc);User maria=copilotAt(province);earlierFlight(maria,tuc,salta,"COMANDANTE");
+  ApiException e=assertThrows(ApiException.class,()->service.assignCopilot(f.getId(),new Crew(maria.getId(),"COPILOTO"),ops.getId()));
+  assertEquals("COMMANDER_OUTSIDE_DEPARTURE_JURISDICTION",e.code());assertTrue(e.getMessage().contains("al terminar el vuelo V-ANTES"));
+ }
+ @Test void copilotCandidatesAreTheOtherCommandersLocatedByTheirItineraryAndExcludeTheMainCommander(){
+  Flight f=copilotFlight(salta);User maria=copilotAt(province),local=copilotAt(otherProvince),lost=copilotAt(province);Flight before=earlierFlight(maria,tuc,salta,"COPILOTO");when(itCrews.openCopilotArrivingBy(any())).thenReturn(List.of(crew(id(),before,maria,"COPILOTO")));
+  when(users.findActiveCommanderAccounts(eq(""),any())).thenReturn(List.of(commander,maria,local,lost));
+  CommanderCandidates result=service.commanderCandidates(f.getId(),ops.getId(),"",null,"COPILOTO");
+  assertEquals(Set.of(maria.getId(),local.getId()),new HashSet<>(result.ordinarios().stream().map(CommanderCandidateView::id).toList()));
+  assertEquals(maria.getId(),result.ordinarios().stream().filter(c->"V-ANTES".equals(c.ubicacionPrevistaTrasVuelo())).findFirst().orElseThrow().id());
+  assertEquals(1,result.excepcionales().size());assertEquals(lost.getId(),result.excepcionales().get(0).id());
+  assertTrue(result.ordinarios().stream().noneMatch(c->c.id().equals(commander.getId())));
+ }
+ @Test void removingACopilotClosesItsGeographicExceptionSoItCannotCoverALaterAssignment(){
+  Flight f=copilotFlight(tuc);User far=copilotAt(otherProvince);
+  CommanderGeographicException e=new CommanderGeographicException();e.setCommander(far);e.setFunction("COPILOTO");e.setDepartureProvince(province);e.setFlight(f);
+  when(geoExceptions.findCurrentByFlightId(f.getId())).thenReturn(List.of(e));
+  FlightCrew row=crew(55L,f,far,"COPILOTO");when(crews.findById(55L)).thenReturn(Optional.of(row));
+  service.removeCrew(f.getId(),55L,ops.getId());
+  assertNotNull(e.getReplacedAt());verify(crewManagement).remove(f.getId(),55L,ops.getId());
+ }
+ @Test void finishingAFlightRelocatesTheCommanderAndTheCopilotToTheArrivalJurisdiction(){
+  Flight f=operational;f.setEstadoVuelo(status("EN_CURSO"));f.setFechaSalidaReal(LocalDateTime.now());f.setDestino(salta);
+  User copilot=copilotAt(province);when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId())).thenReturn(List.of(crew(1,f,commander,"COMANDANTE"),crew(2,f,copilot,"COPILOTO")));
+  status("FINALIZADO");when(aircraft.lockById(oldPlane.getId())).thenReturn(Optional.of(oldPlane));
+  service.finish(f.getId(),ops.getId());
+  assertSame(otherProvince,commander.getPerson().getCommanderProfile().getProvinciaActual());assertSame(otherProvince,copilot.getPerson().getCommanderProfile().getProvinciaActual());
+  verify(audit,times(2)).record(eq(f),eq(ops),eq("COMMANDER_PROFILE"),any(),eq("UPDATE_LOCATION_AFTER_FINISH"),any(),any());
+ }
+ @Test void cancellingAFlightRevalidatesTheLaterFlightsOfItsCrewWithoutRemovingAnything(){
+  Flight a=operational;User copilot=copilotAt(province);status("CANCELADO");
+  CancellationReason reason=new CancellationReason();reason.setCodigo("CLIMA");reason.setNombre("Clima");when(reasons.findByIdAndActivoTrue(5L)).thenReturn(Optional.of(reason));
+  Flight later=new Flight();later.setId(id());later.setCodigo("V-DESPUES");later.setOrigen(salta);later.setDestino(tuc);later.setEstadoVuelo(status("PLANIFICADO"));later.setFechaPlanificadaSalida(a.getFechaPlanificadaSalida().plusDays(1));later.setFechaPlanificadaLlegada(a.getFechaPlanificadaSalida().plusDays(1).plusHours(2));later.setComandante(copilot);
+  when(itFlights.openOfCommander(copilot.getId())).thenReturn(List.of(later));when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(a.getId())).thenReturn(List.of(crew(1,a,commander,"COMANDANTE"),crew(2,a,copilot,"COPILOTO")));
+  service.cancel(a.getId(),new Cancel(5L,null),ops.getId());
+  assertEquals("CANCELADO",a.getEstadoVuelo().getCodigo());assertSame(copilot,later.getComandante());
+  verify(notifications).createOncePreferred(eq(later),eq("CREW_ITINERARY_REVIEW"),anyString(),anyString(),anyCollection(),any(String[].class));
+ }
+
 }

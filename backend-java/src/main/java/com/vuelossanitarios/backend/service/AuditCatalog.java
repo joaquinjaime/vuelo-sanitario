@@ -11,7 +11,7 @@ final class AuditCatalog {
  static final Map<String,String> FIELDS=new LinkedHashMap<>();
  static {
   Map<String,String> t=ENTITY_TYPES;
-  t.put("FLIGHT","Vuelo");t.put("SANITARY_REQUEST","Solicitud sanitaria");t.put("FLIGHT_CREW","Tripulación del vuelo");t.put("AIRCRAFT","Aeronave");
+  t.put("FLIGHT","Vuelo");t.put("SANITARY_REQUEST","Solicitud sanitaria");t.put("FLIGHT_CREW","Tripulación del vuelo");t.put("HEALTH_STAFF","Personal sanitario");t.put("FLIGHT_HEALTH_STAFF","Personal sanitario del vuelo");t.put("AIRCRAFT","Aeronave");
   t.put("GEOGRAPHIC_PROVINCE","Provincia");t.put("GEOGRAPHIC_LOCALITY","Localidad");t.put("GEOGRAPHIC_AIRPORT","Aeropuerto");
   t.put("FLIGHT_ROUTE","Ruta del vuelo");t.put("DOCUMENT","Documento del vuelo");t.put("DOCUMENT_LOCK","Bloqueo de documento");t.put("HANGAR_INFO","Preparación en hangar");
   t.put("AA2000_COORDINATION","Coordinación aeroportuaria");t.put("FLIGHT_LOG","Bitácora operativa");t.put("WEATHER","Condiciones meteorológicas");
@@ -32,7 +32,7 @@ final class AuditCatalog {
   o.put("USUARIO_CREADO","Alta de cuenta");o.put("USUARIO_ACTUALIZADO","Modificación de datos personales");o.put("USUARIO_ACTIVADO","Cuenta activada por el usuario");o.put("CONTRASENA_CAMBIADA","Contraseña cambiada por el usuario");o.put("CODIGO_ACTIVACION_REGENERADO","Código de activación regenerado");o.put("ASSIGN_COMMANDER","Rol de comandante asignado");o.put("REMOVE_COMMANDER","Rol de comandante retirado");o.put("USUARIO_DESACTIVADO","Usuario desactivado");o.put("USUARIO_REACTIVADO","Usuario reactivado");o.put("CONTRASENA_RESTABLECIDA","Contraseña restablecida");o.put("UPDATE_LICENSE","Cambio de licencia");
   o.put("DOWNLOAD","Descarga");o.put("DEACTIVATE","Baja lógica");o.put("RECTIFY_DNI","Rectificación de DNI");o.put("ASSIGN_DNI","Asignación de DNI");o.put("SET_PRIMARY","Contacto principal cambiado");o.put("VIEW","Consulta de contactos");
   o.put("VERIFY_REQUEST","Código de verificación de correo solicitado");o.put("VERIFY_RESEND","Código de verificación de correo reenviado");o.put("VERIFY_CONFIRM","Correo verificado");o.put("VERIFY_EXPIRED","Código de verificación vencido");o.put("VERIFY_LOCKED","Código de verificación bloqueado por intentos fallidos");o.put("VERIFY_RATE_LIMITED","Límite de envíos de verificación alcanzado");o.put("VERIFY_SEND_FAILED","Falló el envío del código de verificación");
-  o.put("INVALIDATE","Invalidación por cambio del vuelo");o.put("RETIRE","Retiro de la clasificación");o.put("START_REJECTED","Inicio rechazado por la ruta");
+  o.put("INVALIDATE","Invalidación por cambio del vuelo");o.put("REACTIVATE","Reactivación");o.put("ITINERARY_REVIEW_REQUIRED","Itinerario a revisar");o.put("ELIGIBILITY_REVIEW_REQUIRED","Elegibilidad a revisar");o.put("RETIRE","Retiro de la clasificación");o.put("START_REJECTED","Inicio rechazado por la ruta");
   o.put("RENEW","Renovación");o.put("EXTERNAL_CHECK","Consulta externa registrada");o.put("CORRECCION_SOLICITADA","Corrección solicitada");o.put("SCAN","Análisis antimalware");o.put("HOLD","Bloqueo de conservación");o.put("RELEASE_HOLD","Liberación del bloqueo de conservación");o.put("DATA_REQUEST","Solicitud de rectificación o supresión");o.put("EXPIRY_NOTICE","Aviso de vencimiento");
   o.put("CREATE_WITH_SANITARY_REQUEST","Paciente registrado con solicitud sanitaria");
   o.put("LINK_EXISTING_PERSON_WITH_REQUEST","Persona preexistente vinculada como paciente con solicitud sanitaria");

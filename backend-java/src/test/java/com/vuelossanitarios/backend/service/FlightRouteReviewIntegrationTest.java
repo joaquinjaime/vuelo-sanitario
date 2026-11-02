@@ -38,9 +38,9 @@ import org.springframework.http.HttpStatus;
 class FlightRouteReviewIntegrationTest {
  @Autowired FlightService flightService; @Autowired FlightRouteService routeService; @Autowired CrewManagementService crewService;
  @Autowired FlightRouteRepository routes; @Autowired AuditEventRepository auditEvents; @Autowired AircraftRepository aircraft; @Autowired AirportRepository airports; @Autowired ProvinceRepository provinces; @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roleRepository; @Autowired UserRoleRepository userRoles; @Autowired CommanderProfileRepository commanderProfiles;
- @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CrewQualificationRepository qualifications;
+ @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles;
  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager; private org.springframework.transaction.support.TransactionTemplate tx;
- @MockBean ProfessionalCredentialService credentials; @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
+ @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
 
  private static int seq; private static synchronized int next(){return ++seq;}
  private static Province province; private static User ops,ops2;
@@ -53,18 +53,18 @@ class FlightRouteReviewIntegrationTest {
   User u=new User();u.setUsername(prefix+n);u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("ACTIVO");users.save(u);
   userRoles.save(new UserRole(u,role(roleCode)));return users.findById(u.getId()).orElseThrow();
  }
- private User qualified(User u,String code){CrewQualification q=new CrewQualification();q.setUser(u);q.setRole(crewRole(code));q.setClassifier(ops);qualifications.save(q);return u;}
+ private User qualified(User u,String code){return u;}
  private Airport airport(String name){int n=next();Airport a=new Airport();a.setNombre(name+n);a.setActivo(true);a.setProvinciaReferencial(province);a.setCodigoOaci(String.format("R%03d",n));a.setCodigoIata(String.format("%03d",n));return airports.save(a);}
  private Aircraft plane(Airport at){int n=next();Aircraft a=new Aircraft();a.setMatricula("LV-R"+n);a.setModelo("M");a.setTipo("T");a.setCapacidadPacientes((short)1);a.setCapacidadTripulacion((short)4);a.setActivo(true);a.setAeropuertoActual(at);return aircraft.save(a);}
 
- @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();when(credentials.assess(any(),any(),any(),any())).thenReturn(new ProfessionalCredentialService.Assessment(true,"ELEGIBLE","Vigente",null));}
+ @BeforeEach void setUp(){tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);bootstrap();}
  private synchronized void bootstrap(){
   if(ops!=null)return;
   Province p=new Province();p.setCodigoOficial("R1");p.setNombre("Provincia rutas");p.setActivo(true);province=provinces.save(p);
   ops=user("ops","CENTRO_OPERACIONES",false);ops2=user("ops","OPERACIONES",false);
   FlightType t=new FlightType();t.setCodigo("REGRESO_BASE");t.setNombre("Regreso");types.save(t);
   for(String s:List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PLANIFICADO","CANCELADO","EN_CURSO","FINALIZADO"))status(s);
-  crewRole("COMANDANTE");crewRole("MEDICO");
+  crewRole("COMANDANTE");crewRole("COPILOTO");
  }
 
  /** Vuelo operativo en PLANIFICADO con su comandante, aeronave y aeropuerto de origen. */
@@ -115,8 +115,8 @@ class FlightRouteReviewIntegrationTest {
 
  @Test void changesMadeThroughTheRealServicesInvalidateWhenMaterialAndNotWhenAdministrative(){
   Scenario s=planned();approved(s);
-  User medic=qualified(user("med","MEDICO",false),"MEDICO");
-  crewService.assign(s.id(),new Crew(medic.getId(),"MEDICO"),ops.getId());                 // administrativo: tripulación
+  User medic=qualified(user("med","COMANDANTE",true),"COPILOTO");
+  crewService.assign(s.id(),new Crew(medic.getId(),"COPILOTO"),ops.getId());                 // administrativo: tripulación
   assertEquals(FlightRoute.APROBADA,tx.execute(st->current(s).getEstadoRevision()));
   Aircraft other=plane(s.origin);flightService.changeAircraft(s.id(),new ChangeAircraft(other.getId(),"Mantenimiento de la aeronave original"),ops.getId());  // material: aeronave
   FlightRoute r=tx.execute(st->current(s));assertEquals(FlightRoute.REQUIERE_REVISION,r.getEstadoRevision());assertTrue(r.getCausaInvalidacion().contains("aeronave"),r.getCausaInvalidacion());

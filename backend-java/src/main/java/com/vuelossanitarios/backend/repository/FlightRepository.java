@@ -31,6 +31,12 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     List<Flight> findByAircraftIdOrderByFechaPlanificadaSalidaDescIdDesc(Long aircraftId);
     @Query("select (count(f) > 0) from Flight f where f.comandante.id = :userId and f.estadoVuelo.codigo in :states") boolean existsOperationalCommanderAssignment(@Param("userId") Long userId,@Param("states") Collection<String> states);
     @Query("select f from Flight f join f.sanitario s where s.solicitadoPor.id=:userId") List<Flight> findSanitaryBySolicitadoPorId(@Param("userId") Long userId);
+    /** Vuelos abiertos con comandante que llegan (según el horario planificado) a más tardar en {@code at}: base de la ubicación prevista de los comandantes (V66). */
+    @Query("select f from Flight f join fetch f.comandante join fetch f.destino left join f.estadoVuelo st where f.fechaPlanificadaLlegada is not null and f.fechaPlanificadaLlegada <= :at and (st is null or st.codigo not in ('FINALIZADO','COMPLETADO','CANCELADO','RECHAZADO'))")
+    List<Flight> openArrivingBy(@Param("at") LocalDateTime at);
+    /** Vuelos abiertos de un comandante (sin estado, es decir con el comandante sólo reservado, incluidos). */
+    @Query("select f from Flight f left join f.estadoVuelo st where f.comandante.id = :userId and (st is null or st.codigo not in ('FINALIZADO','COMPLETADO','CANCELADO','RECHAZADO'))")
+    List<Flight> openOfCommander(@Param("userId") Long userId);
     List<Flight> findByComandanteId(Long userId);
     List<Flight> findByEstadoVueloCodigoIn(Collection<String> codes);
     boolean existsByOrigenIdOrDestinoId(Long origenId, Long destinoId);

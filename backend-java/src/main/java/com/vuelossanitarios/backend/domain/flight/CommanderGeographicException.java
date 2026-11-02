@@ -20,6 +20,10 @@ import java.time.LocalDateTime;
  @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="id_provincia_salida") private Province departureProvince;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_localidad_comandante") private Locality commanderLocality;
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="id_provincia_comandante") private Province commanderProvince;
+ /** Función a la que se aplica la excepción (V66): comandante principal o copiloto. Un mismo vuelo puede tener una vigente por función. */
+ @Column(name="funcion",nullable=false,length=20) private String function=FUNCTION_COMMANDER;
+ public static final String FUNCTION_COMMANDER="COMANDANTE", FUNCTION_COPILOT="COPILOTO";
+ public String getFunction(){return function;} public void setFunction(String v){function=v;}
  @Column(name="tipo_excepcion",nullable=false,length=40) private String type;
  @Column(name="motivo",nullable=false,length=500) private String reason;
  @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="id_usuario_autoriza") private User authorizedBy;

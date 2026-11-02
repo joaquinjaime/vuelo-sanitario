@@ -27,18 +27,18 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @Import({SecurityConfig.class,JwtAuthenticationFilter.class})
 class CrewAndAircraftAssignmentAuthorizationTest {
  @Autowired MockMvc mvc; @MockBean JwtService jwt; @MockBean UserRepository users; @MockBean FlightService flights; @MockBean CrewManagementService crewManagement; @MockBean com.vuelossanitarios.backend.service.CrewContactService crewContacts; @MockBean SanitaryRequestRegistrationService registration;
- private static final String CREW="{\"userId\":2,\"crewRoleCode\":\"MEDICO\"}",AIRCRAFT="{\"aircraftId\":9,\"motivo\":\"Mantenimiento\"}";
+ private static final String CREW="{\"userId\":2,\"crewRoleCode\":\"COPILOTO\"}",AIRCRAFT="{\"aircraftId\":9,\"motivo\":\"Mantenimiento\"}";
  private RequestPostProcessor as(String role){return SecurityMockMvcRequestPostProcessors.authentication(new UsernamePasswordAuthenticationToken(new CurrentUser(7L,"u"),null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));}
  private void allowed(String role,boolean can,org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {mvc.perform(request.with(as(role)).contentType(MediaType.APPLICATION_JSON)).andExpect(can?status().is2xxSuccessful():status().isForbidden());}
 
  @Test void onlyOperationsManageTheAdditionalCrew() throws Exception {
   for(String role:List.of("OPERACIONES","CENTRO_OPERACIONES")){
-   allowed(role,true,post("/api/flights/1/crew").content(CREW));allowed(role,true,put("/api/flights/1/crew/5").content(CREW));allowed(role,true,delete("/api/flights/1/crew/5"));allowed(role,true,get("/api/flights/1/crew/candidates").param("role","MEDICO"));allowed(role,true,get("/api/flights/1/crew/available").param("role","MEDICO"));
+   allowed(role,true,post("/api/flights/1/crew").content(CREW));allowed(role,true,put("/api/flights/1/crew/5").content(CREW));allowed(role,true,delete("/api/flights/1/crew/5"));
   }
   for(String role:List.of("ADMINISTRADOR","COMANDANTE","DTS")){
-   allowed(role,false,post("/api/flights/1/crew").content(CREW));allowed(role,false,put("/api/flights/1/crew/5").content(CREW));allowed(role,false,delete("/api/flights/1/crew/5"));allowed(role,false,get("/api/flights/1/crew/candidates").param("role","MEDICO"));allowed(role,false,get("/api/flights/1/crew/available").param("role","MEDICO"));
+   allowed(role,false,post("/api/flights/1/crew").content(CREW));allowed(role,false,put("/api/flights/1/crew/5").content(CREW));allowed(role,false,delete("/api/flights/1/crew/5"));
   }
-  verify(crewManagement,times(2)).assign(eq(1L),any(Crew.class),eq(7L));verify(crewManagement,times(2)).replace(eq(1L),eq(5L),any(Crew.class),eq(7L));verify(flights,times(2)).removeCrew(1L,5L,7L);
+  verify(flights,times(2)).assignCopilot(eq(1L),any(Crew.class),eq(7L));verify(flights,times(2)).replaceCopilot(eq(1L),eq(5L),any(Crew.class),eq(7L));verify(flights,times(2)).removeCrew(1L,5L,7L);
  }
  @Test void crewCanBeReadByOperationsAndByTheCommanderButNotByDtsOrAdministrator() throws Exception {
   for(String role:List.of("OPERACIONES","CENTRO_OPERACIONES","COMANDANTE")){allowed(role,true,get("/api/flights/1/crew"));allowed(role,true,get("/api/flights/1/crew").param("history","true"));}

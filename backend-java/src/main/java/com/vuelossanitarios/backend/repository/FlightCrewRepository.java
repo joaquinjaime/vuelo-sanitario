@@ -10,6 +10,8 @@ public interface FlightCrewRepository extends JpaRepository<FlightCrew, Long> {
  @Query("select new com.vuelossanitarios.backend.repository.CrewPersonRow(fc.id,u.id,u.activo,u.estadoCuenta,p.id,p.nombre,p.apellido,r.codigo,r.nombre) from FlightCrew fc join fc.user u join u.person p join fc.crewRole r where fc.flight.id=:flightId and fc.fechaBaja is null order by fc.id") List<CrewPersonRow> findCurrentPeopleByFlightId(@Param("flightId") Long flightId);
  /** Tripulación vigente de todos los vuelos en los estados indicados, en una sola consulta (la simulación de políticas examina todos los vuelos abiertos). */
  @Query("select fc from FlightCrew fc join fetch fc.flight f join fetch fc.user join fetch fc.crewRole where fc.fechaBaja is null and f.estadoVuelo.codigo in :states order by fc.id") List<FlightCrew> activeCrewOfFlightsInStates(@Param("states") Collection<String> states);
+ /** Asignaciones vigentes de copiloto en vuelos abiertos que llegan a más tardar en {@code at} (ubicación prevista, V66). */
+ @Query("select fc from FlightCrew fc join fetch fc.flight f join fetch fc.user join fetch f.destino left join f.estadoVuelo st where fc.fechaBaja is null and fc.crewRole.codigo='COPILOTO' and f.fechaPlanificadaLlegada is not null and f.fechaPlanificadaLlegada <= :at and (st is null or st.codigo not in ('FINALIZADO','COMPLETADO','CANCELADO','RECHAZADO'))") List<FlightCrew> openCopilotArrivingBy(@Param("at") java.time.LocalDateTime at);
  boolean existsByFlightIdAndUserIdAndFechaBajaIsNull(Long flightId, Long userId);
  /** Historial completo del vuelo (vigentes y dadas de baja). */
  List<FlightCrew> findByFlightIdOrderByIdAsc(Long flightId);

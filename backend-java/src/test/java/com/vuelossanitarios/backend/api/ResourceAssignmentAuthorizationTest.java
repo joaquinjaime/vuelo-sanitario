@@ -49,7 +49,7 @@ class ResourceAssignmentAuthorizationTest {
   for(String role:List.of("ADMINISTRADOR","COMANDANTE","DTS")){
    allowed(role,false,put("/api/flights/1/commander").content(COMMANDER));allowed(role,false,put("/api/flights/1/assigned-aircraft").content(AIRCRAFT));allowed(role,false,get("/api/flights/1/commander-candidates"));
   }
-  verify(flights,times(2)).assignCommander(eq(1L),any(AssignCommander.class),eq(7L));verify(flights,times(2)).assignAircraft(eq(1L),any(AssignAircraft.class),eq(7L));verify(flights,times(2)).commanderCandidates(eq(1L),eq(7L),eq(""),isNull());
+  verify(flights,times(2)).assignCommander(eq(1L),any(AssignCommander.class),eq(7L));verify(flights,times(2)).assignAircraft(eq(1L),any(AssignAircraft.class),eq(7L));verify(flights,times(2)).commanderCandidates(eq(1L),eq(7L),eq(""),isNull(),eq("COMANDANTE"));
  }
  @Test void theGeographicExceptionTravelsOnlyInsideTheAssignmentRequestAndKeepsItsJustification() throws Exception {
   mvc.perform(put("/api/flights/1/commander").with(as("CENTRO_OPERACIONES")).contentType(MediaType.APPLICATION_JSON).content(COMMANDER)).andExpect(status().isOk());

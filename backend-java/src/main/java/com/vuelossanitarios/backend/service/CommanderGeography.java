@@ -37,4 +37,16 @@ public final class CommanderGeography {
   String from=departure==null?"la jurisdicción de salida":departure.province();
   return new Assessment(false,CommanderGeographicException.OTHER_PROVINCE,"Se encuentra en "+name+" y el vuelo sale de "+from,id,name);
  }
+ /**
+  * Igual que {@link #assess(CommanderProfile,Departure)} pero con la jurisdicción en la que la persona se encontrará cuando el vuelo despegue: la de su perfil o, si ya tiene un
+  * vuelo anterior que termina antes de la salida, la del aeropuerto de llegada de ese vuelo (ubicación prevista, derivada del itinerario sin modificar el perfil).
+  * {@code afterFlight} es el código del vuelo del que se deriva la ubicación prevista; null si es la ubicación registrada.
+  */
+ public static Assessment assess(Long provinceId,String name,Departure departure,String afterFlight){
+  if(provinceId==null)return new Assessment(false,CommanderGeographicException.UNKNOWN,"No tiene una ubicación operativa registrada",null,null);
+  String where=afterFlight==null?"Se encuentra en "+name:"Estará en "+name+" al terminar el vuelo "+afterFlight;
+  if(departure!=null&&provinceId.equals(departure.provinceId()))return new Assessment(true,SAME_JURISDICTION,where+", jurisdicción del aeropuerto de salida",provinceId,name);
+  String from=departure==null?"la jurisdicción de salida":departure.province();
+  return new Assessment(false,CommanderGeographicException.OTHER_PROVINCE,where+" y el vuelo sale de "+from,provinceId,name);
+ }
 }

@@ -26,14 +26,14 @@ class FlightClosureServiceTest {
  private final Map<String,FlightStatus> catalog=new HashMap<>();
 
  @BeforeEach void setUp(){
-  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,routeReview,mock(AirportLocks.class),mock(com.vuelossanitarios.backend.repository.CommanderGeographicExceptionRepository.class),clock);
+  service=new FlightService(flights,sanitary,types,mock(SanitaryRequestStatusRepository.class),mock(PatientRepository.class),users,statuses,mock(FlightPriorityRepository.class),aircraft,airports,mock(LocalityRepository.class),mock(CrewRoleRepository.class),crews,mock(FlightMedicalInfoRepository.class),mock(FlightFinalReportRepository.class),mock(FlightScheduleNegotiationRepository.class),reasons,weather,audit,access,notifications,mock(FlightUrgencyPolicy.class),reportWorkflow,commanderAccess,crewManagement,log,routeReview,mock(AirportLocks.class),mock(com.vuelossanitarios.backend.repository.CommanderGeographicExceptionRepository.class),new CrewItineraryService(mock(com.vuelossanitarios.backend.repository.FlightRepository.class),mock(com.vuelossanitarios.backend.repository.FlightCrewRepository.class),mock(com.vuelossanitarios.backend.repository.UserRepository.class),mock(com.vuelossanitarios.backend.repository.CommanderGeographicExceptionRepository.class),mock(NotificationService.class),mock(AuditService.class)),clock);
   Province province=new Province();province.setId(1L);province.setNombre("Tucumán");
   origin=airport(1L,"TUC",province);destination=airport(2L,"AEP",province);
   ops=user(10L,"ops","CENTRO_OPERACIONES");commander=user(11L,"cmd","COMANDANTE");commander.getPerson().getCommanderProfile().setProvinciaActual(province);
   plane=new Aircraft();plane.setId(5L);plane.setActivo(true);plane.setAeropuertoActual(origin);
   for(String code:List.of("PLANIFICADO","EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO","PENDIENTE_CONFIRMACION_COMANDANTE")){FlightStatus s=new FlightStatus();s.setCodigo(code);catalog.put(code,s);when(statuses.findByCodigo(code)).thenReturn(Optional.of(s));}
   when(users.findById(10L)).thenReturn(Optional.of(ops));when(users.findById(11L)).thenReturn(Optional.of(commander));when(users.lockById(11L)).thenReturn(Optional.of(commander));when(users.findWithRolesByUsername("ops")).thenReturn(Optional.of(ops));when(users.findWithRolesByUsername("cmd")).thenReturn(Optional.of(commander));
-  when(crewManagement.evaluateOn(any(),any(),any(),any(),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente",null));
+  when(crewManagement.evaluate(any(),any(),any(),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(true,"ELEGIBLE","Vigente"));
   flight=flight("EN_CURSO");when(flights.lockById(7L)).thenReturn(Optional.of(flight));when(flights.findById(7L)).thenReturn(Optional.of(flight));
   FlightType type=new FlightType();type.setCodigo("REGRESO_BASE");type.setActivo(true);when(types.findByCodigoAndActivoTrue("REGRESO_BASE")).thenReturn(Optional.of(type));when(airports.findById(2L)).thenReturn(Optional.of(destination));when(aircraft.lockById(5L)).thenReturn(Optional.of(plane));when(flights.activeAircraftAssignments(any(),any())).thenReturn(List.of());
  }
@@ -67,19 +67,19 @@ class FlightClosureServiceTest {
   doNothing().when(commanderAccess).requireOperationalAccess(11L); service.start(7L,10L);
   assertEquals("EN_CURSO",flight.getEstadoVuelo().getCodigo()); assertEquals(LocalDateTime.of(2026,10,20,0,30),flight.getFechaSalidaReal());
  }
- @Test void startRejectsACommanderWhoseCredentialChangedAfterPlanning(){
+ @Test void startRejectsACommanderWhoseAccountWasDeactivatedAfterPlanning(){
   flight.setEstadoVuelo(catalog.get("PLANIFICADO"));
-  when(crewManagement.evaluateOn(eq(flight),eq(commander),eq("COMANDANTE"),any(),eq(true))).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_REVOCADA","Verificación revocada",null));
+  when(crewManagement.evaluate(any(),eq(commander),eq("COMANDANTE"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CUENTA_INACTIVA","La cuenta del tripulante no está activa"));
   ApiException e=assertThrows(ApiException.class,()->service.start(7L,10L));
-  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_REVOCADA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());assertNull(flight.getFechaSalidaReal());
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("CUENTA_INACTIVA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());assertNull(flight.getFechaSalidaReal());
  }
- @Test void startRejectsAnAssignedCrewMemberWhoseCredentialExpired(){
+ @Test void startRejectsAnAssignedCopilotWhoseAccountIsNoLongerActive(){
   flight.setEstadoVuelo(catalog.get("PLANIFICADO"));User copiloto=user(12L,"cop","DTS");when(users.lockById(12L)).thenReturn(Optional.of(copiloto));when(users.findById(12L)).thenReturn(Optional.of(copiloto));
   CrewRole role=new CrewRole();role.setCodigo("COPILOTO");FlightCrew assignment=new FlightCrew();assignment.setUser(copiloto);assignment.setCrewRole(role);
   when(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(7L)).thenReturn(List.of(assignment));
-  when(crewManagement.evaluateOn(eq(flight),eq(copiloto),eq("COPILOTO"),any(),eq(true))).thenReturn(new CrewManagementService.Eligibility(false,"HABILITACION_VENCIDA","Vencida",null));
+  when(crewManagement.evaluate(any(),eq(copiloto),eq("COPILOTO"),anyBoolean())).thenReturn(new CrewManagementService.Eligibility(false,"CUENTA_INACTIVA","La cuenta del tripulante no está activa"));
   ApiException e=assertThrows(ApiException.class,()->service.start(7L,10L));
-  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("HABILITACION_VENCIDA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());verify(log,never()).automatic(any(),any(),eq("INICIO"),anyString());
+  assertEquals(HttpStatus.CONFLICT,e.status());assertEquals("CUENTA_INACTIVA",e.code());assertEquals("PLANIFICADO",flight.getEstadoVuelo().getCodigo());verify(log,never()).automatic(any(),any(),eq("INICIO"),anyString());
  }
  @Test void startAndFinishCannotRunOutOfOrder(){
   flight.setEstadoVuelo(catalog.get("COMPLETADO")); assertThrows(ApiException.class,()->service.start(7L,10L));
