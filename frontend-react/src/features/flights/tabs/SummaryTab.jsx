@@ -4,8 +4,7 @@ import { appPath } from "../../../app/navigation";
 import { Alert } from "../../../components/ui/feedback";
 import { Card } from "../../../components/ui/Card";
 import { dt, locationLabel } from "../../../utils/format";
-import { RequestSummary, NegotiationHistory } from "../negotiation";
-import { FlightClosure } from "../../reports/closure";
+import { RequestSummary } from "../negotiation";
 import { Urgency } from "../components/Urgency";
 import { CancellationNote } from "../components/CancellationNote";
 import { CommanderAssignment } from "../components/CommanderAssignment";
@@ -42,17 +41,15 @@ function Facts({ flight, detail }) {
 }
 
 export function SummaryTab({ ctx, basePath }) {
-  const { flight, detail, events, workspace } = ctx;
+  const { flight, detail, workspace } = ctx;
   const sanitary = Boolean(flight.datosSanitarios);
   return (
     <div className="tab-stack">
       <NextStepCard ctx={ctx} basePath={basePath} />
       <CancellationNote flight={flight} />
-      {workspace === "COMANDANTE" && <CommanderAssignment flight={flight} done={ctx.done} msg={ctx.notify} reload={ctx.reload} />}
+      {workspace === "COMANDANTE" && !ctx.commanderBlocked && <CommanderAssignment flight={flight} done={ctx.done} msg={ctx.notify} reload={ctx.reload} />}
       {sanitary ? <RequestSummary flight={flight} medical={detail.medical} /> : <Card title="Vuelo operativo"><Urgency flight={flight} detail /></Card>}
       <Card title="Situación del vuelo"><Facts flight={flight} detail={detail} /></Card>
-      {ctx.show.has("cierre") && <FlightClosure flight={flight} cierre={detail.cierre} />}
-      {workspace === "COMANDANTE" && events.length > 0 && <Card title="Historial del horario"><NegotiationHistory events={events} /></Card>}
     </div>
   );
 }

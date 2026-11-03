@@ -1,6 +1,6 @@
 import React from "react";
 import { act, render } from "@testing-library/react";
-import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders } from "./app/App";
 import { AppRoutes } from "./app/AppRoutes";
 
@@ -22,5 +22,6 @@ export const currentPath = () => `${locationRef.pathname}${locationRef.search}`;
 /** Renderiza la aplicación completa (proveedores + tabla de rutas) en una ruta: lo más parecido a abrir esa URL en el navegador. */
 export function renderApp(route = "/app/inicio", { roles, ...extra } = {}) {
   if (roles) signIn(roles, extra);
-  return render(<MemoryRouter initialEntries={Array.isArray(route) ? route : [route]}><AppProviders><Probe /><AppRoutes /></AppProviders></MemoryRouter>);
+  const router = createMemoryRouter([{ path: "*", element: <AppProviders><Probe /><AppRoutes /></AppProviders> }], { initialEntries: Array.isArray(route) ? route : [route] });
+  return render(<RouterProvider router={router} />);
 }

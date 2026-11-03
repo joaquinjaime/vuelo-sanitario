@@ -29,6 +29,7 @@ export const apiRelative = (url) => String(url).replace(/^\/api(?=\/)/, "");
  */
 export function FlightDocuments({ flightId, canEdit = false, canViewRetired = false, msg = () => {}, gateRefreshMs = GATE_REFRESH_MS }) {
   // null mientras se consulta; {disponible:false,...} con el horario sin acordar. El servidor es la autoridad: aquí sólo se refleja.
+  const [creating, setCreating] = useState(false), [replacing, setReplacing] = useState(false);
   const [gate, setGate] = useState(null);
   const [documents, setDocuments] = useState(null), [types, setTypes] = useState(null), [selected, setSelected] = useState(null), [history, setHistory] = useState(null), [lock, setLock] = useState(null);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -72,7 +73,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   const choose = async (item) => {
     if (current.current.selected && current.current.selected.id !== item.id) releaseQuietly();
     const mine = ++choice.current;
-    setSelected(item); current.current.selected = item; setHistory(null); setLock(null); setVersionFile(null); setRetiring(false); setReason("");
+    setSelected(item); current.current.selected = item; setHistory(null); setLock(null); setVersionFile(null); setReplacing(false); setRetiring(false); setReason("");
     try {
       const h = await api(`/documents/${item.id}/versions`);
       if (!h || !Array.isArray(h.versiones)) throw Error("Respuesta de versiones inválida");
@@ -98,6 +99,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   const startRef = useRef(start); startRef.current = start;
   useEffect(() => {
     let alive = true;
+    setCreating(false); setReplacing(false); setName(""); setTypeCode(""); setCreateFile(null); setVersionFile(null);
     setSelected(null); setHistory(null); setLock(null); setDocuments(null); setTypes(null); setError(""); setRetired(null); setRetiring(false); setReason(""); setGate(null); choice.current++;
     checkGate().then((open) => { if (alive && open) startRef.current(); });
     return () => { alive = false; releaseQuietly(); };
@@ -136,7 +138,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
     if (!createFile || !typeCode || !name.trim()) return;
     return run(async () => {
       const created = await uploadFile(`/flights/${flightId}/documents/pdf`, createFile, { documentTypeCode: typeCode, nombreDocumento: name.trim() });
-      setName(""); setTypeCode(""); setCreateFile(null);
+      setName(""); setTypeCode(""); setCreateFile(null); setCreating(false);
       await load(); await choose(created); msg("Documento registrado");
     });
   };
@@ -187,8 +189,9 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
           </li>
         ))}</ul>
       )}
-      {canEdit && (
-        <div className="grid-form">
+      {canEdit && documents !== null && !creating && <button type="button" onClick={() => setCreating(true)}>Nuevo documento</button>}
+      {canEdit && creating && (
+        <div className="grid-form" data-flight-draft>
           <h4 className="wide">Registrar documento PDF</h4>
           <label>Tipo documental
             <select value={typeCode} onChange={(e) => setTypeCode(e.target.value)} disabled={types === null}>
@@ -199,6 +202,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
           <label>Nombre del documento<input maxLength="255" value={name} onChange={(e) => setName(e.target.value)} /></label>
           <label>Archivo PDF<input type="file" accept="application/pdf,.pdf" onChange={(e) => setCreateFile(e.target.files[0] || null)} /></label>
           <button type="button" disabled={busy || !typeCode || !name.trim() || !createFile} onClick={create}>Registrar documento</button>
+          <button type="button" className="secondary-action" disabled={busy} onClick={() => { setCreating(false); setName(""); setTypeCode(""); setCreateFile(null); }}>Cancelar</button>
         </div>
       )}
       {canViewRetired && (
@@ -226,7 +230,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
           </>}
           {canEdit && selected.puedeRetirar && !retiring && <p><button type="button" className="secondary-action" disabled={busy} onClick={() => setRetiring(true)}>Retirar documento</button></p>}
           {canEdit && selected.puedeRetirar && retiring && (
-            <fieldset className="wide">
+            <fieldset className="wide" data-flight-draft>
               <legend>Retirar documento</legend>
               <p role="note">El documento saldrá del uso operativo y dejará de poder recibir versiones o bloqueos. Sus versiones y archivos se conservan y Operaciones y el comandante podrán consultarlos en «documentos retirados». Esta acción no se puede deshacer.</p>
               <label>Motivo de la baja<textarea maxLength="500" required value={reason} onChange={(e) => setReason(e.target.value)} /></label>
@@ -235,10 +239,11 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
             </fieldset>
           )}
           {canEdit && lock?.active && lock.mine && !selected.fechaBaja && (
-            <div>
+            replacing ? <div data-flight-draft>
               <label>Nueva versión PDF<input type="file" accept="application/pdf,.pdf" onChange={(e) => setVersionFile(e.target.files[0] || null)} /></label>
               <button type="button" disabled={busy || !versionFile} onClick={addVersion}>Guardar nueva versión</button>
-            </div>
+              <button type="button" className="secondary-action" disabled={busy} onClick={() => { setReplacing(false); setVersionFile(null); }}>Cancelar</button>
+            </div> : <button type="button" disabled={busy} onClick={() => setReplacing(true)}>Cargar nueva versión</button>
           )}
           <h4>Historial de versiones</h4>
           {history === null ? <p>Cargando historial…</p> : history.versiones.length === 0 ? <p>Sin versiones disponibles.</p> : (

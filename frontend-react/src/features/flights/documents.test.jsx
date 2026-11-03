@@ -55,6 +55,7 @@ test("the type selector comes from the catalog and creation sends context only, 
   serve(); vi.mocked(uploadFile).mockResolvedValue({ ...item, id: "45", nombreDocumento: "Autorización A" });
   const msg = vi.fn();
   render(<FlightDocuments flightId={7} canEdit msg={msg} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nuevo documento" }));
   const select = await screen.findByLabelText("Tipo documental");
   await waitFor(() => expect(screen.getByRole("option", { name: "Autorización de vuelo" })).toBeInTheDocument());
   const create = screen.getByRole("button", { name: "Registrar documento" });
@@ -70,7 +71,8 @@ test("the type selector comes from the catalog and creation sends context only, 
 test("a duplicate or invalid upload shows the server error and keeps the entered data", async () => {
   serve(); vi.mocked(uploadFile).mockRejectedValue(new Error("Ya existe un documento con ese nombre en el vuelo; registre una nueva versión del existente"));
   render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
-  await waitFor(() => expect(screen.getByRole("option", { name: "Plan de vuelo" })).toBeInTheDocument());
+  fireEvent.click(await screen.findByRole("button", { name: "Nuevo documento" }));
+  await screen.findByRole("option", { name: "Plan de vuelo" });
   fireEvent.change(screen.getByLabelText("Tipo documental"), { target: { value: "PLAN_DE_VUELO" } });
   fireEvent.change(screen.getByLabelText("Nombre del documento"), { target: { value: "Plan de vuelo" } });
   fireEvent.change(screen.getByLabelText("Archivo PDF"), { target: { files: [pdf()] } });
@@ -98,6 +100,7 @@ test("the lease holder saves a new version and the list and history refresh", as
   render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: /Plan de vuelo · Plan/ }));
   expect(await screen.findByText(/Usted posee el bloqueo/)).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Cargar nueva versión" }));
   fireEvent.change(screen.getByLabelText("Nueva versión PDF"), { target: { files: [pdf("nueva.pdf")] } });
   fireEvent.click(screen.getByRole("button", { name: "Guardar nueva versión" }));
   await waitFor(() => expect(uploadFile).toHaveBeenCalledWith("/documents/44/versions/pdf", expect.any(File)));
@@ -112,6 +115,7 @@ test("a rejected save because the lease expired re-reads the server lease instea
   render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: /Plan de vuelo · Plan/ }));
   await screen.findByText(/Usted posee el bloqueo/);
+  fireEvent.click(await screen.findByRole("button", { name: "Cargar nueva versión" }));
   fireEvent.change(screen.getByLabelText("Nueva versión PDF"), { target: { files: [pdf()] } });
   fireEvent.click(screen.getByRole("button", { name: "Guardar nueva versión" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("venció");
@@ -173,7 +177,8 @@ const retiredRow = { id: "50", nombreDocumento: "Parte equivocado", tipoDocument
 test("the selector asks the flight which types it admits instead of filtering a global catalog", async () => {
   serve({ "GET /flights/7/documents/types": [{ codigo: "AUTORIZACION", nombre: "Autorización de vuelo" }, { codigo: "OTRO", nombre: "Otro documento" }] });
   render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
-  await waitFor(() => expect(screen.getByRole("option", { name: "Otro documento" })).toBeInTheDocument());
+  fireEvent.click(await screen.findByRole("button", { name: "Nuevo documento" }));
+  expect(await screen.findByRole("option", { name: "Otro documento" })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: "Parte médico" })).toBeNull();
   expect(vi.mocked(api).mock.calls.some(([p]) => p === "/catalogs/document-types")).toBe(false);
 });
@@ -294,13 +299,14 @@ test("when the schedule gets agreed the documents are enabled on the next refres
   agreed = true;
   expect(await screen.findByRole("button", { name: /Plan de vuelo · Plan de vuelo · v2/ })).toBeInTheDocument();
   expect(screen.queryByText("Documentación no disponible")).toBeNull();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Registrar documento" })).toBeInTheDocument());
+  expect(await screen.findByRole("button", { name: "Nuevo documento" })).toBeInTheDocument();
 });
 
 test("an agreed schedule keeps the normal flow and a stale screen is corrected by the server's 409", async () => {
   serve({ "GET /flights/7/documents/access": { disponible: true } });
   vi.mocked(uploadFile).mockRejectedValue(Object.assign(new Error("Documentación no disponible"), { status: 409, code: "DOCUMENTS_LOCKED_SCHEDULE_NOT_AGREED", pendientePor: "DTS" }));
   render(<FlightDocuments flightId={7} canEdit msg={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nuevo documento" }));
   const select = await screen.findByLabelText("Tipo documental");
   await waitFor(() => expect(screen.getByRole("option", { name: "Autorización de vuelo" })).toBeInTheDocument());
   fireEvent.change(select, { target: { value: "AUTORIZACION" } });

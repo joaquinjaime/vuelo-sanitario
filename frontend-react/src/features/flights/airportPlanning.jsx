@@ -90,7 +90,7 @@ function Proposal({ flight, kind, msg, onChanged, onClose }) {
     finally { lock.current = false; setBusy(false); }
   };
   const ordinary = candidates?.ordinarios || [], canAuthorizeException = Boolean(candidates?.puedeAutorizarExcepcion);
-  return <div className="resource-chooser" aria-busy={busy}>
+  return <div className="resource-chooser" data-flight-draft aria-busy={busy}>
     <AirportPicker flightId={flight.id} kind={kind} selectedId={picked?.id} onSelect={setPicked} disabled={busy}/>
     {outside && <label className="resource-reason">Justificación operativa (el aeropuerto está fuera de la jurisdicción del paciente)
       <textarea value={reason} onChange={(e) => setReason(e.target.value)} minLength={MIN_REASON} maxLength={500} rows={2} disabled={busy}/><small>{reason.trim().length}/{MIN_REASON} caracteres mínimos. Queda auditada.</small></label>}
@@ -143,7 +143,15 @@ export function AirportSummary({ flight, plan }) {
  * otros aeropuertos; una modificación queda auditada, Centro de Operaciones es avisado y la ruta presentada o aprobada vuelve a revisión. Un aeropuerto fuera de la jurisdicción del paciente
  * requiere una justificación operativa, y el servidor rechaza una salida fuera de la jurisdicción del propio comandante (no puede autorizarse una excepción a sí mismo).
  */
-export function CommanderAirportPlanning({ flight, plan, onSaved, msg }) {
+export function CommanderAirportPlanning(props) {
+  const [editing, setEditing] = useState(false);
+  const proposed = [props.plan?.salida, props.plan?.llegada].some((slot) => slot?.estado === "PROPUESTO");
+  const hasConfirmed = [props.plan?.salida, props.plan?.llegada].some((slot) => slot?.estado === "CONFIRMADO");
+  if (!editing) return <button type="button" onClick={() => setEditing(true)}>{proposed ? "Revisar aeropuertos propuestos" : hasConfirmed ? "Modificar planificación aeroportuaria" : "Registrar planificación aeroportuaria"}</button>;
+  return <CommanderAirportEditor {...props} onClose={() => setEditing(false)} />;
+}
+
+function CommanderAirportEditor({ flight, plan, onSaved, msg, onClose }) {
   const [origin, setOrigin] = useState(plan?.salida?.aeropuertoId ? { id: plan.salida.aeropuertoId } : null), [destination, setDestination] = useState(plan?.llegada?.aeropuertoId ? { id: plan.llegada.aeropuertoId } : null),
     [arrival, setArrival] = useState(flight.llegada ? String(flight.llegada).slice(0, 16) : ""), [reason, setReason] = useState(""), [needsReason, setNeedsReason] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [open, setOpen] = useState(null);
   const lock = useRef(false);
@@ -157,6 +165,7 @@ export function CommanderAirportPlanning({ flight, plan, onSaved, msg }) {
     try {
       await api(`/flights/${flight.id}/operational-planning`, { method: "POST", body: JSON.stringify({ origenId: origin.id, destinoId: destination.id, llegada: arrival, justificacion: showReason ? reason.trim() : null }) });
       msg("Aeropuertos confirmados y planificación guardada");
+      onClose();
       await onSaved();
     } catch (e) {
       setError(e.message); msg(e.message, true);
@@ -168,7 +177,7 @@ export function CommanderAirportPlanning({ flight, plan, onSaved, msg }) {
     {open === kind ? <AirportPicker flightId={flight.id} kind={kind} selectedId={selected?.id} onSelect={(c) => { kind === "SALIDA" ? setOrigin(c) : setDestination(c); }} disabled={busy}/>
       : <button type="button" className="secondary-action" onClick={() => setOpen(kind)} disabled={busy}>{`Elegir otro aeropuerto de ${kind === "SALIDA" ? "salida" : "llegada"}`}</button>}
   </div>;
-  return <fieldset className="wide airport-commander-planning"><legend>Aeropuertos del vuelo</legend>
+  return <fieldset className="wide airport-commander-planning" data-flight-draft disabled={busy}><legend>Aeropuertos del vuelo</legend>
     <p className="hint">Origen del paciente: <strong>{placeLabel(flight.datosSanitarios?.localidadOrigenSolicitada || flight.origen)}</strong> · destino del paciente: <strong>{placeLabel(flight.datosSanitarios?.localidadDestinoSolicitada || flight.destino)}</strong>. Los aeropuertos son los de la aeronave y pueden estar en otra localidad.</p>
     {proposed && <p className="resource-empty" role="status">Centro de Operaciones propuso estos aeropuertos. Revíselos: puede confirmarlos tal cual o elegir otros (el cambio queda registrado y se avisa a Operaciones).</p>}
     {plan?.pendientes?.length > 0 && <div className="airport-pending" role="status"><ul>{plan.pendientes.map((x) => <li key={x}>{x}</li>)}</ul></div>}
@@ -179,5 +188,6 @@ export function CommanderAirportPlanning({ flight, plan, onSaved, msg }) {
       <textarea value={reason} onChange={(e) => setReason(e.target.value)} minLength={MIN_REASON} maxLength={500} rows={2} disabled={busy}/><small>{reason.trim().length}/{MIN_REASON} caracteres mínimos.</small></label>}
     {error && <p className="error" role="alert">{error}</p>}
     <button type="button" disabled={!ready || busy} onClick={save}>{busy ? "Guardando…" : "Confirmar aeropuertos y guardar planificación"}</button>
+    <button type="button" className="secondary-action" onClick={onClose}>Cancelar</button>
   </fieldset>;
 }

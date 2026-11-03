@@ -267,3 +267,25 @@ body[data-theme="dark"] .airport-pending { background: #4a3a10; color: #ffe9a8; 
 .pending-commanders table { width: 100%; }
 .pending-commanders .inline-check { display: flex; align-items: center; gap: .5rem; }
 .pending-commanders .inline-check input { width: auto; }
+.planning-panel {
+  min-width: 0;
+  border: 1px solid var(--line, currentColor);
+  border-radius: .65rem;
+  padding: 0 .9rem;
+  overflow-wrap: anywhere;
+}
+.planning-panel > summary {
+  cursor: pointer;
+  padding: .85rem 0;
+}
+.planning-panel > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.planning-title { font-weight: 700; }
+.planning-status { display: block; margin: .3rem 0 0 1rem; font-size: .9rem; }
+.planning-body { border-top: 1px solid var(--line, currentColor); padding: .85rem 0; min-width: 0; }
+.planning-body[hidden] { display: none; }
+.planning-body fieldset { min-width: 0; }
+.operational-records { padding-inline-start: 1.3rem; }
+.operational-records > li + li { margin-top: .75rem; }

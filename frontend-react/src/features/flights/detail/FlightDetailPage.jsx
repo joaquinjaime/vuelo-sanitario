@@ -17,6 +17,7 @@ import { dt, locationLabel } from "../../../utils/format";
 import { Urgency } from "../components/Urgency";
 import { CANCELLABLE_REQUEST } from "../components/CancellationNote";
 import { tabsFor, TAB_DEFS } from "./flightTabs";
+import { useFlightDraftGuard } from "./useFlightDraftGuard";
 import { useFlightDetail } from "./useFlightDetail";
 import { CancelFlightDialog } from "./CancelFlightDialog";
 import { SummaryTab } from "../tabs/SummaryTab";
@@ -36,12 +37,15 @@ const OPS_NOT_CANCELLABLE = ["EN_CURSO", "FINALIZADO", "COMPLETADO", "CANCELADO"
  * negociación y el resumen están disponibles. Las acciones críticas (cancelar) viven en el encabezado.
  */
 export function FlightDetailPage() {
+  useFlightDraftGuard();
   const { id, tab } = useParams();
   const { workspace } = useSession();
   const notify = useNotify();
   const location = useLocation();
   const { flights, reload: reloadList } = useOperationalData();
   const { detail, error, loading, reload } = useFlightDetail(id, flights);
+  const reports = useResource(workspace === "COMANDANTE" ? "/final-reports/mine" : null);
+  const commanderBlocked = workspace === "COMANDANTE" && Array.isArray(reports.data) && reports.data.some((item) => item.bloqueado);
   const reasonsResource = useResource("/catalogs/cancellation-reasons", { map: (rows) => (Array.isArray(rows) ? rows : []) });
   const [busy, setBusy] = useState(false), [cancelling, setCancelling] = useState(false);
   const [logRevision, setLogRevision] = useState(0), [routeRevision, setRouteRevision] = useState(0);
@@ -72,14 +76,14 @@ export function FlightDetailPage() {
   if (error && !detail) return (<><PageHeader title="Detalle no disponible" breadcrumbs={[{ label: "Inicio", to: appPath("inicio") }, { label: listLabel, to: appPath(section) }, { label: `Vuelo ${id}` }]} /><ErrorState message={error} onRetry={reload} /></>);
   if (loading || !flight || !model) return (<><PageHeader title="Cargando…" breadcrumbs={[{ label: "Inicio", to: appPath("inicio") }, { label: listLabel, to: appPath(section) }, { label: `Vuelo ${id}` }]} /><LoadingBlock label="Cargando el detalle…" /></>);
 
-  const activeKey = tab || model.defaultKey;
-  if (tab && !CONTENT[tab]) return <Navigate to={basePath} replace />;
+  const invalidTab = tab && !model.tabs.some((item) => item.key === tab);
+  const activeKey = invalidTab ? model.defaultKey : tab || model.defaultKey;
   const tabs = model.tabs.map((item) => ({ ...item, to: item.key === model.defaultKey ? basePath : `${basePath}/${item.key}` }));
   const current = tabs.find((item) => item.key === activeKey);
   const Content = CONTENT[activeKey];
   const sanitary = Boolean(flight.datosSanitarios);
 
-  const ctx = { workspace, flight, detail, events, show: model.show, stage: model.stage, tabs, defaultKey: model.defaultKey, id, notify, reasons: reasonsResource.data || [], call, respond, busy,
+  const ctx = { workspace, commanderBlocked, flight, detail, events, show: model.show, stage: model.stage, tabs, defaultKey: model.defaultKey, id, notify, reasons: reasonsResource.data || [], call, respond, busy,
     reload, done, logRevision, routeRevision, afterChange, afterRouteChange };
 
   const canCancel = workspace === "DTS" ? CANCELLABLE_REQUEST.includes(flight.estado) : workspace === "OPERACIONES" && model.show.has("cancelar") && !OPS_NOT_CANCELLABLE.includes(flight.estado);
@@ -93,6 +97,7 @@ export function FlightDetailPage() {
 
   return (
     <>
+      {invalidTab && <Navigate to={basePath} replace />}
       <PageHeader
         title={`${section === "solicitudes" ? "Solicitud" : "Vuelo"} ${flight.codigo || id}`}
         breadcrumbs={[{ label: "Inicio", to: appPath("inicio") }, { label: listLabel, to: appPath(section) }, { label: flight.codigo || `Vuelo ${id}`, to: current?.key === model.defaultKey ? undefined : basePath }, ...(current && current.key !== model.defaultKey ? [{ label: current.label }] : [])]}
@@ -106,11 +111,12 @@ export function FlightDetailPage() {
         </>}
       />
       {sanitary && <ProcessStepper stage={model.stage} />}
+      {commanderBlocked && <Alert tone="warning" title="Operaciones restringidas por informe vencido"><Link to={appPath("informes")}>Consultar informes finales</Link></Alert>}
       <RouteTabs tabs={tabs} label={`Secciones de ${flight.codigo || "la solicitud"}`} />
       <div className="tab-panel" id="tab-panel" role="region" aria-label={current?.label || TAB_DEFS[activeKey]?.label}>
         {current?.locked
           ? <Alert tone="info" title={`${current.label}: todavía no disponible`}>{current.reason} <Link to={basePath}>Volver al resumen</Link></Alert>
-          : <Content ctx={ctx} basePath={basePath} />}
+          : <Content key={id} ctx={ctx} basePath={basePath} />}
       </div>
       {cancelling && <CancelFlightDialog title={cancelLabel} confirmLabel="Confirmar cancelación" busy={busy} reasons={ctx.reasons} onClose={() => setCancelling(false)} onConfirm={confirmCancel}
         description={workspace === "DTS" ? "La solicitud se cancelará y se informará a Operaciones. Indique el motivo." : "El vuelo se cancelará y se informará a las partes involucradas. Indique el motivo."} />}

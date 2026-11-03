@@ -59,6 +59,7 @@ test("hangar panel: switching flights ignores the late answer of the previous fl
   vi.mocked(api).mockImplementation((path) => path === "/flights/1/hangar" ? slow.promise : path === "/flights/2/hangar" ? Promise.resolve(hangar("LV-DOS")) : Promise.resolve([]));
   const view = render(<HangarInfo flightId={1} />);
   view.rerender(<HangarInfo flightId={2} />);
+  fireEvent.click(screen.getByText("Hangar y preparación terrestre"));
   expect(await screen.findByText(/LV-DOS/)).toBeInTheDocument();
   slow.resolve(hangar("LV-UNO"));
   await new Promise((r) => setTimeout(r, 50));

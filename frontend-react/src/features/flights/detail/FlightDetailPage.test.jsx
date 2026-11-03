@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import "@testing-library/jest-dom/vitest";
 import { api } from "../../../services/api";
 import { currentPath, renderApp, ROLE } from "../../../test-utils";
+import "./FlightDetailPage";
 import { tabsFor } from "./flightTabs";
 import { nextStep } from "./nextStep";
 import { adaptFlight } from "../../../utils/flightAdapter";
@@ -118,6 +119,8 @@ test("el comandante acepta la asignación y la planificación de la ruta se habi
   expect(await screen.findByText("Prepare el vuelo")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Aceptar asignación" })).toBeNull();
   fireEvent.click(screen.getByRole("link", { name: "Planificación" }));
+  fireEvent.click(await screen.findByText("Ruta operativa", { selector: ".planning-title" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Registrar ruta" }));
   expect(await screen.findByLabelText("Recorrido y puntos intermedios en orden")).toBeInTheDocument();
 });
 
@@ -129,9 +132,11 @@ test("el historial meteorológico se actualiza cuando el comandante registra las
     return undefined;
   });
   renderApp("/app/vuelos/1/planificacion", { roles: [ROLE.cmd] });
+  fireEvent.click(await screen.findByText("Condiciones meteorológicas", { selector: ".planning-title" }));
   expect(await screen.findByText("Sin registros meteorológicos.")).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Condiciones"), { target: { value: "Nubes bajas" } });
   fireEvent.click(screen.getByRole("button", { name: "Registrar clima" }));
+  fireEvent.change(screen.getByLabelText("Condiciones"), { target: { value: "Nubes bajas" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar registro meteorológico" }));
   expect(await screen.findByText(/No favorable/)).toBeInTheDocument(); expect(screen.getByText("Nubes bajas")).toBeInTheDocument();
   expect(vi.mocked(api)).toHaveBeenCalledWith("/flights/1/weather", expect.objectContaining({ method: "POST" }));
 });
@@ -139,6 +144,7 @@ test("el historial meteorológico se actualiza cuando el comandante registra las
 test("sólo el vuelo planificado permite registrar clima; Operaciones sólo consulta el historial", async () => {
   serve({ vuelo: operational(1, "PLANIFICADO"), recursos: {}, negociacion: [] });
   renderApp("/app/vuelos/1/planificacion", { roles: [ROLE.ops] });
+  fireEvent.click(await screen.findByText("Condiciones meteorológicas", { selector: ".planning-title" }));
   expect(await screen.findByText("Historial meteorológico")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Registrar clima" })).toBeNull();
 });
@@ -199,4 +205,72 @@ test("las notificaciones abren el vuelo o la solicitud a la que se refieren seg�
   cleanup();
   renderApp("/app/notificaciones", { roles: [ROLE.cmd] });
   expect((await screen.findAllByRole("link", { name: "Abrir" })).map((a) => a.getAttribute("href"))).toEqual(["/app/vuelos/7", "/app/vuelos/8"]);
+});
+
+test("hangar distingue alta y edición, conserva una sola versión vigente y protege el borrador", async () => {
+  let versions = [];
+  const savedVersions = [];
+  const hangar = () => ({ estado: versions.length ? "PREPARACION_PENDIENTE" : "SIN_REGISTRO", versiones: versions, puedeGestionar: true });
+  serve({ vuelo: operational(7, "PLANIFICADO"), recursos: {} }, (path, options) => {
+    if (path !== "/flights/7/hangar") return undefined;
+    if (options?.method === "PUT") {
+      const form = JSON.parse(options.body);
+      savedVersions.push(form.version);
+      versions = [{ ...form, id: form.version + 1, version: form.version + 1, actual: true, responsable: "operador", fechaCreacion: "2026-11-03T09:00:00" }, ...versions.map((v) => ({ ...v, actual: false }))];
+    }
+    return Promise.resolve(hangar());
+  });
+  const openHangar = async () => fireEvent.click(await screen.findByText("Hangar y preparación terrestre"));
+  const observations = () => screen.getByLabelText("Observaciones de Operaciones");
+  renderApp("/app/vuelos/7/planificacion", { roles: [ROLE.ops] });
+  await screen.findByText("Sin registrar");
+  await openHangar();
+  expect(screen.getByText(/Todavía no se registró información/)).toBeVisible();
+  expect(screen.queryByLabelText("Observaciones de Operaciones")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Registrar información", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Guardar información" }));
+  expect(await screen.findByText("Información de hangar guardada")).toBeVisible();
+  expect(screen.getByText(/1 · .* · operador/)).toBeVisible();
+  expect(screen.queryByLabelText("Observaciones de Operaciones")).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Modificar información" }));
+  expect(observations()).toHaveValue("");
+  fireEvent.change(observations(), { target: { value: "Borrador" } });
+  window.confirm.mockReturnValueOnce(false);
+  fireEvent.click(screen.getByRole("link", { name: "Documentos" }));
+  await waitFor(() => expect(window.confirm).toHaveBeenCalled());
+  expect(currentPath()).toBe("/app/vuelos/7/planificacion");
+  expect(observations()).toHaveValue("Borrador");
+  window.confirm.mockReturnValueOnce(false);
+  fireEvent.click(screen.getByText("Coordinaciones aeroportuarias"));
+  expect(observations()).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Cancelar", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Modificar información" }));
+  expect(observations()).toHaveValue("");
+  fireEvent.change(observations(), { target: { value: "Preparación coordinada" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  expect(await screen.findByText("Preparación coordinada", { selector: "dd" })).toBeVisible();
+  expect(savedVersions).toEqual([0, 1]);
+  expect(versions.filter((v) => v.actual)).toHaveLength(1);
+
+  cleanup();
+  renderApp("/app/vuelos/7/planificacion", { roles: [ROLE.ops] });
+  await openHangar();
+  expect(await screen.findByText("Preparación coordinada", { selector: "dd" })).toBeVisible();
+});
+
+test.each([ROLE.ops, ROLE.cmd])("el rol %s consulta aeropuertos y recursos de un vuelo sanitario finalizado", async (role) => {
+  serve({
+    vuelo: sanitary(7, "APROBADO", { estadoVuelo: "FINALIZADO", salida: "2026-11-03T10:00:00" }),
+    recursos: { aircraftId: 9, aircraftMatricula: "LV-UX", commanderId: 8, commanderNombre: "Ana", commanderApellido: "Pérez" },
+    aeropuertos: { salida: { aeropuertoId: 1, aeropuerto: "Matienzo", estado: "CONFIRMADO" }, llegada: { aeropuertoId: 2, aeropuerto: "Rosario", estado: "CONFIRMADO" } },
+  }, (path) => path === "/flights/7/crew" ? Promise.resolve([]) : undefined);
+  renderApp("/app/vuelos/7/planificacion", { roles: [role] });
+  fireEvent.click(await screen.findByText("Aeropuertos de salida y llegada", { selector: ".planning-title" }));
+  expect(screen.getByText("Matienzo", { exact: true })).toBeVisible();
+  expect(screen.queryByRole("button", { name: /Cambiar aeropuerto|Modificar planificación/ })).toBeNull();
+  fireEvent.click(screen.getByText("Asignación de recursos", { selector: ".planning-title" }));
+  expect(screen.getByText("LV-UX", { exact: true })).toBeVisible();
+  expect(screen.getByText("Ana Pérez")).toBeVisible();
+  expect(screen.queryByRole("button", { name: /Cambiar comandante|Cambiar aeronave|Seleccionar copiloto/ })).toBeNull();
 });

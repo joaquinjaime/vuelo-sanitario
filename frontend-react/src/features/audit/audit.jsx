@@ -84,7 +84,7 @@ export function AuditTimeline({ flightId, title = "Historial de actividad", page
     {loading && <p role="status">Cargando historial…</p>}
     {error && <p role="alert" className="error">{error} <button type="button" className="secondary-action" onClick={() => setAttempt((x) => x + 1)}>Reintentar</button></p>}
     {!loading && !error && data && items.length === 0 && <p>{page > 0 ? "No hay más actividad registrada." : "Todavía no hay actividad registrada para este vuelo."}</p>}
-    {items.length > 0 && <ol className="audit-timeline">{items.map((e) => <li key={e.id}>
+    {!loading && items.length > 0 && <ol className="audit-timeline">{items.map((e) => <li key={e.id}>
       <p><strong>{e.operationLabel}</strong> · <span>{e.entityTypeLabel}</span></p>
       <p>{e.summary}</p>
       <p className="hint"><time dateTime={e.occurredAt}>{formatInstant(e.occurredAt, data.timeZone)}</time> · {e.actor.label}</p>

@@ -97,6 +97,8 @@ test("el DTS asigna un profesional disponible a un vuelo con horario acordado y 
   const msg = vi.fn();
   render(<FlightHealthStaff flightId={9} mode="dts" state="APROBADO" msg={msg} />);
   expect(await screen.findByText("Todavía no asignó personal sanitario a este vuelo.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Profesional")).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: "Agregar profesional" }));
   await screen.findByRole("option", { name: /Apellido3, Nombre3/ });
   expect(screen.getByText(/No disponibles en este horario \(1\)/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Profesional"), { target: { value: "3" } });
@@ -113,6 +115,7 @@ test("un rechazo del servidor (duplicado o vuelo bloqueado) se muestra sin falso
   });
   const msg = vi.fn();
   render(<FlightHealthStaff flightId={9} mode="dts" state="PLANIFICADO" msg={msg} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Agregar profesional" }));
   await screen.findByRole("option", { name: /Apellido3/ });
   fireEvent.change(screen.getByLabelText("Profesional"), { target: { value: "3" } }); fireEvent.click(screen.getByRole("button", { name: "Asignar al vuelo" }));
   expect((await screen.findAllByRole("alert"))[0]).toHaveTextContent("ya integra"); expect(msg).not.toHaveBeenCalledWith("Profesional asignado al vuelo");
@@ -133,6 +136,7 @@ test("retirar pide confirmación, sustituir usa PUT y el historial muestra quié
   expect(await screen.findByText(/retirado por dts1/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Sustituir" }));
   await screen.findByText("Seleccione el profesional que lo sustituirá.");
+  await screen.findByLabelText("Profesional");
   fireEvent.change(screen.getByLabelText("Profesional"), { target: { value: "5" } }); fireEvent.click(screen.getByRole("button", { name: "Confirmar sustitución" }));
   await waitFor(() => expect(api).toHaveBeenCalledWith("/flights/9/health-staff/5", { method: "PUT", body: JSON.stringify({ personalSanitarioId: 5 }) }));
   window.confirm.mockReturnValue(false); fireEvent.click(await screen.findByRole("button", { name: "Retirar" }));

@@ -68,9 +68,9 @@ export function AircraftActivity({ aircraft }) {
  * Aeronave del vuelo y su cambio (Centro de Operaciones). El cambio sólo se ofrece antes del inicio del vuelo; las aeronaves
  * no disponibles se listan con el motivo y los vuelos que generan el conflicto.
  */
-export function FlightAircraft({ flight, recursos, done = async () => {}, msg = () => {}, reload = async () => {} }) {
+export function FlightAircraft({ flight, recursos, canManage = true, actionOnly = false, done = async () => {}, msg = () => {}, reload = async () => {} }) {
   const [open, setOpen] = useState(false), [candidates, setCandidates] = useState(null), [error, setError] = useState(""), [selected, setSelected] = useState(""), [reason, setReason] = useState(""), [busy, setBusy] = useState(false);
-  const changeable = Boolean(recursos?.aircraftId) && ["PLANIFICADO", "PENDIENTE_CONFIRMACION_COMANDANTE"].includes(flight?.estado);
+  const changeable = canManage && Boolean(recursos?.aircraftId) && ["PLANIFICADO", "PENDIENTE_CONFIRMACION_COMANDANTE"].includes(flight?.estado);
   const loadCandidates = async () => { setCandidates(null); setError(""); try { const rows = await api(`/flights/${flight.id}/aircraft-candidates`); setCandidates(Array.isArray(rows) ? rows : []); } catch (e) { setCandidates([]); setError(text(e)); } };
   useEffect(() => { setOpen(false); setCandidates(null); setSelected(""); setReason(""); setError(""); }, [flight?.id, recursos?.aircraftId]);
   const start = async () => { setOpen(true); await loadCandidates(); };
@@ -83,12 +83,13 @@ export function FlightAircraft({ flight, recursos, done = async () => {}, msg = 
     try { await api(`/flights/${flight.id}/aircraft`, { method: "POST", body: JSON.stringify({ aircraftId: Number(selected), motivo: reason.trim() || null }) }); msg(`Aeronave del vuelo cambiada a ${chosen.matricula}`); setOpen(false); setSelected(""); setReason(""); await done(); await reload(); }
     catch (e) { await loadCandidates(); setError(text(e)); } finally { setBusy(false); }
   };
+  if (actionOnly && !changeable) return null;
   if (!recursos?.aircraftId) return <div className="wide"><h4>Aeronave</h4><p>Sin aeronave asignada.</p></div>;
-  return <div className="wide detail-actions" aria-label="Aeronave del vuelo"><h4>Aeronave</h4>
-    <p><strong>{recursos.aircraftMatricula}</strong>{recursos.aircraftModelo ? ` · ${recursos.aircraftModelo}` : ""}{recursos.aircraftTipo ? ` · ${recursos.aircraftTipo}` : ""} · Ubicación actual: {recursos.aircraftUbicacion || "—"} · Tripulación máx.: {recursos.aircraftCapacidadTripulacion ?? "—"}</p>
-    {!changeable && <p className="hint">La aeronave sólo puede cambiarse antes del inicio del vuelo (planificado o pendiente de confirmación).</p>}
+  return <div className="wide detail-actions" aria-label="Aeronave del vuelo">{!actionOnly && <><h4>Aeronave</h4>
+    <p><strong>{recursos.aircraftMatricula}</strong>{recursos.aircraftModelo ? ` · ${recursos.aircraftModelo}` : ""}{recursos.aircraftTipo ? ` · ${recursos.aircraftTipo}` : ""} · Ubicación actual: {recursos.aircraftUbicacion || "—"} · Tripulación máx.: {recursos.aircraftCapacidadTripulacion ?? "—"}</p></>}
+    {canManage && !changeable && <p className="hint">La aeronave sólo puede cambiarse antes del inicio del vuelo (planificado o pendiente de confirmación).</p>}
     {changeable && !open && <button type="button" className="secondary-action" onClick={start}>Cambiar aeronave</button>}
-    {changeable && open && <div>
+    {changeable && open && <div data-flight-draft>
       <p className="hint">Se validan en el servidor: aeronave activa, fuera de vuelo, sin vuelos superpuestos, con capacidad para la tripulación asignada y en el origen correspondiente. En un vuelo operativo, si cambia el aeropuerto de origen el comandante deberá confirmar nuevamente.</p>
       {error && <p className="error" role="alert">{error}</p>}
       {candidates === null ? <p>Cargando aeronaves…</p> : <>

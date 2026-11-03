@@ -64,24 +64,32 @@ export function HealthStaffCatalog({ notify = () => {} }) {
  * cualquier otro modo (Centro de Operaciones, comandante principal) lo ve sin poder modificarlo. El servidor decide si el vuelo admite cambios (horario acordado, sin iniciar).
  */
 export function FlightHealthStaff({ flightId, mode = "read", state, msg = () => {} }) {
-  const [rows, setRows] = useState(null), [history, setHistory] = useState(null), [showHistory, setShowHistory] = useState(false), [candidates, setCandidates] = useState(null), [error, setError] = useState(""), [pick, setPick] = useState(""), [replace, setReplace] = useState(""), [busy, setBusy] = useState(false);
+  const [rows, setRows] = useState(null), [history, setHistory] = useState(null), [showHistory, setShowHistory] = useState(false), [candidates, setCandidates] = useState(null), [error, setError] = useState(""), [pick, setPick] = useState(""), [replace, setReplace] = useState(null), [busy, setBusy] = useState(false);
   const latest = useRef(0), dts = mode === "dts";
   const editable = dts && ["APROBADO", "PLANIFICADO", "PENDIENTE_REPLANIFICACION"].includes(state);
   const load = async (quiet = false) => {
     const mine = ++latest.current;
     try {
       const data = await api(`/flights/${flightId}/health-staff`); if (mine !== latest.current) return; if (!Array.isArray(data)) throw new Error("Respuesta de personal sanitario inválida"); setRows(data); setError("");
-      if (editable) { const list = await api(`/flights/${flightId}/health-staff/candidates`); if (mine === latest.current) setCandidates(Array.isArray(list) ? list : []); }
     } catch (e) { if (mine !== latest.current || quiet) return; setRows(null); setError(e.message); }
   };
   const loadHistory = async () => { try { const data = await api(`/flights/${flightId}/health-staff?history=true`); setHistory(Array.isArray(data) ? data : []); } catch (e) { setHistory(null); setError(e.message); } };
-  useEffect(() => { setRows(null); setCandidates(null); setPick(""); setReplace(""); setShowHistory(false); setHistory(null); load(); }, [flightId, state]);
+  useEffect(() => { setRows(null); setCandidates(null); setPick(""); setReplace(null); setShowHistory(false); setHistory(null); load(); }, [flightId, state]);
+  useEffect(() => {
+    if (!editable || replace === null) return undefined;
+    let active = true;
+    setCandidates(null);
+    api(`/flights/${flightId}/health-staff/candidates`).then((list) => {
+      if (active) setCandidates(Array.isArray(list) ? list : []);
+    }).catch((e) => { if (active) { setError(e.message); setReplace(null); } });
+    return () => { active = false; };
+  }, [editable, replace, flightId]);
   const refresh = async () => { await load(); if (showHistory) await loadHistory(); };
   const save = async () => {
     if (busy || !pick) return; setBusy(true); setError("");
     try {
       await api(`/flights/${flightId}/health-staff${replace ? `/${replace}` : ""}`, { method: replace ? "PUT" : "POST", body: JSON.stringify({ personalSanitarioId: Number(pick) }) });
-      setPick(""); setReplace(""); msg(replace ? "Profesional sustituido" : "Profesional asignado al vuelo"); await refresh();
+      setPick(""); setReplace(null); msg(replace ? "Profesional sustituido" : "Profesional asignado al vuelo"); await refresh();
     } catch (e) { msg(e.message, true); await refresh(); setError(e.message); } finally { setBusy(false); }
   };
   const remove = async (row) => {
@@ -99,17 +107,20 @@ export function FlightHealthStaff({ flightId, mode = "read", state, msg = () => 
     {error && <p role="alert" className="error">{error}</p>}
     {rows === null ? !error && <p>Cargando personal sanitario…</p> : rows.length === 0 ? <p className="hint">{dts ? "Todavía no asignó personal sanitario a este vuelo." : "El DTS todavía no asignó personal sanitario a este vuelo."}</p> :
       rows.map((row) => <p key={row.id}><strong>{row.nombre} {row.apellido}</strong> · {TYPE_LABEL[row.tipoProfesional] || row.tipoProfesional} · matrícula {row.matricula}
-        {editable && <> <button type="button" className="secondary-action" disabled={busy} onClick={() => remove(row)}>Retirar</button> <button type="button" className="secondary-action" disabled={busy} onClick={() => setReplace(String(row.id))}>Sustituir</button></>}</p>)}
+        {editable && replace === null && <> <button type="button" className="secondary-action" disabled={busy} onClick={() => remove(row)}>Retirar</button> <button type="button" className="secondary-action" disabled={busy} onClick={() => setReplace(String(row.id))}>Sustituir</button></>}</p>)}
     {rows !== null && <button type="button" className="link-button" onClick={toggleHistory}>{showHistory ? "Ocultar historial del personal sanitario" : "Ver historial del personal sanitario"}</button>}
     {showHistory && (history === null ? <p>Cargando historial…</p> : removed.length === 0 ? <p className="hint">Sin retiros ni sustituciones registrados.</p> :
       <ul aria-label="Historial del personal sanitario">{removed.map((r) => <li key={r.id}>{r.nombre} {r.apellido} · {TYPE_LABEL[r.tipoProfesional] || r.tipoProfesional} — {r.motivoBaja === "REEMPLAZO" ? "sustituido" : "retirado"} por {r.bajaPor || "—"} el {civil(r.fechaBaja)} (asignado por {r.asignadoPor || "—"} el {civil(r.asignadoEn)})</li>)}</ul>)}
-    {editable && candidates !== null && <div className="detail-actions">
+    {editable && rows !== null && replace === null && <button type="button" onClick={() => { setError(""); setReplace(""); }}>Agregar profesional</button>}
+    {editable && replace !== null && <div className="detail-actions" data-flight-draft>
+      {candidates === null ? <p role="status">Consultando profesionales…</p> : <>
       <p>{replace ? "Seleccione el profesional que lo sustituirá." : "Seleccione a quién enviará en este traslado."}</p>
       <label>Profesional<select value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy}><option value="">Seleccionar</option>{available.map((c) => <option key={c.id} value={c.id}>{c.apellido}, {c.nombre} — {TYPE_LABEL[c.tipoProfesional] || c.tipoProfesional} ({c.matricula})</option>)}</select></label>
       {available.length === 0 && <p className="hint">No tiene profesionales disponibles. Registre más personal en «Personal sanitario».</p>}
       {unavailable.length > 0 && <details><summary>No disponibles en este horario ({unavailable.length})</summary><ul>{unavailable.map((c) => <li key={c.id}>{c.apellido}, {c.nombre}: {c.motivoNoDisponible}</li>)}</ul></details>}
       <button type="button" disabled={!pick || busy} onClick={save}>{busy ? "Guardando…" : replace ? "Confirmar sustitución" : "Asignar al vuelo"}</button>
-      {replace && <button type="button" className="secondary-action" onClick={() => setReplace("")}>Cancelar sustitución</button>}
+      </>}
+      <button type="button" className="secondary-action" disabled={busy} onClick={() => { setPick(""); setReplace(null); setError(""); }}>Cancelar</button>
     </div>}
     {dts && !editable && <p className="hint">El personal sanitario se asigna cuando el horario está acordado y hasta que el vuelo inicia.</p>}
   </section>;

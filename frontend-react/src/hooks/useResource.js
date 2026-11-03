@@ -6,7 +6,7 @@ import { api } from "../services/api";
  * anterior) nunca pisa a una más nueva. `reload({ quiet: true })` vuelve a leer sin mostrar «cargando» ni borrar lo que ya se ve.
  * path null/"" = no hay nada que leer todavía.
  */
-export function useResource(path, { map = (value) => value } = {}) {
+export function useResource(path, { map = (value) => value, revision } = {}) {
   const [state, setState] = useState({ data: null, error: "", loading: Boolean(path) });
   const latest = useRef(0);
   const mapRef = useRef(map);
@@ -24,6 +24,6 @@ export function useResource(path, { map = (value) => value } = {}) {
       return null;
     }
   }, [path]);
-  useEffect(() => { setState({ data: null, error: "", loading: Boolean(path) }); load(); return () => { latest.current++; }; }, [load, path]);
+  useEffect(() => { setState({ data: null, error: "", loading: Boolean(path) }); load(); return () => { latest.current++; }; }, [load, path, revision]);
   return { ...state, reload: load, setData: (data) => setState((previous) => ({ ...previous, data })) };
 }

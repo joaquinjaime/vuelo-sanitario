@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { NotifyProvider } from "./providers/NotifyProvider";
 import { SessionProvider } from "./providers/SessionProvider";
@@ -10,6 +10,9 @@ export function AppProviders({ children }) {
   return <ThemeProvider><NotifyProvider><SessionProvider>{children}</SessionProvider></NotifyProvider></ThemeProvider>;
 }
 
+const routes = [{ path: "*", element: <AppProviders><AppRoutes /></AppProviders> }];
+
 export function App() {
-  return <BrowserRouter><AppProviders><AppRoutes /></AppProviders></BrowserRouter>;
+  const [router] = React.useState(() => createBrowserRouter(routes));
+  return <RouterProvider router={router} />;
 }

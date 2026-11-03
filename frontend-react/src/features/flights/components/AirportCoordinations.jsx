@@ -1,15 +1,160 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { api } from "../../../services/api";
+import { useResource } from "../../../hooks/useResource";
+import { PlanningPanel, readStatus } from "./PlanningPanel";
 import { dt } from "../../../utils/format";
 
-export function AirportCoordinations({flightId, msg=()=>{}}) {
- const empty={aeropuertoId:'',finalidad:'',descripcion:'',estado:'PENDIENTE',fechaSlot:'',contacto:'',canal:'',fechaComunicacion:'',fechaRespuesta:'',fuenteRespuesta:'',referenciaExterna:'',observaciones:'',motivoCambio:''};
- const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[editing,setEditing]=useState(null),[form,setForm]=useState(empty),[query,setQuery]=useState(''),[airports,setAirports]=useState([]);
- const latest=useRef(0);const load=async()=>{const mine=++latest.current;try{const x=await api(`/flights/${flightId}/airport-coordinations`);if(mine!==latest.current)return;if(!x||!Array.isArray(x.versiones))throw Error('Respuesta de coordinaciones inválida');setData(x);setError('');}catch(e){if(mine!==latest.current)return;setData(null);setError(e.message);}};
- useEffect(()=>{setData(null);setEditing(null);setForm(empty);load();},[flightId]);
- useEffect(()=>{if(!data?.puedeGestionar)return;let active=true;api(`/catalogs/airports?q=${encodeURIComponent(query)}`).then(x=>{if(active)setAirports(x);}).catch(e=>{if(active)setError(e.message);});return ()=>{active=false;};},[query,data?.puedeGestionar]);
- const choose=v=>{setEditing(v.gestionId);setForm({aeropuertoId:v.aeropuertoId||'',finalidad:v.finalidad||'',descripcion:v.descripcion||'',estado:v.estado,fechaSlot:v.fechaSlot?.slice(0,16)||'',contacto:v.contacto||'',canal:v.canal||'',fechaComunicacion:v.fechaComunicacion?.slice(0,16)||'',fechaRespuesta:v.fechaRespuesta?.slice(0,16)||'',fuenteRespuesta:v.fuenteRespuesta||'',referenciaExterna:v.referenciaExterna||'',observaciones:v.observaciones||'',motivoCambio:''});};
- const save=async()=>{setBusy(true);try{const current=data.versiones.find(v=>v.actual&&v.gestionId===editing);const body={...form,version:current?.version||0,aeropuertoId:Number(form.aeropuertoId),fechaSlot:form.fechaSlot||null,fechaComunicacion:form.fechaComunicacion||null,fechaRespuesta:form.fechaRespuesta||null};await api(`/flights/${flightId}/airport-coordinations${editing?'/'+editing:''}`,{method:editing?'PUT':'POST',body:JSON.stringify(body)});await load();setEditing(null);setForm(empty);msg('Gestión aeroportuaria guardada');}catch(e){setError(e.message);}finally{setBusy(false);}};
- const current=data?.versiones.filter(v=>v.actual)||[];
- return <section className="wide detail-actions"><h4>Coordinaciones aeroportuarias</h4><p>Seguimiento manual: las respuestas son declaradas por el personal y no se envían ni verifican automáticamente con AA2000.</p>{error&&<p role="alert">{error}</p>}{!data?!error&&<p>Cargando coordinaciones…</p>:<><p>Plan actual: {data.origen||'Origen pendiente'} → {data.destino||'Destino pendiente'} · {data.aeronave||'Aeronave pendiente'} · Salida: {data.salida?dt(data.salida):'Pendiente'} · Llegada: {data.llegada?dt(data.llegada):'Pendiente'}</p>{current.length===0?<p>Sin gestiones registradas; no se presupone que sean necesarias.</p>:current.map(v=><article key={v.gestionId}><p><strong>{v.aeropuerto||'Aeropuerto pendiente'} · {v.finalidad||'Finalidad pendiente'}</strong> · {v.estado.replaceAll('_',' ')} · {v.estadoVigencia.replaceAll('_',' ')}</p><p>{v.descripcion||v.observaciones||'Gestión histórica'}</p><p>Comunicación: {v.fechaComunicacion?dt(v.fechaComunicacion):'No registrada'} · {v.canal||'—'} · {v.contacto||'—'}</p>{v.fechaRespuesta&&<p>Respuesta declarada: {dt(v.fechaRespuesta)} · Fuente: {v.fuenteRespuesta} · Referencia: {v.referenciaExterna||'—'}</p>}<p>Registró versión {v.version}: {v.responsable} · {dt(v.fechaCreacion)}</p><details><summary>Historial de esta gestión</summary>{data.versiones.filter(x=>x.gestionId===v.gestionId).map(x=><div key={x.id}><p>Versión {x.version} · {x.estado.replaceAll('_',' ')} · {x.responsable} · {dt(x.fechaCreacion)} · {x.motivoCambio||'Alta'}</p><p>{x.descripcion||'—'} · Observaciones: {x.observaciones||'—'}</p><p>Slot: {x.fechaSlot?dt(x.fechaSlot):'—'} · Comunicación: {x.fechaComunicacion?dt(x.fechaComunicacion):'—'} · {x.canal||'—'} · {x.contacto||'—'}</p><p>Respuesta: {x.fechaRespuesta?dt(x.fechaRespuesta):'—'} · Fuente: {x.fuenteRespuesta||'—'} · Referencia: {x.referenciaExterna||'—'}</p></div>)}</details>{data.puedeGestionar&&v.estado!=='CANCELADO'&&<button type="button" onClick={()=>choose(v)}>Actualizar gestión</button>}</article>)}{data.motivo&&<p>{data.motivo}</p>}{data.puedeGestionar&&<div><h4>{editing?'Actualizar gestión':'Nueva gestión'}</h4><label>Buscar aeropuerto de coordinación<input value={query} onChange={e=>setQuery(e.target.value)}/></label><label>Aeropuerto de coordinación<select value={form.aeropuertoId} disabled={!!editing&&!!data.versiones.find(v=>v.actual&&v.gestionId===editing)?.aeropuertoId} onChange={e=>setForm({...form,aeropuertoId:e.target.value})}><option value="">Seleccionar</option>{form.aeropuertoId&&!airports.some(a=>a.id===Number(form.aeropuertoId))&&<option value={form.aeropuertoId}>{data.versiones.find(v=>v.actual&&v.gestionId===editing)?.aeropuerto||'Seleccionado'}</option>}{airports.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label>Finalidad de coordinación<input maxLength={200} disabled={!!editing&&!!data.versiones.find(v=>v.actual&&v.gestionId===editing)?.finalidad} value={form.finalidad} onChange={e=>setForm({...form,finalidad:e.target.value})}/></label><label>Descripción de la gestión<textarea maxLength={4000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>{editing&&<label>Estado de seguimiento<select value={form.estado} onChange={e=>setForm({...form,estado:e.target.value,fechaRespuesta:'',fuenteRespuesta:''})}><option value="PENDIENTE">Pendiente</option><option value="EN_SEGUIMIENTO">En seguimiento</option><option value="CONFIRMADO">Confirmación declarada</option><option value="RECHAZADO">Rechazo informado</option><option value="CANCELADO">Cancelada</option></select></label>}<label>Fecha y hora del slot informado<input type="datetime-local" value={form.fechaSlot} onChange={e=>setForm({...form,fechaSlot:e.target.value})}/></label><label>Contacto de coordinación<input maxLength={150} value={form.contacto} onChange={e=>setForm({...form,contacto:e.target.value})}/></label><label>Canal de comunicación<input maxLength={100} value={form.canal} onChange={e=>setForm({...form,canal:e.target.value})}/></label><label>Fecha y hora de comunicación<input type="datetime-local" value={form.fechaComunicacion} onChange={e=>setForm({...form,fechaComunicacion:e.target.value})}/></label>{['CONFIRMADO','RECHAZADO'].includes(form.estado)&&<><label>Fecha y hora de respuesta<input type="datetime-local" value={form.fechaRespuesta} onChange={e=>setForm({...form,fechaRespuesta:e.target.value})}/></label><label>Fuente de la respuesta<input maxLength={250} value={form.fuenteRespuesta} onChange={e=>setForm({...form,fuenteRespuesta:e.target.value})}/></label></>}<label>Referencia externa proporcionada<input maxLength={250} value={form.referenciaExterna} onChange={e=>setForm({...form,referenciaExterna:e.target.value})}/></label><label>Observaciones de coordinación<textarea maxLength={4000} value={form.observaciones} onChange={e=>setForm({...form,observaciones:e.target.value})}/></label>{editing&&<label>Motivo del cambio<textarea maxLength={1000} value={form.motivoCambio} onChange={e=>setForm({...form,motivoCambio:e.target.value})}/></label>}<button type="button" disabled={busy||!form.aeropuertoId||!form.finalidad.trim()||!form.descripcion.trim()||(editing&&!form.motivoCambio.trim())} onClick={save}>{editing?'Guardar seguimiento':'Registrar coordinación'}</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setForm(empty);}}>Cancelar edición</button>}</div>}</>}</section>;
+const STATES = {
+  PENDIENTE: "Pendiente",
+  EN_SEGUIMIENTO: "En seguimiento",
+  CONFIRMADO: "Confirmación declarada",
+  RECHAZADO: "Rechazo informado",
+  CANCELADO: "Cancelada",
+};
+const NEXT = {
+  PENDIENTE: ["EN_SEGUIMIENTO", "CONFIRMADO", "RECHAZADO", "CANCELADO"],
+  EN_SEGUIMIENTO: ["CONFIRMADO", "RECHAZADO", "CANCELADO"],
+  CONFIRMADO: ["EN_SEGUIMIENTO", "CANCELADO"],
+  RECHAZADO: ["CANCELADO"],
+};
+const VIGENCY = { VIGENTE: "Vigente", REQUIERE_REVISION: "Requiere revisión" };
+const DATES = ["fechaSlot", "fechaComunicacion", "fechaRespuesta"];
+const TEXT = ["finalidad", "descripcion", "contacto", "canal", "fuenteRespuesta", "referenciaExterna", "observaciones"];
+const date = (value) => value ? dt(value) : "—";
+
+export function AirportCoordinations({ flightId, revision, canManage = true, msg = () => {} }) {
+  const path = `/flights/${flightId}/airport-coordinations`;
+  const resource = useResource(path, { revision, map: (result) => {
+    if (!Array.isArray(result?.versiones)) throw Error("Respuesta de coordinaciones inválida");
+    return result;
+  } });
+  const { data, error, reload } = resource;
+  const current = data?.versiones.filter((item) => item.actual) || [];
+  const summary = readStatus(resource, () => {
+    if (current.length === 0) return "Sin gestiones registradas";
+    const registered = current.length === 1 ? "1 gestión registrada" : `${current.length} gestiones registradas`;
+    const review = current.filter((item) => item.estadoVigencia === "REQUIERE_REVISION").length;
+    return review ? `${registered} · ${review} para revisar` : registered;
+  });
+  return <PlanningPanel title="Coordinaciones aeroportuarias" summary={summary}>
+    {() => <CoordinationDetails {...{ path, data, error, reload, current, canManage, msg }} />}
+  </PlanningPanel>;
+}
+
+function CoordinationDetails({ path, data, error, reload, current, canManage, msg }) {
+  const [editor, setEditor] = useState(null);
+  return <div className="detail-actions">
+    <p className="hint">Seguimiento manual de gestiones aeroportuarias. El personal registra las respuestas recibidas de AA2000.</p>
+    {error && <p role="alert">{error} <button type="button" onClick={reload}>Reintentar</button></p>}
+    {data && <>
+      <p>Plan actual: {data.origen || "Origen pendiente"} → {data.destino || "Destino pendiente"} · {data.aeronave || "Aeronave pendiente"} · Salida: {date(data.salida)} · Llegada: {date(data.llegada)}</p>
+      {current.length === 0 ? <p>Todavía no se registraron coordinaciones.</p> : <ul className="operational-records">
+        {current.map((item) => <li key={item.gestionId}>
+          <CoordinationRecord item={item} history={data.versiones.filter((v) => v.gestionId === item.gestionId && !v.actual)}
+            onEdit={canManage && data.puedeGestionar && item.estado !== "CANCELADO" && !editor ? () => setEditor({ item }) : null} />
+        </li>)}
+      </ul>}
+      {canManage && data.puedeGestionar && !editor && <button type="button" onClick={() => setEditor({})}>Nueva coordinación</button>}
+      {canManage && data.puedeGestionar && editor && <CoordinationEditor path={path} item={editor.item} onCancel={() => setEditor(null)} onSaved={async () => {
+        setEditor(null);
+        msg(editor.item ? "Cambios de coordinación guardados" : "Coordinación registrada");
+        await reload();
+      }} />}
+      {data.motivo && <p className="hint">{data.motivo}</p>}
+    </>}
+  </div>;
+}
+
+function CoordinationRecord({ item, history, onEdit }) {
+  return <>
+    <details>
+      <summary><strong>{item.aeropuerto || "Aeropuerto sin registrar"} · {item.finalidad || "Finalidad sin registrar"}</strong> · {STATES[item.estado] || item.estado} · {VIGENCY[item.estadoVigencia] || item.estadoVigencia}</summary>
+      <CoordinationFacts item={item} />
+      {history.length > 0 && <details><summary>Versiones anteriores ({history.length})</summary>{history.map((version) =>
+        <article key={version.id}>
+          <strong>{STATES[version.estado] || version.estado} · {version.motivoCambio || "Alta"}</strong>
+          <CoordinationFacts item={version} />
+        </article>)}</details>}
+    </details>
+    {onEdit && <button type="button" className="secondary-action" onClick={onEdit}>Modificar coordinación</button>}
+  </>;
+}
+
+function CoordinationFacts({ item }) {
+  return <dl className="facts">
+    <div><dt>Descripción</dt><dd>{item.descripcion || "—"}</dd></div>
+    <div><dt>Observaciones</dt><dd>{item.observaciones || "—"}</dd></div>
+    <div><dt>Slot informado</dt><dd>{date(item.fechaSlot)}</dd></div>
+    <div><dt>Comunicación</dt><dd>{date(item.fechaComunicacion)} · {item.canal || "—"} · {item.contacto || "—"}</dd></div>
+    <div><dt>Respuesta declarada</dt><dd>{date(item.fechaRespuesta)} · {item.fuenteRespuesta || "—"}</dd></div>
+    <div><dt>Referencia externa</dt><dd>{item.referenciaExterna || "—"}</dd></div>
+    <div><dt>Versión {item.version}</dt><dd>{date(item.fechaCreacion)} · {item.responsable}</dd></div>
+  </dl>;
+}
+
+function CoordinationEditor({ path, item, onCancel, onSaved }) {
+  const [form, setForm] = useState(() => ({
+    aeropuertoId: item?.aeropuertoId ?? "",
+    estado: item?.estado ?? "PENDIENTE",
+    motivoCambio: "",
+    ...Object.fromEntries(TEXT.map((key) => [key, item?.[key] ?? ""])),
+    ...Object.fromEntries(DATES.map((key) => [key, item?.[key]?.slice(0, 16) ?? ""])),
+  }));
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const fixedAirport = Boolean(item?.aeropuertoId && item?.finalidad);
+  const airports = useResource(fixedAirport ? null : `/catalogs/airports?q=${encodeURIComponent(query)}`);
+  const choices = Array.isArray(airports.data) ? airports.data : [];
+  const hasResponse = ["CONFIRMADO", "RECHAZADO"].includes(form.estado);
+  const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+  const save = async (event) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const dates = Object.fromEntries(DATES.map((key) => [key, form[key] || null]));
+      await api(item ? `${path}/${item.gestionId}` : path, {
+        method: item ? "PUT" : "POST",
+        body: JSON.stringify({ ...form, ...dates, version: item?.version ?? 0, aeropuertoId: Number(form.aeropuertoId) }),
+      });
+      await onSaved();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+  return <form data-flight-draft onSubmit={save}>
+    <fieldset disabled={busy}>
+      <legend>{item ? "Modificar coordinación" : "Registrar coordinación"}</legend>
+      {!fixedAirport && <label>Buscar aeropuerto de coordinación<input value={query} onChange={(e) => setQuery(e.target.value)} /></label>}
+      {airports.error && <p role="alert">{airports.error} <button type="button" onClick={airports.reload}>Reintentar búsqueda</button></p>}
+      <label>Aeropuerto de coordinación<select required value={form.aeropuertoId} disabled={fixedAirport} onChange={set("aeropuertoId")}>
+        <option value="">{airports.loading ? "Consultando…" : "Seleccionar"}</option>
+        {form.aeropuertoId && !choices.some((airport) => airport.id === Number(form.aeropuertoId)) && <option value={form.aeropuertoId}>{item?.aeropuerto || "Aeropuerto seleccionado"}</option>}
+        {choices.map((airport) => <option key={airport.id} value={airport.id}>{airport.nombre}</option>)}
+      </select></label>
+      <label>Finalidad de coordinación<input required maxLength={200} disabled={fixedAirport} value={form.finalidad} onChange={set("finalidad")} /></label>
+      <label>Descripción de la gestión<textarea required maxLength={4000} value={form.descripcion} onChange={set("descripcion")} /></label>
+      {item && <label>Estado de seguimiento<select value={form.estado} onChange={(e) => {
+        const estado = e.target.value;
+        const response = ["CONFIRMADO", "RECHAZADO"].includes(estado);
+        setForm({ ...form, estado, fechaRespuesta: response ? form.fechaRespuesta : "", fuenteRespuesta: response ? form.fuenteRespuesta : "" });
+      }}>{[item.estado, ...(NEXT[item.estado] || [])].map((state) => <option key={state} value={state}>{STATES[state] || state}</option>)}</select></label>}
+      <label>Fecha y hora del slot informado<input type="datetime-local" value={form.fechaSlot} onChange={set("fechaSlot")} /></label>
+      <label>Contacto de coordinación<input maxLength={150} value={form.contacto} onChange={set("contacto")} /></label>
+      <label>Canal de comunicación<input maxLength={100} value={form.canal} onChange={set("canal")} /></label>
+      <label>Fecha y hora de comunicación<input type="datetime-local" value={form.fechaComunicacion} onChange={set("fechaComunicacion")} /></label>
+      {hasResponse && <>
+        <label>Fecha y hora de respuesta<input type="datetime-local" required value={form.fechaRespuesta} onChange={set("fechaRespuesta")} /></label>
+        <label>Fuente de la respuesta<input required maxLength={250} value={form.fuenteRespuesta} onChange={set("fuenteRespuesta")} /></label>
+      </>}
+      <label>Referencia externa proporcionada<input maxLength={250} value={form.referenciaExterna} onChange={set("referenciaExterna")} /></label>
+      <label>Observaciones de coordinación<textarea maxLength={4000} value={form.observaciones} onChange={set("observaciones")} /></label>
+      {item && <label>Motivo del cambio<textarea required maxLength={1000} value={form.motivoCambio} onChange={set("motivoCambio")} /></label>}
+      {error && <p role="alert">{error}</p>}
+      <div className="form-actions">
+        <button disabled={!form.aeropuertoId || !form.finalidad.trim() || !form.descripcion.trim() || (item && !form.motivoCambio.trim())}>{busy ? "Guardando…" : item ? "Guardar cambios" : "Guardar coordinación"}</button>
+        <button type="button" className="secondary-action" onClick={onCancel}>Cancelar</button>
+      </div>
+    </fieldset>
+  </form>;
 }

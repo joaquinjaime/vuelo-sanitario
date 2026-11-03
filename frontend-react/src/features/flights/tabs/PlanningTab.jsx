@@ -1,31 +1,46 @@
 import React from "react";
-import { Card } from "../../../components/ui/Card";
-import { AirportPlanning, CommanderAirportPlanning } from "../airportPlanning";
+import { AIRPORT_STATE_LABEL, AirportPlanning, CommanderAirportPlanning } from "../airportPlanning";
 import { ResourceAssignment } from "../resourceAssignment";
 import { FlightAircraft } from "../../aircraft/aircraft";
 import { FlightRoute } from "../flightRoute";
 import { HangarInfo } from "../components/HangarInfo";
 import { AirportCoordinations } from "../components/AirportCoordinations";
 import { WeatherLog } from "../components/WeatherLog";
+import { PlanningPanel, PlanningPanels } from "../components/PlanningPanel";
 
-/** Planificación del vuelo: aeropuertos, recursos, aeronave, ruta, hangar, coordinaciones y clima. Lo que se muestra lo fija la etapa. */
 export function PlanningTab({ ctx }) {
   const { flight, detail, show, id, workspace } = ctx;
   const sanitary = Boolean(flight.datosSanitarios);
   const commander = workspace === "COMANDANTE";
+  const commanderCanWrite = commander && !ctx.commanderBlocked;
+  const ops = workspace === "OPERACIONES";
   const planned = flight.estado === "PLANIFICADO";
-  const agreedState = flight.estado === "APROBADO" || flight.estado === "PLANIFICADO";
-  const airportsKey = `${id}-${detail.aeropuertos?.salida?.aeropuertoId || 0}-${detail.aeropuertos?.salida?.estado}-${detail.aeropuertos?.llegada?.aeropuertoId || 0}-${detail.aeropuertos?.llegada?.estado}`;
+  const agreedState = flight.estado === "APROBADO" || planned;
+  const { aeropuertos: airports, recursos: resources } = detail;
+  const airportSummary = [airports?.salida, airports?.llegada].map((slot) =>
+    slot?.aeropuertoId ? `${slot.aeropuerto} (${AIRPORT_STATE_LABEL[slot.estado] || slot.estado})` : "Sin definir",
+  ).join(" → ");
+  const aircraft = <FlightAircraft flight={flight} recursos={resources} canManage={ops} actionOnly={sanitary}
+    done={ctx.done} msg={ctx.notify} reload={ctx.afterRouteChange} />;
+  const revision = `${ctx.routeRevision}-${flight.estado}`;
   return (
-    <div className="tab-stack">
-      {!commander && show.has("aeropuertos") && sanitary && <Card><AirportPlanning key={`airports-${airportsKey}`} flight={flight} plan={detail.aeropuertos} msg={ctx.notify} editable={agreedState} onChanged={ctx.afterChange} /></Card>}
-      {commander && planned && sanitary && <Card><CommanderAirportPlanning key={`airport-plan-${airportsKey}`} flight={flight} plan={detail.aeropuertos} msg={ctx.notify} onSaved={ctx.afterRouteChange} /></Card>}
-      {!commander && show.has("recursos") && sanitary && agreedState && <Card><ResourceAssignment key={`resources-${id}`} flight={flight} resources={detail.recursos} plan={detail.aeropuertos} msg={ctx.notify} onChanged={ctx.afterChange} /></Card>}
-      {!commander && show.has("aeronave") && <Card><FlightAircraft key={`aircraft-${id}-${detail.recursos?.aircraftId || 0}`} flight={flight} recursos={detail.recursos} done={ctx.done} msg={ctx.notify} reload={ctx.reload} /></Card>}
-      {show.has("ruta") && <Card><FlightRoute key={`route-${id}-${ctx.routeRevision}-${flight.estado}`} flightId={id} canEdit={commander} canReview={!commander} msg={ctx.notify} onChanged={commander ? undefined : ctx.afterRouteChange} /></Card>}
-      {show.has("hangar") && <Card><HangarInfo key={`hangar-${id}`} flightId={id} msg={ctx.notify} /></Card>}
-      {show.has("coordinaciones") && <Card><AirportCoordinations key={`airport-${id}-${ctx.logRevision}-${ctx.routeRevision}`} flightId={id} msg={ctx.notify} /></Card>}
-      {show.has("clima") && <Card><WeatherLog key={`weather-${id}`} flightId={id} canRecord={commander && planned} msg={ctx.notify} /></Card>}
-    </div>
+    <PlanningPanels>
+      {show.has("aeropuertos") && sanitary && <PlanningPanel title="Aeropuertos de salida y llegada" summary={airportSummary}>
+        {() => <>
+          <AirportPlanning flight={flight} plan={airports} msg={ctx.notify} editable={ops && agreedState} onChanged={ctx.afterRouteChange} />
+          {commanderCanWrite && planned && <CommanderAirportPlanning flight={flight} plan={airports} msg={ctx.notify} onSaved={ctx.afterRouteChange} />}
+        </>}
+      </PlanningPanel>}
+      {sanitary && (show.has("recursos") || show.has("aeropuertos")) && <PlanningPanel title="Asignación de recursos"
+        summary={`${resources?.aircraftMatricula || "Aeronave sin asignar"} · ${resources?.commanderId ? "Comandante asignado" : "Comandante sin asignar"}`}>
+        {() => <ResourceAssignment flight={flight} resources={resources} plan={airports} msg={ctx.notify}
+          onChanged={ctx.afterRouteChange} canManage={ops} aircraftAction={ops && planned ? aircraft : null} />}
+      </PlanningPanel>}
+      {!sanitary && show.has("aeronave") && <PlanningPanel title="Aeronave" summary={resources?.aircraftMatricula || "Sin asignar"}>{() => aircraft}</PlanningPanel>}
+      {show.has("ruta") && <FlightRoute revision={revision} flightId={id} canEdit={commanderCanWrite} canReview={ops} msg={ctx.notify} onChanged={commander ? undefined : ctx.afterChange} />}
+      {show.has("hangar") && <HangarInfo canComplete={flight.estado !== "EN_CURSO"} canManage={ops} revision={revision} flightId={id} canObserve={commanderCanWrite} msg={ctx.notify} />}
+      {show.has("coordinaciones") && <AirportCoordinations canManage={ops} revision={revision} flightId={id} msg={ctx.notify} />}
+      {show.has("clima") && <WeatherLog flightId={id} canRecord={commanderCanWrite && planned} msg={ctx.notify} />}
+    </PlanningPanels>
   );
 }

@@ -75,7 +75,7 @@ function CommanderCard({ flight, resources, plan, msg, onChanged, editable, bloc
     {!open && (editable
       ? <button type="button" onClick={openChooser}>{assigned ? "Cambiar comandante" : "Seleccionar comandante"}</button>
       : blockedReason && <p className="hint resource-blocked">{blockedReason}</p>)}
-    {open && <div className="resource-chooser" aria-busy={loading || busy}>
+    {open && <div className="resource-chooser" data-flight-draft aria-busy={loading || busy}>
       {loading && !data && <p className="hint" role="status">Consultando comandantes…</p>}
       {data && <>
         <p className="hint">Jurisdicción de salida: <strong>{data.salida.provincia}</strong>{data.salida.aeropuerto ? <> (aeropuerto {data.salida.aeropuerto})</> : " (provincia donde se encuentra el paciente; todavía no hay aeropuerto de salida)"}. Sólo se ofrecen de forma ordinaria los comandantes ubicados en esa provincia o CABA; la localidad del paciente no se compara con la del comandante.</p>
@@ -110,7 +110,7 @@ function CommanderCard({ flight, resources, plan, msg, onChanged, editable, bloc
   </section>;
 }
 
-function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReason }) {
+function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReason, aircraftAction }) {
   const [open, setOpen] = useState(false), [list, setList] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(""), [selected, setSelected] = useState(""), [busy, setBusy] = useState(false);
   const lock = useRef(false), requests = useRef(0);
   const assigned = resources.aircraftId != null, reserved = assigned && resources.commanderId == null;
@@ -145,10 +145,11 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
       <div><dt>Ubicación actual</dt><dd>{resources.aircraftUbicacion || "—"}</dd></div>
       <div><dt>Capacidad de tripulación</dt><dd>{resources.aircraftCapacidadTripulacion ?? "—"}</dd></div>
     </dl> : <p className="hint">Aún no hay una aeronave asignada a este vuelo.</p>}
+    {aircraftAction}
     {!open && (editable
       ? <button type="button" onClick={openChooser}>{assigned ? "Cambiar aeronave" : "Seleccionar aeronave"}</button>
       : blockedReason && <p className="hint resource-blocked">{blockedReason}</p>)}
-    {open && <div className="resource-chooser" aria-busy={loading || busy}>
+    {open && <div className="resource-chooser" data-flight-draft aria-busy={loading || busy}>
       {loading && !list && <p className="hint" role="status">Consultando aeronaves…</p>}
       {list && <>
         <p className="hint">Aeronaves activas ubicadas en la jurisdicción del aeropuerto de salida (o, mientras no haya, en la provincia del paciente) y, si ya hay aeropuerto de salida, en ese aeropuerto; sólo pueden confirmarse las que no tienen un vuelo comprometido en el horario de este vuelo.</p>
@@ -170,14 +171,16 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
  * Copiloto del vuelo: otro usuario COMANDANTE asignado a esa función (opcional). Se elige con la misma lista de candidatos del comandante (jurisdicción de salida según el itinerario previsto,
  * excepción geográfica autorizada sólo por Centro de Operaciones, disponibilidad horaria); el servidor decide. No recibe tareas ni permisos del comandante principal de este vuelo.
  */
-export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}, editable = true, blockedReason = "" }) {
-  const [current, setCurrent] = useState(undefined), [open, setOpen] = useState(false), [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(""),
+export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}, editable = true, blockedReason = "", currentCopilot }) {
+  const [fetchedCopilot, setCurrent] = useState(undefined), [open, setOpen] = useState(false), [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(""),
     [selected, setSelected] = useState(""), [reason, setReason] = useState(""), [search, setSearch] = useState(""), [busy, setBusy] = useState(false);
   const lock = useRef(false), requests = useRef(0), currentRequests = useRef(0);
+  const current = currentCopilot === undefined ? fetchedCopilot : currentCopilot;
   const loadCurrent = async () => {
+    if (currentCopilot !== undefined) return;
     const mine = ++currentRequests.current;
     try { const rows = await api(`/flights/${flight.id}/crew`); if (mine === currentRequests.current) setCurrent((Array.isArray(rows) ? rows : []).find((r) => r.crewRoleCode === "COPILOTO" && r.vigente !== false) || null); }
-    catch { if (mine === currentRequests.current) setCurrent(null); }
+    catch (e) { if (mine === currentRequests.current) setError(e.message); }
   };
   useEffect(() => { setOpen(false); setData(null); loadCurrent(); }, [flight.id, flight.estado]);
   const load = async (q = "", keepError = false) => {
@@ -212,12 +215,13 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
   return <section className="resource-card" aria-labelledby={`resource-copilot-title-${flight.id}`}>
     <header><h5 id={`resource-copilot-title-${flight.id}`}>Copiloto <small>(opcional)</small></h5>
       {current ? <StatusBadge kind="assigned">Asignado</StatusBadge> : <StatusBadge kind="pending">Sin copiloto</StatusBadge>}</header>
-    {current ? <dl className="resource-facts"><div><dt>Copiloto</dt><dd>{current.nombre} {current.apellido}</dd></div><div><dt>Usuario</dt><dd>{current.username} (rol COMANDANTE)</dd></div>
+    {currentCopilot === undefined && current ? <dl className="resource-facts"><div><dt>Copiloto</dt><dd>{current.nombre} {current.apellido}</dd></div><div><dt>Usuario</dt><dd>{current.username} (rol COMANDANTE)</dd></div>
       {current.elegibilidadCodigo && current.elegibilidadCodigo !== "ELEGIBLE" && <div><dt>Revisión</dt><dd><strong className="error">{current.elegibilidadMotivo || current.elegibilidadCodigo}</strong></dd></div>}</dl>
-      : <p className="hint">{current === undefined ? "Consultando la tripulación…" : "El vuelo no tiene copiloto. Si corresponde, elija a otro usuario COMANDANTE."}</p>}
-    {!open && (editable ? <div className="form-actions"><button type="button" onClick={openChooser} disabled={busy}>{current ? "Cambiar copiloto" : "Seleccionar copiloto"}</button>{current && <button type="button" className="secondary-action" onClick={remove} disabled={busy}>Retirar copiloto</button>}</div>
+      : !current && <p className="hint">{current === undefined ? "Consultando la tripulación…" : "El vuelo no tiene copiloto. Si corresponde, elija a otro usuario COMANDANTE."}</p>}
+    {!open && error && <p role="alert">{error} {current === undefined && <button type="button" onClick={loadCurrent}>Reintentar</button>}</p>}
+    {!open && (editable ? <div className="form-actions"><button type="button" onClick={openChooser} disabled={busy || current === undefined}>{current ? "Cambiar copiloto" : "Seleccionar copiloto"}</button>{current && <button type="button" className="secondary-action" onClick={remove} disabled={busy}>Retirar copiloto</button>}</div>
       : blockedReason && <p className="hint resource-blocked">{blockedReason}</p>)}
-    {open && <div className="resource-chooser" aria-busy={loading || busy}>
+    {open && <div className="resource-chooser" data-flight-draft aria-busy={loading || busy}>
       {loading && !data && <p className="hint" role="status">Consultando comandantes disponibles como copiloto…</p>}
       {data && <>
         <p className="hint">Jurisdicción de salida: <strong>{data.salida.provincia}</strong>. Se ofrecen usuarios COMANDANTE distintos del comandante principal; cada uno se ubica donde estará al despegar este vuelo según los vuelos que ya tiene asignados.</p>
@@ -251,18 +255,18 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
   </section>;
 }
 
-export function ResourceAssignment({ flight, resources, plan = null, msg, onChanged, copilot = true }) {
+export function ResourceAssignment({ flight, resources, plan = null, msg, onChanged, copilot = true, canManage = true, aircraftAction }) {
   const res = resources || {};
   const complete = res.commanderId != null && res.aircraftId != null;
   const agreed = flight.estado === "APROBADO" || flight.estado === "PLANIFICADO";
-  const editable = agreed && Boolean(flight.salida);
-  const blockedReason = !agreed ? "Las asignaciones sólo pueden gestionarse con el horario acordado y antes del inicio del vuelo." : !flight.salida ? "Primero debe fijarse el horario definitivo." : "";
+  const editable = canManage && agreed && Boolean(flight.salida);
+  const blockedReason = !canManage ? "" : !agreed ? "Las asignaciones sólo pueden gestionarse con el horario acordado y antes del inicio del vuelo." : !flight.salida ? "Primero debe fijarse el horario definitivo." : "";
   return <div className="wide resource-assignment" role="group" aria-label="Asignación de recursos">
     <h4>Asignación de recursos</h4>
-    <p className="hint">{complete ? "El comandante y la aeronave están asignados. Los cambios se validan nuevamente y quedan auditados." : "El horario está acordado. Confirme el comandante y la aeronave: cada elección queda reservada y el vuelo pasa a Planificado cuando están los dos. El copiloto es opcional y se elige entre los demás usuarios COMANDANTE."}</p>
+    {editable && <p className="hint">{complete ? "El comandante y la aeronave están asignados. Los cambios se validan nuevamente y quedan auditados." : "El horario está acordado. Confirme el comandante y la aeronave: cada elección queda reservada y el vuelo pasa a Planificado cuando están los dos. El copiloto es opcional y se elige entre los demás usuarios COMANDANTE."}</p>}
     <div className="resource-grid">
       <CommanderCard flight={flight} resources={res} plan={plan} msg={msg} onChanged={onChanged} editable={editable} blockedReason={blockedReason}/>
-      <AircraftCard flight={flight} resources={res} msg={msg} onChanged={onChanged} editable={editable && flight.estado === "APROBADO"} blockedReason={flight.estado === "PLANIFICADO" ? "Para cambiar la aeronave de un vuelo planificado use «Cambio de aeronave»." : blockedReason}/>
+      <AircraftCard flight={flight} resources={res} msg={msg} onChanged={onChanged} editable={editable && flight.estado === "APROBADO"} blockedReason={aircraftAction ? "" : canManage && flight.estado === "PLANIFICADO" ? "Para cambiar la aeronave de un vuelo planificado use «Cambio de aeronave»." : blockedReason} aircraftAction={aircraftAction}/>
       {copilot && <CopilotCard flight={flight} msg={msg} onChanged={onChanged} editable={editable} blockedReason={blockedReason}/>}
     </div>
   </div>;

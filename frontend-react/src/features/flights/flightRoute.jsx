@@ -1,3 +1,4 @@
+import { PlanningPanel } from "./components/PlanningPanel";
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -39,11 +40,13 @@ export const RouteStateBadge = ({ estado }) => <span className={`status status-r
  * aprueba o la devuelve con observaciones (`canReview`). Todo lo que se puede hacer lo informa el servidor (`editable`, `puedePresentar`,
  * `puedeRevisar`, `requiereMotivo`): aquí sólo se muestra, y el servidor revalida cada acción. Nunca se piden identificadores.
  */
-export function FlightRoute({ flightId, canEdit = false, canReview = false, msg = () => {}, onChanged = () => {} }) {
+export function FlightRoute({ flightId, revision, canEdit = false, canReview = false, msg = () => {}, onChanged = () => {} }) {
   const [data, setData] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [airports, setAirports] = useState([]), [airportQuery, setAirportQuery] = useState("");
   const [form, setForm] = useState(EMPTY), [note, setNote] = useState(""), [returnReason, setReturnReason] = useState("");
 
+  const [mode, setMode] = useState(null);
+  const reset = () => { setMode(null); setForm(formOf(data?.versiones[0])); setNote(""); setReturnReason(""); setAirportQuery(""); };
   const latest = useRef(0);
   const load = async () => {
     const mine = ++latest.current;
@@ -54,13 +57,13 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
       setData(d); setForm(formOf(d.versiones[0])); setNote(""); setReturnReason(""); setError("");
     } catch (e) { if (mine === latest.current) setError(e.message); }
   };
-  useEffect(() => { load(); }, [flightId]);
+  useEffect(() => { load(); return () => { latest.current++; }; }, [flightId, revision]);
   useEffect(() => {
-    if (!canEdit) return;
+    if (!canEdit || mode !== "edit") return;
     let active = true;
     api(`/catalogs/airports?q=${encodeURIComponent(airportQuery)}`).then((a) => { if (active) setAirports(a); }).catch((e) => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [canEdit, airportQuery]);
+  }, [canEdit, mode, airportQuery]);
 
   const current = data?.versiones?.[0];
   const dirty = !data || !current || ["recorrido", "alternativoId", "altitudPies", "distanciaNm", "tiempoEstimadoMinutos", "observaciones"].some((k) => String(form[k] ?? "") !== String(formOf(current)[k] ?? ""));
@@ -74,10 +77,10 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
     setBusy(true);
     try {
       await api(`/flights/${flightId}/route${path}`, options);
-      await load(); msg(success); onChanged();
+      setMode(null); await load(); msg(success); onChanged();
     } catch (e) {
       setError(e.message);
-      if (RELOAD_CODES.includes(e.code)) { await load(); setError(e.message); }
+      if (RELOAD_CODES.includes(e.code)) { setMode(null); await load(); setError(e.message); }
     } finally { setBusy(false); }
   };
   const save = (present) => act("", { method: "PUT", body: JSON.stringify({
@@ -91,10 +94,10 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
 
   const inicio = data?.inicio;
   return (
+    <PlanningPanel title="Ruta operativa" summary={data ? ROUTE_STATE_LABEL[data.estado] || data.estado : error ? "Consulta no disponible" : "Cargando información…"} onClose={reset}>
     <div className="wide detail-actions route-panel">
-      <h4>Ruta operativa</h4>
       <p>Planificación interna; no constituye autorización aeronáutica.</p>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{error} {!data && <button type="button" onClick={load}>Reintentar</button>}</p>}
       {!data ? !error && <p>Cargando ruta…</p> : <>
         <p>Estado: <RouteStateBadge estado={data.estado} /> · {data.origen || "Origen pendiente"} → {data.destino || "Destino pendiente"}</p>
         <p>Salida: {data.salida ? dt(data.salida) : "Pendiente"} · Llegada: {data.llegada ? dt(data.llegada) : "Pendiente"}</p>
@@ -104,17 +107,26 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
         {inicio?.aplica && !inicio.permitido && <p className="hint">Inicio del vuelo bloqueado por la ruta: {inicio.mensaje}</p>}
         {inicio?.aplica && inicio.permitido && <p className="hint">La ruta no impide el inicio del vuelo.</p>}
 
-        {canReview && data.puedeRevisar && <fieldset className="wide">
+        {current ? <RouteVersion v={current} open /> : <p>Sin ruta registrada.</p>}
+        {data.versiones.length > 1 && <details><summary>Versiones anteriores de ruta</summary>{data.versiones.slice(1).map((v) => <RouteVersion key={v.version} v={v} />)}</details>}
+        {canReview && data.puedeRevisar && !mode && <button type="button" onClick={() => setMode("review")}>Revisar ruta</button>}
+        {canReview && data.puedeRevisar && mode === "review" && <fieldset className="wide" data-flight-draft disabled={busy}>
           <legend>Revisión de Operaciones · versión {data.versionVigente}</legend>
           <label>Comentario de la aprobación (opcional)<textarea value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} /></label>
           <button type="button" disabled={busy} onClick={approve}>Aprobar ruta</button>
           <label>Motivo de la devolución (obligatorio)<textarea value={returnReason} maxLength={1000} onChange={(e) => setReturnReason(e.target.value)} /></label>
           <button type="button" className="secondary-action" disabled={busy || returnReason.trim().length < MIN_RETURN} onClick={sendBack}>Devolver con observaciones</button>
           {returnReason.trim().length > 0 && returnReason.trim().length < MIN_RETURN && <p className="hint">Describa qué debe corregirse (al menos {MIN_RETURN} caracteres).</p>}
+          <button type="button" className="secondary-action" onClick={reset}>Cancelar</button>
         </fieldset>}
         {canReview && !data.puedeRevisar && data.estado === "PENDIENTE_REVISION" && <p className="hint">Esta versión no puede revisarla quien la planificó o presentó.</p>}
 
-        {canEdit && data.editable ? <>
+        {canEdit && data.editable && !mode && <div className="form-actions">
+          <button type="button" onClick={() => setMode("edit")}>{current ? "Modificar ruta" : "Registrar ruta"}</button>
+          {data.puedePresentar && <button type="button" disabled={busy} onClick={submit}>Presentar a Operaciones</button>}
+        </div>}
+        {canEdit && data.editable && mode === "edit" && <fieldset data-flight-draft disabled={busy}>
+          <legend>{current ? "Modificar ruta operativa" : "Registrar ruta operativa"}</legend>
           <label>Recorrido y puntos intermedios en orden<textarea value={form.recorrido} onChange={(e) => setForm({ ...form, recorrido: e.target.value })} /></label>
           <label>Buscar aeropuerto alternativo<input value={airportQuery} onChange={(e) => setAirportQuery(e.target.value)} /></label>
           <label>Aeropuerto alternativo<select value={form.alternativoId} onChange={(e) => setForm({ ...form, alternativoId: e.target.value })}><option value="">Ninguno</option>{form.alternativoId && !airports.some((a) => a.id === Number(form.alternativoId)) && <option value={form.alternativoId}>{current?.alternativo || "Alternativo seleccionado"}</option>}{airports.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>
@@ -122,15 +134,14 @@ export function FlightRoute({ flightId, canEdit = false, canReview = false, msg 
           <label>Observaciones<textarea value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} /></label>
           {data.requiereMotivo && <label>Motivo de la modificación<textarea value={form.motivoModificacion} maxLength={500} onChange={(e) => setForm({ ...form, motivoModificacion: e.target.value })} /></label>}
           {data.requiereMotivo && !reasonOk && <p className="hint">Indique el motivo de la modificación (al menos {MIN_REASON} caracteres): la versión anterior ya fue presentada a Operaciones.</p>}
-          <button type="button" disabled={!canSave} onClick={() => save(false)}>Guardar ruta</button>
+          <button type="button" disabled={!canSave} onClick={() => save(false)}>{current ? "Guardar cambios" : "Guardar ruta"}</button>
           <button type="button" disabled={!canSave} onClick={() => save(true)}>Guardar y presentar a Operaciones</button>
-          {data.puedePresentar && <button type="button" disabled={busy} onClick={submit}>Presentar a Operaciones</button>}
-        </> : canEdit && <p>{data.motivo}</p>}
-
-        <h4>Historial de ruta</h4>
-        {data.versiones.length === 0 ? <p>Sin ruta registrada.</p> : data.versiones.map((v, i) => <RouteVersion key={v.version} v={v} open={i === 0} />)}
+          <button type="button" className="secondary-action" onClick={reset}>Cancelar</button>
+        </fieldset>}
+        {canEdit && !data.editable && <p>{data.motivo}</p>}
       </>}
     </div>
+    </PlanningPanel>
   );
 }
 

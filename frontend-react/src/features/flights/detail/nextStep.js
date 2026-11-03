@@ -12,7 +12,7 @@ export function nextStep({ workspace, flight }) {
 
   if (workspace === "DTS") {
     if (state === "SOLICITADO") return { tone: "wait", title: "Pendiente de evaluación", text: "Operaciones debe aceptar el horario solicitado, proponer otro o rechazar la solicitud." };
-    if (state === "PENDIENTE_RESPUESTA_DTS") return { tone: "action", title: "Debe responder la contrapropuesta", text: "Operaciones propuso otro horario: acéptelo o recházelo (si lo rechaza, la solicitud se cancela).", tab: "negociacion", cta: "Responder contrapropuesta" };
+    if (state === "PENDIENTE_RESPUESTA_DTS") return { tone: "action", title: "Debe responder la contrapropuesta", text: "Operaciones propuso otro horario: acéptelo o rechácelo (si lo rechaza, la solicitud se cancela).", tab: "negociacion", cta: "Responder contrapropuesta" };
     if (state === "APROBADO") return { tone: "wait", title: "Horario acordado", text: "Operaciones asignará la aeronave y el comandante. Mientras tanto puede cargar el personal sanitario y los contactos del traslado.", tab: "equipo", cta: "Personal y contactos" };
     if (state === "FINALIZADO") return { tone: "done", title: "Vuelo finalizado", text: "Falta el informe final del comandante y su revisión por Operaciones." };
     if (state === "EN_CURSO") return { tone: "done", title: "Vuelo en curso", text: "El traslado se está realizando." };

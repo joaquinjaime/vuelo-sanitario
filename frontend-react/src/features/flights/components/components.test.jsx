@@ -17,7 +17,7 @@ test("bitácora impide iniciar una corrección mientras guarda otra novedad", as
  vi.mocked(api).mockReset();let finish;
  const entry={id:9,tipo:'DEMORA',descripcion:'Entrada existente',ocurrido:'2025-01-01T12:00:00Z',registrado:'2025-01-01T13:00:00Z',origen:'MANUAL',importancia:'NORMAL',responsable:'cmd'};
  vi.mocked(api).mockImplementation((path,opts)=>opts?.method==='POST'?new Promise(resolve=>{finish=resolve;}):Promise.resolve({entradas:[entry],hayMas:false,puedeRegistrar:true}));
- const { FlightLog } = await import("./FlightLog");render(<FlightLog flightId={7}/>);await screen.findByText('Entrada existente');fireEvent.change(screen.getByLabelText('Descripción de la novedad'),{target:{value:'Nueva'}});fireEvent.change(screen.getByLabelText('Fecha y hora del acontecimiento'),{target:{value:'2025-01-01T12:00'}});fireEvent.click(screen.getByRole('button',{name:'Registrar novedad'}));expect(screen.getByRole('button',{name:'Corregir #9'})).toBeDisabled();finish({});await waitFor(()=>expect(screen.getByRole('button',{name:'Corregir #9'})).toBeEnabled());
+ const { FlightLog } = await import("./FlightLog");render(<FlightLog flightId={7}/>);await screen.findByText('Entrada existente');fireEvent.click(screen.getByRole('button',{name:'Nuevo acontecimiento'}));fireEvent.change(screen.getByLabelText('Descripción de la novedad'),{target:{value:'Nueva'}});fireEvent.change(screen.getByLabelText('Fecha y hora del acontecimiento'),{target:{value:'2025-01-01T12:00'}});fireEvent.click(screen.getByRole('button',{name:'Registrar novedad'}));expect(screen.getByRole('button',{name:'Corregir #9'})).toBeDisabled();finish({});await waitFor(()=>expect(screen.getByRole('button',{name:'Corregir #9'})).toBeEnabled());
 });
 
 test("tripulación permite retirar un integrante y vuelve a consultar el backend", async () => {
@@ -79,9 +79,10 @@ test("flight documents lists a selected document and exposes its owner lease", a
 });
 
 test("weather history shows an error rather than an empty history", async () => {
- const { WeatherHistory } = await import("./WeatherHistory");
+ const { WeatherLog } = await import("./WeatherLog");
  vi.mocked(api).mockRejectedValue(new Error("Acceso denegado"));
- render(<WeatherHistory flightId="1"/>);
+ render(<WeatherLog flightId="1"/>);
+ fireEvent.click(screen.getByText("Condiciones meteorológicas"));
  expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
 });
 
@@ -95,9 +96,55 @@ test("ruta: comandante guarda la versión cargada y operaciones solo consulta", 
   return Promise.resolve([]);
  });
  const { FlightRoute } = await import("../flightRoute");const view=render(<FlightRoute flightId={42} canEdit msg={vi.fn()}/>);
- await screen.findByText(/Sin planificar/);fireEvent.change(screen.getByLabelText('Recorrido y puntos intermedios en orden'),{target:{value:'Punto Alfa'}});fireEvent.click(screen.getByRole('button',{name:'Guardar ruta'}));
+ fireEvent.click(screen.getByText('Ruta operativa', { selector: '.planning-title' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Registrar ruta' }));
+ fireEvent.change(screen.getByLabelText('Recorrido y puntos intermedios en orden'),{target:{value:'Punto Alfa'}});fireEvent.click(screen.getByRole('button',{name:'Guardar ruta'}));
  await waitFor(()=>expect(api).toHaveBeenCalledWith('/flights/42/route',expect.objectContaining({method:'PUT',body:expect.stringContaining('"version":0')})));
  await screen.findByText('Punto Alfa',{selector:'p'});view.unmount();render(<FlightRoute flightId={42} msg={vi.fn()}/>);
+ fireEvent.click(screen.getByText("Ruta operativa", { selector: ".planning-title" }));
  await screen.findByText('Punto Alfa',{selector:'p'});expect(screen.queryByRole('button',{name:'Guardar ruta'})).toBeNull();
 });
 
+
+test("coordinaciones carga el catálogo al registrar y actualiza el grupo con la versión consultada", async () => {
+  const { AirportCoordinations } = await import("./AirportCoordinations");
+  const path = "/flights/7/airport-coordinations";
+  let versions = [];
+  const writes = [];
+  vi.mocked(api).mockImplementation(async (url, options) => {
+    if (url.startsWith("/catalogs/airports")) return [{ id: 8, nombre: "Rosario" }];
+    if (options?.method) {
+      const body = JSON.parse(options.body);
+      writes.push({ url, method: options.method, body });
+      const next = { ...body, id: body.version + 1, version: body.version + 1, gestionId: "grupo-1", aeropuerto: "Rosario", actual: true, estadoVigencia: "VIGENTE", responsable: "operador" };
+      versions = [next, ...versions.map((v) => ({ ...v, actual: false }))];
+      return next;
+    }
+    return { versiones: versions, puedeGestionar: true };
+  });
+  render(<AirportCoordinations flightId={7} />);
+  fireEvent.click(screen.getByText("Coordinaciones aeroportuarias"));
+  await screen.findByText("Todavía no se registraron coordinaciones.");
+  expect(screen.queryByLabelText("Aeropuerto de coordinación")).toBeNull();
+  expect(vi.mocked(api).mock.calls.some(([url]) => url.startsWith("/catalogs/airports"))).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Nueva coordinación" }));
+  await screen.findByRole("option", { name: "Rosario" });
+  fireEvent.change(screen.getByLabelText("Aeropuerto de coordinación"), { target: { value: "8" } });
+  fireEvent.change(screen.getByLabelText("Finalidad de coordinación"), { target: { value: "Estacionamiento" } });
+  fireEvent.change(screen.getByLabelText("Descripción de la gestión"), { target: { value: "Gestión original" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar coordinación" }));
+  expect(await screen.findByText("1 gestión registrada")).toBeVisible();
+  expect(writes[0]).toMatchObject({ url: path, method: "POST", body: { version: 0, estado: "PENDIENTE" } });
+
+  fireEvent.click(screen.getByText("Rosario · Estacionamiento"));
+  expect(screen.getByText("Gestión original", { selector: "dd" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Modificar coordinación" }));
+  expect(screen.getByLabelText("Descripción de la gestión")).toHaveValue("Gestión original");
+  expect(screen.getByLabelText("Aeropuerto de coordinación")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Descripción de la gestión"), { target: { value: "Gestión actualizada" } });
+  fireEvent.change(screen.getByLabelText("Motivo del cambio"), { target: { value: "Seguimiento de la misma gestión" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+  await waitFor(() => expect(writes[1]).toMatchObject({ url: path + "/grupo-1", method: "PUT", body: { version: 1 } }));
+  expect(await screen.findByText("Gestión actualizada", { selector: "dd" })).toBeInTheDocument();
+  expect(versions.filter((v) => v.actual)).toHaveLength(1);
+});

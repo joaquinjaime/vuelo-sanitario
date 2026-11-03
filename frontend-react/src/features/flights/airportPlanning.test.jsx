@@ -120,6 +120,7 @@ test("el comandante ve lo propuesto por Centro de Operaciones, lo confirma y la 
   const msg = vi.fn(), onSaved = vi.fn(async () => {});
   const proposed = plan({ salida: slot({ aeropuertoId: 1, aeropuerto: "Matienzo", provincia: "Tucumán", estado: "PROPUESTO" }), llegada: slot({ aeropuertoId: 2, aeropuerto: "Güemes", provincia: "Salta", estado: "PROPUESTO" }), pendientes: [] });
   render(<CommanderAirportPlanning flight={flight({ estado: "PLANIFICADO", llegada: "2026-11-10T13:00:00" })} plan={proposed} msg={msg} onSaved={onSaved}/>);
+  fireEvent.click(screen.getByRole("button", { name: /Revisar aeropuertos propuestos|Modificar planificación aeroportuaria/ }));
   expect(screen.getByText(/Centro de Operaciones propuso estos aeropuertos/)).toBeInTheDocument();
   expect(screen.getAllByText("Propuesto por Centro de Operaciones")).toHaveLength(2);
   const save = screen.getByRole("button", { name: "Confirmar aeropuertos y guardar planificación" });
@@ -144,6 +145,7 @@ test("el rechazo por jurisdicción del comandante se muestra tal cual, sin guard
   const onSaved = vi.fn();
   const current = plan({ salida: slot({ aeropuertoId: 1, aeropuerto: "Matienzo", provincia: "Tucumán", estado: "CONFIRMADO" }), llegada: slot({ aeropuertoId: 2, aeropuerto: "Güemes", provincia: "Salta", estado: "CONFIRMADO" }), pendientes: [] });
   render(<CommanderAirportPlanning flight={flight({ estado: "PLANIFICADO", llegada: "2026-11-10T13:00:00" })} plan={current} msg={vi.fn()} onSaved={onSaved}/>);
+  fireEvent.click(screen.getByRole("button", { name: /Revisar aeropuertos propuestos|Modificar planificación aeroportuaria/ }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmar aeropuertos y guardar planificación" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("volver a verificar la elegibilidad del comandante");
   expect(onSaved).not.toHaveBeenCalled();
