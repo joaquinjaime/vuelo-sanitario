@@ -1,0 +1,7 @@
+erDiagram
+ PERSONAS ||--o| USUARIOS : identidad
+ PERSONAS ||--o| PACIENTES : identidad
+ USUARIOS ||--o{ USUARIOS_ROLES : roles
+ VUELOS ||--o| VUELOS_SANITARIOS : especializa
+ VUELOS ||--o{ RUTAS_VUELO : versiona
+ VUELOS ||--o{ VUELOS_TRIPULANTES : asigna
