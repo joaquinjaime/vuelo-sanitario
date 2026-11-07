@@ -150,7 +150,7 @@ import org.springframework.web.multipart.MultipartFile;
  private void requireReader(FinalReportObligation o,Long actorId){
   if(o.getCommander().getId().equals(actorId))return;
   User u=users.findById(actorId).flatMap(x->users.findWithRolesByUsername(x.getUsername())).orElseThrow(()->new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a este informe"));
-  if(u.getUserRoles().stream().noneMatch(x->Set.of("OPERACIONES","CENTRO_OPERACIONES","ADMINISTRADOR").contains(x.getRole().getCodigo())))throw new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a este informe");
+  if(!FlightAuthorizationService.readsAllFlights(FlightAuthorizationService.roleCodes(u)))throw new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a este informe");
  }
  private FinalReportObligation locked(Long id){return obligations.lockById(id).orElseThrow(()->notFound());}
  private ApiException notFound(){return new ApiException(HttpStatus.NOT_FOUND,"Obligación de informe inexistente");}

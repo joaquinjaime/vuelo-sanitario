@@ -37,7 +37,7 @@ test("el DTS ve la propuesta, la acepta enviando el identificador de la propuest
  const calls = dtsApi(() => ({ vuelo: sanitary({ datos: { estadoSolicitud: state } }), negociacion: events({}, { tipo: "CO_CONTRAPROPUESTA", respondeA: 1, fechaHoraPropuesta: "2026-10-24T09:00:00", motivo: "No hay aeronave" }) }));
  renderApp("/app/solicitudes/7", { roles: [ROLE.dts] });
  expect(await screen.findByText(/Nuevo horario propuesto/)).toBeInTheDocument(); expect(screen.getAllByText(/No hay aeronave/).length).toBeGreaterThanOrEqual(1);
- const listCalls = () => vi.mocked(api).mock.calls.filter(([p]) => p === "/flights").length, before = listCalls();
+ const listCalls = () => vi.mocked(api).mock.calls.filter(([p]) => p === "/flights?scope=mine").length, before = listCalls();
  state = "APROBADO"; fireEvent.click(screen.getByRole("button", { name: "Aceptar contrapropuesta" }));
  await waitFor(() => expect(calls).toEqual([["/flights/7/schedule/response", { aceptar: true, propuestaId: 2, motivoCancelacionId: null, motivoCancelacionPersonalizado: null }]]));
  expect(await screen.findByText("Contrapropuesta aceptada")).toBeInTheDocument(); await waitFor(() => expect(listCalls()).toBeGreaterThan(before)); await waitFor(() => expect(screen.queryByText(/Nuevo horario propuesto/)).toBeNull());

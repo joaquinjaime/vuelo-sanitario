@@ -52,7 +52,8 @@ function Shell() {
 
 /** Estructura de la aplicación autenticada: barra lateral persistente, barra superior y área de trabajo donde cambian las pantallas. */
 export function AppLayout() {
-  const { workspace } = useSession();
+  const { session, workspace } = useSession();
   if (!workspace) return <WorkspaceSelector />;
-  return workspace === "ADMIN" ? <Shell /> : <OperationalDataProvider key={workspace}><Shell /></OperationalDataProvider>;
+  // La clave incluye la cuenta: al cambiar de usuario no sobrevive ningún dato cargado para el anterior.
+  return workspace === "ADMIN" ? <Shell /> : <OperationalDataProvider key={`${session?.username}:${workspace}`} scope={workspace === "DTS" ? "mine" : undefined}><Shell /></OperationalDataProvider>;
 }

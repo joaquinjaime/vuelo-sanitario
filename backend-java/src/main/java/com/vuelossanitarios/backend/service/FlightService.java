@@ -62,8 +62,10 @@ import org.springframework.transaction.annotation.*;
   notifyRequester(s,f,"SCHEDULE_COUNTERPROPOSAL","Centro de Operaciones propuso un nuevo horario ("+req.salida()+") para la solicitud "+f.getCodigo()+". Debe aceptarlo o rechazarlo.","SCHEDULE_COUNTERPROPOSAL:"+n.getId());return view(f);
  }
  @Transactional public FlightView respondToCounterproposal(Long id,NegotiationResponse req,Long actorId){
-  Flight f=locked(id);SanitaryFlight s=sanitary(f);requireSanitaryStatus(s,"PENDIENTE_RESPUESTA_DTS");
+  Flight f=locked(id);SanitaryFlight s=sanitary(f);
+  // La propiedad se comprueba antes que el estado: quien no creó la solicitud no averigua en qué etapa está.
   if(!s.getSolicitadoPor().getId().equals(actorId))throw forbidden("Sólo DTS solicitante puede responder la contrapropuesta");
+  requireSanitaryStatus(s,"PENDIENTE_RESPUESTA_DTS");
   User actor=user(actorId);FlightScheduleNegotiation proposal=requireCurrentProposal(f,"CO_CONTRAPROPUESTA",req.propuestaId());
   if(req.aceptar()){
    requireFuture(proposal.getFechaHoraPropuesta(),"La propuesta venció: el horario propuesto ya pasó. Solicite a Operaciones una nueva propuesta");
@@ -595,7 +597,18 @@ import org.springframework.transaction.annotation.*;
 
  @Transactional(readOnly=true) public FlightDetailView get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->notFound("Vuelo"));access.mayRead(f,actor);return detail(f);}
  /** Orden de atención: solicitudes de extrema urgencia abiertas primero (por horario límite), luego el resto, más recientes primero. */
- @Transactional(readOnly=true) public List<FlightView> list(Long actor){User u=user(actor);List<Flight> rows=new ArrayList<>(hasOperationsOrAdmin(u)?flights.findAll():hasRole(u,"COMANDANTE")?flights.findByComandanteId(actor).stream().filter(x->x.getEstadoVuelo()!=null).toList():flights.findSanitaryBySolicitadoPorId(actor));List<FlightView> views=rows.stream().map(this::view).collect(java.util.stream.Collectors.toCollection(ArrayList::new));views.sort(Comparator.comparing((FlightView v)->openUrgent(v)?0:1).thenComparing((FlightView v)->openUrgent(v)&&v.datosSanitarios().fechaLimiteTraslado()!=null?v.datosSanitarios().fechaLimiteTraslado():LocalDateTime.MAX).thenComparing(FlightView::id,Comparator.reverseOrder()));return views;}
+ @Transactional(readOnly=true) public List<FlightView> list(Long actor){return list(actor,false);}
+ /**
+  * Vuelos visibles para el usuario autenticado (la identidad sale del JWT, nunca del cliente). Operaciones y el administrador que no es DTS ven todos; el resto sólo lo propio:
+  * las solicitudes que creó como DTS y, si es comandante, los vuelos que tiene asignados. {@code onlyOwn} sólo estrecha el resultado a las solicitudes creadas por el usuario
+  * (área «Mis solicitudes» de quien además tiene un rol de Operaciones); nunca lo amplía.
+  */
+ @Transactional(readOnly=true) public List<FlightView> list(Long actor,boolean onlyOwn){
+  Set<String> roles=FlightAuthorizationService.roleCodes(users.findWithRolesByUsername(user(actor).getUsername()).orElseThrow());
+  Map<Long,Flight> visible=new LinkedHashMap<>();
+  if(!onlyOwn&&FlightAuthorizationService.readsAllFlights(roles))flights.findAll().forEach(x->visible.put(x.getId(),x));
+  else{flights.findSanitaryBySolicitadoPorId(actor).forEach(x->visible.put(x.getId(),x));if(!onlyOwn&&roles.contains("COMANDANTE"))flights.findByComandanteId(actor).stream().filter(x->x.getEstadoVuelo()!=null).forEach(x->visible.putIfAbsent(x.getId(),x));}
+  List<Flight> rows=new ArrayList<>(visible.values());List<FlightView> views=rows.stream().map(this::view).collect(java.util.stream.Collectors.toCollection(ArrayList::new));views.sort(Comparator.comparing((FlightView v)->openUrgent(v)?0:1).thenComparing((FlightView v)->openUrgent(v)&&v.datosSanitarios().fechaLimiteTraslado()!=null?v.datosSanitarios().fechaLimiteTraslado():LocalDateTime.MAX).thenComparing(FlightView::id,Comparator.reverseOrder()));return views;}
  private boolean openUrgent(FlightView v){return v.datosSanitarios()!=null&&v.datosSanitarios().extremaUrgencia()&&Set.of("SOLICITADO","PENDIENTE_RESPUESTA_DTS","APROBADO").contains(v.datosSanitarios().estadoSolicitud())&&(v.estadoVuelo()==null||"PLANIFICADO".equals(v.estadoVuelo()));}
 
  private void fixSanitarySchedule(Flight f,SanitaryFlight s,LocalDateTime departure,String event,String reason,User actor,FlightScheduleNegotiation answers){validateSanitaryHour(s,departure);if(event.startsWith("CO_")){s.setEvaluadoPor(actor);s.setFechaEvaluacion(LocalDateTime.now(clock));}s.setEstadoSolicitud(sanitaryStatus("APROBADO"));f.setFechaPlanificadaSalida(departure);routeReview.reassess(f,actor);negotiation(f,event,departure,null,reason,actor,answers);}

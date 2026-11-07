@@ -207,8 +207,21 @@ test("el inicio del administrador muestra datos reales aunque falle otro recurso
   const stats = await screen.findByRole("region", { name: "Resumen administrativo" }, undefined);
   await waitFor(() => expect(within(stats).getByText("Cuentas activas").closest("a")).toHaveTextContent("3"));
   expect(within(stats).getByText("Activaciones pendientes").closest("a")).toHaveTextContent("1");
-  expect(within(stats).getByText("Cuentas desactivadas").closest("a")).toHaveTextContent("2");
   expect(within(stats).getByText("Cuentas activas").closest("a")).toHaveAttribute("href", "/app/usuarios");
+});
+
+test("el inicio del administrador muestra tres indicadores y no el de cuentas desactivadas, que sigue disponible en Usuarios", async () => {
+  vi.mocked(api).mockImplementation((path) => path === "/catalogs/aircraft/admin" ? Promise.resolve([{ id: 1, activo: true }, { id: 2, activo: true }, { id: 3, activo: false }]) : defaults(path));
+  renderApp("/app/inicio", { roles: [ROLE.admin] });
+  const stats = await screen.findByRole("region", { name: "Resumen administrativo" }, undefined);
+  await waitFor(() => expect(within(stats).getByText("Aeronaves activas").closest("a")).toHaveTextContent("2"));
+  expect(within(stats).getAllByRole("link").map((a) => a.textContent.match(/Cuentas activas|Activaciones pendientes|Aeronaves activas/)?.[0])).toEqual(["Cuentas activas", "Activaciones pendientes", "Aeronaves activas"]);
+  expect(screen.queryByText("Cuentas desactivadas")).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Gestión frecuente" })).toBeInTheDocument();
+  // Las cuentas desactivadas se siguen consultando en Administración → Usuarios.
+  await go("/app/usuarios?estado=desactivados");
+  expect(await screen.findByRole("heading", { level: 1, name: /Usuarios/ })).toBeInTheDocument();
+  await waitFor(() => expect(vi.mocked(api).mock.calls.some(([path]) => path.startsWith("/auth/users/search") && path.includes("status=INACTIVOS"))).toBe(true));
 });
 
 test("el trayecto de un vuelo operativo se muestra desde el contrato estructurado, sin «undefined»", async () => {

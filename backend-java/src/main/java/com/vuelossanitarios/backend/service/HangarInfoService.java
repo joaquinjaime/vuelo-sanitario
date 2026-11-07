@@ -48,7 +48,7 @@ public class HangarInfoService {
     @Transactional(readOnly=true)
     public View get(Long id, Long actor) {
         Flight flight=flight(id, false); User user=user(actor);
-        if (!operations(user) && !role(user,"ADMINISTRADOR") && !commander(flight,user)) throw forbidden();
+        if (!operations(user) && !FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(user)) && !commander(flight,user)) throw forbidden();
         return view(flight,user);
     }
 
