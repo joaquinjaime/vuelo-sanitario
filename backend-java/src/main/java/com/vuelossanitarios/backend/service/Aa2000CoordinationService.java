@@ -88,7 +88,7 @@ public class Aa2000CoordinationService {
     private User user(Long id){User u=users.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));return users.findWithRolesByUsername(u.getUsername()).orElseThrow();}
     private boolean role(User u,String... codes){return u.getUserRoles().stream().anyMatch(r->Arrays.asList(codes).contains(r.getRole().getCodigo()));}
     private boolean operations(User u){return role(u,"OPERACIONES","CENTRO_OPERACIONES");}
-    private boolean canRead(Flight f,User u){return operations(u)||role(u,"ADMINISTRADOR")||role(u,"COMANDANTE")&&f.getComandante()!=null&&Objects.equals(id(f.getComandante()),id(u));}
+    private boolean canRead(Flight f,User u){return operations(u)||FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(u))||role(u,"COMANDANTE")&&f.getComandante()!=null&&Objects.equals(id(f.getComandante()),id(u));}
     private boolean blank(String s){return s==null||s.isBlank();} private String clean(String s){return blank(s)?null:s.trim();}
     private String serialize(Object o){try{return json.writeValueAsString(o);}catch(JsonProcessingException e){throw new IllegalStateException(e);}}
     private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}private ApiException forbidden(){return new ApiException(HttpStatus.FORBIDDEN,"No tiene permiso para las coordinaciones de este vuelo");}

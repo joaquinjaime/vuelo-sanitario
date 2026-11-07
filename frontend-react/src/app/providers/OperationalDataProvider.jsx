@@ -12,8 +12,10 @@ const OperationalDataContext = createContext(null);
  * Las solicitudes nuevas aparecen sin recargar: con la pestaña visible (y al volver a ella) se refrescan sólo estos dos GET.
  * Los catálogos (prioridades, aeronaves, aeropuertos, comandantes) los pide cada pantalla que los necesita.
  */
-export function OperationalDataProvider({ children }) {
+export function OperationalDataProvider({ children, scope }) {
   const notify = useNotify();
+  // «mine»: el área DTS pide sólo las solicitudes creadas por la cuenta (el servidor lo resuelve con la identidad del JWT; el filtro nunca amplía el acceso).
+  const flightsPath = scope === "mine" ? "/flights?scope=mine" : "/flights";
   const [state, setState] = useState({ flights: [], notifications: [], unread: 0, updatedAt: null, loading: true, error: "" });
   const loadGeneration = useRef(0), pollGeneration = useRef(0);
 
@@ -28,7 +30,7 @@ export function OperationalDataProvider({ children }) {
     pollGeneration.current++;
     const failures = [];
     await Promise.all([
-      ["vuelos", "/flights", (rows) => ({ flights: rows.map(adaptFlight), updatedAt: updateStamp() })],
+      ["vuelos", flightsPath, (rows) => ({ flights: rows.map(adaptFlight), updatedAt: updateStamp() })],
       ["notificaciones", "/notifications", (n) => { const rows = n.items || n.content || []; return { notifications: rows, unread: n.unread ?? rows.filter((x) => !x.leido).length }; }],
     ].map(async ([label, path, map]) => {
       try { const values = map(await api(path)); if (generation === loadGeneration.current) setState((previous) => ({ ...previous, ...values })); }
@@ -37,16 +39,16 @@ export function OperationalDataProvider({ children }) {
     if (generation !== loadGeneration.current) return;
     setState((previous) => ({ ...previous, loading: false, error: failures.join(" · ") }));
     if (failures.length) notify(failures.join(" · "), true);
-  }, [notify]);
+  }, [notify, flightsPath]);
 
   const refresh = useCallback(async () => {
     const poll = ++pollGeneration.current, full = loadGeneration.current;
     try {
-      const [rows, n] = await Promise.all([api("/flights"), api("/notifications")]);
+      const [rows, n] = await Promise.all([api(flightsPath), api("/notifications")]);
       if (poll !== pollGeneration.current || full !== loadGeneration.current || !Array.isArray(rows)) return;
       setState((previous) => ({ ...previous, ...apply(rows, n), loading: false, error: "" }));
     } catch { /* El próximo ciclo o «Actualizar» lo reintenta; un fallo transitorio no debe tapar la pantalla con errores. */ }
-  }, []);
+  }, [flightsPath]);
 
   useEffect(() => { reload(); return () => { loadGeneration.current++; }; }, [reload]);
   useEffect(() => {

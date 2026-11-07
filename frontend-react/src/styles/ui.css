@@ -56,6 +56,9 @@ tbody tr:hover { background: color-mix(in srgb, var(--brand) 4%, var(--card)); }
 /* Contadores y paneles de inicio */
 .stat-grid, .operational-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem; margin-bottom: 1rem; }
 .stat-card, .operational-summary article { display: grid; gap: .1rem; align-content: start; padding: 1rem 1.15rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow); text-decoration: none; }
+/* Tres indicadores (inicio de Administración): tres columnas iguales; en pantallas angostas se apilan a todo el ancho, sin una tarjeta huérfana a media fila. */
+.stat-grid-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 62rem) { .stat-grid-three { grid-template-columns: 1fr; } }
 a.stat-card:hover { border-color: var(--brand); }
 .stat-label, .operational-summary span { color: var(--muted); font-size: .86rem; font-weight: 650; }
 .stat-value, .operational-summary strong { font-size: 1.9rem; line-height: 1.15; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }

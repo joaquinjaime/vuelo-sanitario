@@ -20,10 +20,9 @@ export function AdminDashboard() {
       <PageHeader title={`Hola, ${session.username}`} description="Gestione cuentas y recursos. Las bajas y el historial siguen disponibles dentro de cada módulo." breadcrumbs={[{ label: "Inicio" }]}
         actions={<><Link className="button-link" to={appPath("usuarios/nuevo")}><Icon name="plus" size={16} />Añadir usuario</Link><Link className="button-link secondary-action" to={appPath("aeronaves/nueva")}><Icon name="plus" size={16} />Añadir aeronave</Link></>} />
       {users.error && <ErrorState message={`Resumen de usuarios: ${users.error}`} onRetry={users.reload} />}
-      <section className="stat-grid" aria-label="Resumen administrativo">
+      <section className="stat-grid stat-grid-three" aria-label="Resumen administrativo">
         <StatCard label="Cuentas activas" value={counts ? counts.activos : "…"} hint="con acceso vigente" to={appPath("usuarios")} />
         <StatCard label="Activaciones pendientes" value={counts ? counts.pendientes : "…"} hint="requieren seguimiento" tone={counts?.pendientes ? "attention" : "neutral"} to={`${appPath("usuarios")}?estado=pendientes`} />
-        <StatCard label="Cuentas desactivadas" value={counts ? counts.inactivos : "…"} hint="conservan su historial" to={`${appPath("usuarios")}?estado=desactivados`} />
         <StatCard label="Aeronaves activas" value={aircraft.loading ? "…" : fleet.filter((x) => x.activo).length} hint="disponibles en catálogo" to={appPath("aeronaves")} />
       </section>
       <Card eyebrow="ACCESOS RÁPIDOS" title="Gestión frecuente" className="quick-links">
