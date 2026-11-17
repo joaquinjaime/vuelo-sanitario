@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { adaptFlight } from "../../utils/flightAdapter";
 import { updateStamp } from "../../utils/format";

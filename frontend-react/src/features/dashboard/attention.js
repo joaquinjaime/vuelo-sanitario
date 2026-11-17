@@ -1,4 +1,4 @@
-import { isOpenState } from "../../utils/format";
+import { isCopilotFlight } from "../../utils/flightAdapter";
 
 /**
  * Qué vuelos requieren una acción del usuario según su área. Se deriva únicamente del estado real que informa el servidor;
@@ -13,8 +13,6 @@ export const ATTENTION_STATES = {
 
 export const attentionFor = (workspace, flights = []) => {
   const states = ATTENTION_STATES[workspace] || [];
-  return flights.filter((flight) => states.includes(flight.estado));
+  return flights.filter((flight) => states.includes(flight.estado) && !(workspace === "COMANDANTE" && isCopilotFlight(flight)));
 };
 
-export const activeFlights = (flights = []) => flights.filter((flight) => isOpenState(flight.estado));
-export const urgentFlights = (flights = []) => activeFlights(flights).filter((flight) => flight.extremaUrgencia);

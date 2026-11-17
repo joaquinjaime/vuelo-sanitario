@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { useSession } from "../../app/providers/SessionProvider";
 import { useOperationalData } from "../../app/providers/OperationalDataProvider";
@@ -10,14 +9,18 @@ import { Alert } from "../../components/ui/feedback";
 import { Card } from "../../components/ui/Card";
 import { Icon } from "../../components/ui/Icon";
 import { AttentionList } from "./AttentionList";
+import { isCopilotFlight } from "../../utils/flightAdapter";
+import { isOpenState } from "../../utils/format";
 
 const inState = (flights, states) => flights.filter((f) => states.includes(f.estado));
 const byDeparture = (a, b) => String(a.salida || "9").localeCompare(String(b.salida || "9"));
 
-/** Inicio del comandante: asignaciones por aceptar, próximos vuelos preparados y el estado de sus informes finales. */
+/** Inicio del comandante: asignaciones por aceptar, próximos vuelos preparados, vuelos en los que participa como copiloto (sólo consulta) y el estado de sus informes finales. */
 export function CommanderDashboard() {
   const { session } = useSession();
-  const { flights } = useOperationalData();
+  const { flights: all } = useOperationalData();
+  const flights = all.filter((f) => !isCopilotFlight(f));
+  const asCopilot = all.filter((f) => isCopilotFlight(f) && isOpenState(f.estado)).sort(byDeparture);
   const reports = useResource("/final-reports/mine", { map: (rows) => (Array.isArray(rows) ? rows : []) });
   const pending = inState(flights, ["PENDIENTE_CONFIRMACION_COMANDANTE"]);
   const planned = inState(flights, ["PLANIFICADO"]).sort(byDeparture);
@@ -38,6 +41,7 @@ export function CommanderDashboard() {
       <div className="dashboard-columns">
         <AttentionList title="Asignaciones por aceptar" flights={pending} section="vuelos" seeAll={`${appPath("vuelos")}?filtro=accion`} empty="No tiene asignaciones pendientes de aceptación." />
         <AttentionList title="Próximos vuelos" eyebrow="PREPARACIÓN" flights={planned} section="vuelos" seeAll={`${appPath("vuelos")}?filtro=accion`} empty="No tiene vuelos planificados." limit={5} />
+        {asCopilot.length > 0 && <AttentionList title="Vuelos asignados como copiloto" eyebrow="SÓLO CONSULTA" flights={asCopilot} section="vuelos" seeAll={`${appPath("vuelos")}?filtro=copiloto`} empty="No tiene vuelos asignados como copiloto." limit={5} />}
       </div>
       <Card eyebrow="ACCESOS RÁPIDOS" title="Continuar trabajando" className="quick-links">
         <div className="quick-grid">

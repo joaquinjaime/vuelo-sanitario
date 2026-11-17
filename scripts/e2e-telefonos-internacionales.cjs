@@ -1,6 +1,6 @@
 /* Teléfonos internacionales (V54): API real y SQL Server real sobre el stack aislado. El servidor valida con libphonenumber el número contra el país
  * elegido y guarda E.164 + formato internacional + país; lo rechazado nunca se persiste aunque la petición se haga directo a la API. Cubre el
- * autoservicio, el alta administrativa y los contactos de coordinación del traslado, los datos anteriores sin país (se conservan intactos),
+ * autoservicio, el alta administrativa, los datos anteriores sin país (se conservan intactos),
  * la unicidad sobre la forma normalizada (también bajo concurrencia) y las restricciones de SQL Server. Sólo toca el stack aislado.
  * Uso: node scripts/e2e-telefonos-internacionales.cjs */
 const assert = require('node:assert/strict');
@@ -108,40 +108,7 @@ const sqlFails = (q) => { try { sql(q); return false; } catch { return true; } }
   assert.deepEqual(created.map((r) => r.e164), ['+5493815551234', '+56987654321']); assert.equal(created[0].main, true); assert.equal(created[1].type, 'LABORAL');
   pass('alta administrativa: mismas reglas, equivalentes unificados y nada persistido cuando se rechaza');
 
-  // ---------- F. Contactos de coordinación del traslado ----------
-  const dts = await createUser(admin, 'DTS', 'tel4'), ops = await createUser(admin, 'CENTRO_OPERACIONES', 'tel4ops');
-  let province, localities;
-  for (const p of await ok('/catalogs/provinces', { token: dts.token })) { const l = await ok(`/catalogs/localities?provinceId=${p.id}`, { token: dts.token }); if (l.length >= 2) { province = p; localities = l; break; } }
-  const priority = (await ok('/catalogs/priorities', { token: dts.token }))[0];
-  const day = new Date(Date.now() + 13 * 86400000).toISOString().slice(0, 10) + 'T12:00:00';
-  const rnd = () => String(70000000 + Math.floor(Math.random() * 20000000));
-  const request = (contactos, expect = [200]) => call('/flights/with-patient', { method: 'POST', token: dts.token, expect, body: { patient: { nombre: 'Paciente', apellido: 'Tel' + MARK, dni: rnd() }, identidadConfirmada: true, localidadOrigenId: localities[0].id, localidadDestinoId: localities[1].id, priorityCode: priority.codigo, motivoVuelo: 'Teléfonos ' + MARK, fechaSolicitada: day, extremaUrgencia: false, medical: { diagnostico: 'Dx ' + MARK, condicionMedica: 'ESTABLE', requiereEquipamientoEspecial: false }, contactos } });
-  const totals = () => [count('SELECT COUNT(*) FROM personas'), count('SELECT COUNT(*) FROM pacientes'), count('SELECT COUNT(*) FROM vuelos'), count('SELECT COUNT(*) FROM contactos_coordinacion_traslado'), count('SELECT COUNT(*) FROM telefonos')].join('/');
-  const t0 = totals();
-  for (const invalid of [[{ relacion: 'PACIENTE', telefono: '3815550101' }], [{ relacion: 'PACIENTE', pais: 'ZZ', telefono: '3815550101' }], [{ relacion: 'PACIENTE', pais: 'AR', telefono: '+56 9 8765 4321' }], [{ relacion: 'PACIENTE', pais: 'AR', telefono: '0381 555-0101 ext 4' }], [{ relacion: 'PACIENTE', pais: 'CL', telefono: '381 555 0101' }]]) {
-    const r = await request(invalid, [400]); assert.equal(r.data.code, 'TRANSFER_CONTACT_INVALID'); assert.equal(r.data.campo, 'telefono');
-  }
-  assert.equal(totals(), t0, 'los rechazos no dejan persona, paciente, vuelo ni contactos');
-  const flight = (await request([{ relacion: 'PACIENTE', pais: 'CL', telefono: '9 8765 4321' }, { relacion: 'FAMILIAR_RESPONSABLE', nombre: 'Marta', pais: 'US', telefono: '(202) 555-0123' }])).data.id;
-  const rows = lines(`SELECT CONCAT(id_contactos_coordinacion_traslado,'|',telefono_contacto,'|',telefono_normalizado,'|',ISNULL(codigo_pais,'-')) FROM contactos_coordinacion_traslado WHERE id_vuelos=${flight} AND fecha_baja IS NULL ORDER BY 1`).map((r) => r.split('|'));
-  assert.deepEqual(rows.map((r) => r.slice(2)), [['+56987654321', 'CL'], ['+12025550123', 'US']]);
-  const phonesBefore = count('SELECT COUNT(*) FROM telefonos');
-  const base = `/flights/${flight}/transfer-contacts`;
-  assert.equal((await call(base, { method: 'POST', token: dts.token, body: { relacion: 'OTRO', nombre: 'Repetido', pais: 'CL', telefono: '+56 9 8765-4321' }, expect: [400] })).data.code, 'CONTACT_AMBIGUOUS');
-  assert.equal((await call(base, { method: 'POST', token: dts.token, body: { relacion: 'OTRO', nombre: 'Ajeno', pais: 'AR', telefono: '+56 9 8765 4321' }, expect: [400] })).data.motivo, 'PHONE_COUNTRY_MISMATCH');
-  // un contacto anterior sin país se conserva y exige elegir el país al editarlo
-  const legacyContact = Number(one(`SELECT TOP 1 id_contactos_coordinacion_traslado FROM contactos_coordinacion_traslado WHERE id_vuelos=${flight} AND es_principal=0 AND fecha_baja IS NULL`));
-  sql(`UPDATE contactos_coordinacion_traslado SET codigo_pais=NULL,telefono_contacto=N'2025550123',telefono_normalizado=N'2025550123' WHERE id_contactos_coordinacion_traslado=${legacyContact}`);
-  const listing = await ok(base, { token: dts.token }); const legacyView = listing.items.find((c) => c.id === legacyContact); assert.equal(legacyView.telefono, '2025550123'); assert.equal(legacyView.pais ?? null, null);
-  assert.equal((await call(`${base}/${legacyContact}`, { method: 'PUT', token: dts.token, body: { relacion: 'FAMILIAR_RESPONSABLE', nombre: 'Marta', telefono: '2025550123', version: legacyView.version }, expect: [400] })).data.motivo, 'PHONE_COUNTRY_REQUIRED');
-  await ok(`${base}/${legacyContact}`, { method: 'PUT', token: dts.token, body: { relacion: 'FAMILIAR_RESPONSABLE', nombre: 'Marta', pais: 'US', telefono: '2025550123', version: legacyView.version } });
-  assert.equal(one(`SELECT telefono_normalizado FROM contactos_coordinacion_traslado WHERE id_contactos_coordinacion_traslado=${legacyContact}`), '+12025550123');
-  assert.equal(count('SELECT COUNT(*) FROM telefonos'), phonesBefore, 'un teléfono de coordinación jamás pasa a ser un contacto personal');
-  assert.ok(sqlFails(`UPDATE contactos_coordinacion_traslado SET codigo_pais=N'us' WHERE id_contactos_coordinacion_traslado=${legacyContact}`), 'país en minúsculas');
-  assert.ok(sqlFails(`UPDATE contactos_coordinacion_traslado SET telefono_normalizado=N'12025550123' WHERE id_contactos_coordinacion_traslado=${legacyContact}`), 'país informado sin E.164');
-  pass('contactos de coordinación: mismas reglas por país, E.164 + país en SQL, equivalentes ambiguos, dato anterior editable sólo con país y sin tocar telefonos');
-
-  // ---------- G. SQL Server rechaza lo que la aplicación no generaría ----------
+  // ---------- F. SQL Server rechaza lo que la aplicación no generaría ----------
   const row = phoneRows(p1)[0];
   assert.ok(sqlFails(`UPDATE telefonos SET codigo_pais=N'ar' WHERE id_telefonos=${row.id}`), 'país en minúsculas');
   assert.ok(sqlFails(`UPDATE telefonos SET codigo_pais=N'A1' WHERE id_telefonos=${row.id}`), 'país no alfabético');
@@ -152,11 +119,11 @@ const sqlFails = (q) => { try { sql(q); return false; } catch { return true; } }
   assert.ok(sqlFails(`INSERT INTO telefonos(id_personas,numero,numero_normalizado,codigo_pais,tipo_telefono,es_principal,fecha_creacion,fecha_actualizacion) VALUES(${p1},N'x',N'${row.e164}',N'${row.country}',N'PERSONAL',0,SYSUTCDATETIME(),SYSUTCDATETIME())`), 'el índice único vigente rechaza el mismo E.164');
   pass('SQL Server rechaza país en minúsculas o no alfabético, números que no son E.164 y el mismo E.164 vigente dos veces');
 
-  // ---------- H. Auditoría e integridad ----------
+  // ---------- G. Auditoría e integridad ----------
   const values = lines(`SELECT CONCAT(ISNULL(valores_anteriores,''),ISNULL(valores_nuevos,'')) FROM eventos_auditoria WHERE tipo_entidad=N'PERSON_PHONE' AND id_usuario_actor IN (${u1.id},${u2.id},${u3.id})`).join('\n');
   assert.ok(/"pais":"AR"/.test(values) && /"pais":"PE"/.test(values), 'la auditoría registra el país');
   for (const full of ['+5493815551234', '5493815551234', '+56987654321', '987654321', '+12025550123', '2025550123', '3814445566', '+543814445566']) assert.ok(!values.includes(full), 'auditoría sin el número completo: ' + full);
-  assert.equal(sql("DBCC CHECKCONSTRAINTS('telefonos') WITH NO_INFOMSGS").replace(/\s/g, ''), ''); assert.equal(sql("DBCC CHECKCONSTRAINTS('contactos_coordinacion_traslado') WITH NO_INFOMSGS").replace(/\s/g, ''), '');
+  assert.equal(sql("DBCC CHECKCONSTRAINTS('telefonos') WITH NO_INFOMSGS").replace(/\s/g, ''), '');
   assert.equal(count('SELECT COUNT(*) FROM telefonos WHERE codigo_pais IS NULL'), legacyCount, 'los teléfonos anteriores siguen conservados');
   pass('auditoría con país y números enmascarados; restricciones válidas; datos anteriores conservados');
   console.log(`\nOK: ${passed} bloques aprobados`);

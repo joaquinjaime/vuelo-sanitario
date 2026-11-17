@@ -51,17 +51,23 @@ import org.springframework.transaction.annotation.Transactional;
  public CrewContactService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewRoleRepository r,PhoneContactRepository p,EmailContactRepository e,AuditService a){flights=f;crews=c;users=u;crewRoles=r;phones=p;emails=e;audit=a;}
 
  @Transactional public CrewContactsView list(Long flightId,Long actorId){
+  // Carga el usuario actor por su ID junto con sus roles asignados
   User actor=users.findWithRolesById(actorId).orElseThrow(()->new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a los contactos de la tripulación"));
   boolean operations=actor.getUserRoles().stream().filter(r->Boolean.TRUE.equals(r.getRole().getActivo())).anyMatch(r->OPERATIONS_ROLES.contains(r.getRole().getCodigo()));
   if(!operations)throw new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a los contactos de la tripulación");
+  // Busca el vuelo por su ID
   Flight f=flights.findById(flightId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));
   String closed=closedReason(f);
   if(closed!=null)throw new ApiException(HttpStatus.CONFLICT,"CREW_CONTACTS_CLOSED",closed,Map.of());
 
   List<CrewPersonRow> members=members(f);
   List<Long> personIds=members.stream().filter(CrewPersonRow::activeAccount).map(CrewPersonRow::personId).toList();
+  // Obtiene los teléfonos laborales vigentes (sin baja y con código de país) de las personas indicadas, ordenados por persona y con el principal primero
   Map<Long,List<PhoneContact>> phonesByPerson=personIds.isEmpty()?Map.of():phones.findActiveLaboralByPersonIds(personIds).stream().collect(Collectors.groupingBy(p->p.getPerson().getId()));
+  // Obtiene los correos laborales vigentes y verificados de las personas indicadas, ordenados por persona y con el principal primero
   Map<Long,List<EmailContact>> emailsByPerson=personIds.isEmpty()?Map.of():emails.findActiveLaboralByPersonIds(personIds).stream().collect(Collectors.groupingBy(e->e.getPerson().getId()));
+  // Obtiene los IDs de las personas indicadas que tienen algún correo laboral vigente sin verificar
+  // Obtiene los IDs de las personas indicadas que tienen algún teléfono laboral vigente sin código de país validado
   Set<Long> unverifiedMail=personIds.isEmpty()?Set.of():Set.copyOf(emails.personIdsWithUnverifiedLaboral(personIds)),unvalidatedPhone=personIds.isEmpty()?Set.of():Set.copyOf(phones.personIdsWithUnvalidatedLaboral(personIds));
   Long commanderId=f.getComandante()==null?null:f.getComandante().getId();
 
@@ -82,13 +88,16 @@ import org.springframework.transaction.annotation.Transactional;
 
  /** Comandante (si lo hay) y asignaciones vigentes, sin repetir personas; el comandante va primero. */
  private List<CrewPersonRow> members(Flight f){
+  // Obtiene las asignaciones vigentes (sin baja) de la tripulación del vuelo con datos de cuenta, persona y rol, ordenadas por ID de asignación
   List<CrewPersonRow> rows=crews.findCurrentPeopleByFlightId(f.getId());
   Map<Long,CrewPersonRow> byUser=new LinkedHashMap<>();
   Long commanderId=f.getComandante()==null?null:f.getComandante().getId();
   if(commanderId!=null){
    CrewPersonRow own=rows.stream().filter(r->r.userId().equals(commanderId)).findFirst().orElse(null);
    if(own==null){
+    // Obtiene ID, estado activo, estado de cuenta, ID de persona, nombre y apellido del usuario comandante
     Object[] c=users.findCrewPersonRowById(commanderId).stream().findFirst().orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Comandante inexistente"));
+    // Busca el rol de tripulación con código COMANDANTE para obtener su nombre visible
     String name=crewRoles.findByCodigo("COMANDANTE").map(r->r.getNombre()).orElse("Comandante");
     own=new CrewPersonRow(null,(Long)c[0],(Boolean)c[1],(String)c[2],(Long)c[3],(String)c[4],(String)c[5],"COMANDANTE",name);
    }

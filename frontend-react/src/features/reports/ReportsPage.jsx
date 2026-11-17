@@ -1,4 +1,3 @@
-import React from "react";
 import { useSession } from "../../app/providers/SessionProvider";
 import { useNotify } from "../../app/providers/NotifyProvider";
 import { appPath } from "../../app/navigation";

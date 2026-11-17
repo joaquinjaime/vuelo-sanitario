@@ -132,12 +132,6 @@ export function AirportPlanning({ flight, plan, msg, onChanged, editable }) {
   </div>;
 }
 
-/** Vista de sólo lectura de la planificación aeronáutica para el comandante y las etapas posteriores. */
-export function AirportSummary({ flight, plan }) {
-  if (!plan) return null;
-  return <AirportPlanning flight={flight} plan={plan} editable={false} msg={() => {}} onChanged={async () => {}}/>;
-}
-
 /**
  * Planificación aeroportuaria del comandante asignado (la planificación de ruta existente, no una segunda). Parte de lo que propuso Centro de Operaciones: puede confirmarlo tal cual o elegir
  * otros aeropuertos; una modificación queda auditada, Centro de Operaciones es avisado y la ruta presentada o aprobada vuelve a revisión. Un aeropuerto fuera de la jurisdicción del paciente

@@ -1,5 +1,6 @@
 package com.vuelossanitarios.backend.domain.flight;
 
+import com.vuelossanitarios.backend.domain.catalog.PatientCondition;
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -14,7 +15,9 @@ public class FlightMedicalInfo extends BaseEntity {
 @JoinColumn(name = "id_vuelos", nullable = false, unique = true)
     private Flight flight;
     @Column(name = "diagnostico", columnDefinition = "NVARCHAR(MAX)") private String diagnostico;
+    /** Legacy free text, kept only for requests registered before the patient condition catalog (V68). */
     @Column(name = "condicion_medica", length = 100) private String condicionMedica;
+    @ManyToOne @JoinColumn(name = "id_condiciones_paciente") private PatientCondition condicionPaciente;
     @Column(name = "requiere_equipamiento_especial", nullable = false) private Boolean requiereEquipamientoEspecial = false;
     @Column(name = "observaciones_medicas", columnDefinition = "NVARCHAR(MAX)") private String observaciones;
 @CreationTimestamp @Column(name = "fecha_creacion", nullable = false, updatable = false) private LocalDateTime createdAt;
@@ -22,6 +25,7 @@ public class FlightMedicalInfo extends BaseEntity {
     public Flight getFlight() { return flight; } public void setFlight(Flight v) { flight = v; }
     public String getDiagnostico() { return diagnostico; } public void setDiagnostico(String v) { diagnostico = v; }
     public String getCondicionMedica() { return condicionMedica; } public void setCondicionMedica(String v) { condicionMedica = v; }
+    public PatientCondition getCondicionPaciente() { return condicionPaciente; } public void setCondicionPaciente(PatientCondition v) { condicionPaciente = v; }
     public Boolean getRequiereEquipamientoEspecial() { return requiereEquipamientoEspecial; } public void setRequiereEquipamientoEspecial(Boolean v) { requiereEquipamientoEspecial = v; }
     public String getObservaciones() { return observaciones; } public void setObservaciones(String v) { observaciones = v; }
 }

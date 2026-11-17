@@ -26,13 +26,17 @@ import java.util.*;
  @org.springframework.beans.factory.annotation.Autowired public AuthService(UserRepository u,PersonRepository p,RoleRepository r,UserRoleRepository ur,EmailContactRepository e,PhoneContactRepository ph,AccountActivationRepository a,CommanderProfileRepository cp,AuditService au,PasswordEncoder pe,JwtService j,Clock clock,UserResponsibilityService rs,UserDirectoryRepository dir){users=u;persons=p;roles=r;userRoles=ur;emails=e;phones=ph;activations=a;commanderProfiles=cp;audit=au;encoder=pe;jwt=j;this.clock=clock;responsibilities=rs;directory=dir;}
  /** Kept for focused legacy unit tests; production uses the injected constructor above. */
  public AuthService(UserRepository u,PersonRepository p,RoleRepository r,UserRoleRepository ur,EmailContactRepository e,PhoneContactRepository ph,AccountActivationRepository a,CommanderProfileRepository cp,AuditService au,PasswordEncoder pe,JwtService j){this(u,p,r,ur,e,ph,a,cp,au,pe,j,Clock.systemDefaultZone(),null,null);}
+ // login: Obtiene el usuario por su nombre de usuario junto con sus asignaciones de rol y los roles asociados, para validar las credenciales.
  @Transactional(readOnly=true) public TokenResponse login(LoginRequest request){ User u=users.findWithRolesByUsername(request.username()).orElseThrow(()->invalidCredentials()); if(!Boolean.TRUE.equals(u.getActivo())||!"ACTIVO".equals(u.getEstadoCuenta())||u.getPasswordHash()==null||!encoder.matches(request.password(),u.getPasswordHash()))throw invalidCredentials(); Set<String> rs=roleCodes(u); boolean mustChange=Boolean.TRUE.equals(u.getDebeCambiarContrasena()); return new TokenResponse(jwt.create(new CurrentUser(u.getId(),u.getUsername(),mustChange),rs,credentialVersion(u)),"Bearer",u.getUsername(),rs,mustChange); }
  @Transactional public ActivationCodeResponse createPending(CreatePendingUserRequest r, Long actorId){
   if(r.correos()==null||r.correos().isEmpty())throw new ApiException(HttpStatus.BAD_REQUEST,"Debe informar al menos un correo"); if(r.telefonos()==null||r.telefonos().isEmpty())throw new ApiException(HttpStatus.BAD_REQUEST,"Debe informar al menos un teléfono");
   String dni=canonicalDni(r.dni()); Set<String> requestedRoles=new TreeSet<>(r.roles());
+  // createPending: Busca la cuenta de usuario (con su persona) asociada al DNI informado para impedir un alta duplicada.
   Optional<User> existing=Optional.ofNullable(users.findWithPersonByDni(dni)).orElse(Optional.empty()); if(existing.isPresent()){User found=existing.get();String code=Boolean.TRUE.equals(found.getActivo())?"USER_DNI_ALREADY_EXISTS":"INACTIVE_USER_WITH_DNI_EXISTS";String message=Boolean.TRUE.equals(found.getActivo())?"Ya existe un usuario activo con ese DNI":"Ya existe un usuario inactivo con ese DNI; puede reactivarlo";throw new ApiException(HttpStatus.CONFLICT,code,message,Map.of("userId",found.getId(),"username",Objects.toString(found.getUsername(),""),"nombre",found.getPerson().getNombre(),"apellido",found.getPerson().getApellido(),"dni",found.getPerson().getDni(),"activo",Boolean.TRUE.equals(found.getActivo())));}
   Person linked=null;
+  // Verifica si ya existe una persona registrada con el DNI informado.
   if(persons.existsByDni(dni)){
+   // Obtiene la persona registrada con el DNI informado.
    Person known=persons.findByDni(dni).orElse(null);
    if(known==null)throw new ApiException(HttpStatus.CONFLICT,"USER_DNI_ALREADY_EXISTS","Ya existe un usuario con ese DNI",Map.of());
    // La persona ya está registrada (por ejemplo por otro módulo) pero no tiene cuenta: sólo se asocia con una confirmación expresa y nombres coincidentes. Nunca se fusiona ni se corrige su identidad.
@@ -43,18 +47,26 @@ import java.util.*;
   } else if(r.personaExistenteId()!=null)throw new ApiException(HttpStatus.CONFLICT,"PERSON_IDENTITY_MISMATCH","La persona indicada ya no existe con ese DNI",Map.of());
   if(requestedRoles.contains("COMANDANTE")&&(r.licenciaAeronautica()==null||r.licenciaAeronautica().isBlank())&&(linked==null||linked.getCommanderProfile()==null)) throw new ApiException(HttpStatus.BAD_REQUEST,"La licencia aeronáutica es obligatoria para COMANDANTE");
   Person p=linked;
+  // Guarda la nueva persona con su nombre, apellido, DNI y fecha de nacimiento.
+  // Envía de inmediato a la base los cambios pendientes para que el índice único de DNI detecte un alta simultánea.
   if(p==null){p=new Person(); p.setNombre(r.nombre().trim());p.setApellido(r.apellido().trim());p.setDni(dni);p.setFechaNacimiento(r.fechaNacimiento()); persons.save(p);flushUnique(()->persons.flush(),"Ya existe una persona con ese DNI (alta simultánea); verifique y reintente","USER_DNI_ALREADY_EXISTS");}
+  // Guarda la nueva cuenta de usuario en estado PENDIENTE_ACTIVACION vinculada a la persona.
   User u=new User();u.setPerson(p);u.setActivo(true);u.setEstadoCuenta("PENDIENTE_ACTIVACION");users.save(u); assignRoles(u,requestedRoles); ensureCommanderProfile(p,requestedRoles,r.licenciaAeronautica(),actorId); applyInitialLocation(p,requestedRoles,r.provinciaId(),actorId); saveContacts(p,r.correos(),r.telefonos(),linked!=null);
+  // Envía de inmediato a la base los cambios pendientes de la cuenta para detectar por restricción única que la persona ya tenga otra cuenta.
   flushUnique(()->users.flush(),"La persona ya tiene una cuenta (alta simultánea)","USER_DNI_ALREADY_EXISTS");
   audit(actorId,"USER",u.getId(),"USUARIO_CREADO",null,"{\"roles\":"+jsonList(requestedRoles)+",\"personaExistente\":"+(linked!=null)+"}");
   return new ActivationCodeResponse(newActivation(u,actorId),"10 minutos");
  }
+ // regenerate: Obtiene los códigos de activación aún no utilizados del usuario para invalidarlos.
+ // Envía de inmediato a la base la invalidación de esos códigos de activación.
  @Transactional public ActivationCodeResponse regenerate(Long userId, Long actorId){ User u=user(userId); if(!"PENDIENTE_ACTIVACION".equals(u.getEstadoCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta no está pendiente de activación"); activations.findOpenByUserId(userId).forEach(a->a.setUsedAt(now())); activations.flush(); audit(actorId,"USER",u.getId(),"CODIGO_ACTIVACION_REGENERADO",null,null); return new ActivationCodeResponse(newActivation(u,actorId),"10 minutos"); }
  /** Los errores de código deben confirmar el contador y el bloqueo al quinto intento. */
  @Transactional(noRollbackFor=ApiException.class) public void activate(ActivateAccountRequest r){
   if(!r.password().equals(r.confirmacionPassword()))throw new ApiException(HttpStatus.BAD_REQUEST,"Las contraseñas no coinciden");
+  // activate: Obtiene y bloquea para escritura los códigos de activación no utilizados del DNI (con usuario y persona), del más reciente al más antiguo, para serializar los intentos concurrentes.
   String dni=canonicalDni(r.dni()); List<AccountActivation> candidates=activations.findOpenByDniForActivation(dni);
   if(candidates.isEmpty()){
+   // Busca la cuenta de usuario (con su persona) asociada al DNI para informar por qué no hay un código vigente.
    User existing=users.findWithPersonByDni(dni).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"DNI inexistente"));
    if("ACTIVO".equals(existing.getEstadoCuenta()))throw new ApiException(HttpStatus.CONFLICT,"La cuenta ya está activada");
    throw new ApiException(HttpStatus.BAD_REQUEST,"No hay un código de activación vigente");
@@ -67,20 +79,26 @@ import java.util.*;
    if(attempts>=ACTIVATION_CODE_MAX_ATTEMPTS){a.setUsedAt(now());throw new ApiException(HttpStatus.BAD_REQUEST,"ACTIVATION_CODE_ATTEMPTS_EXHAUSTED","El código de activación agotó los intentos permitidos. Solicite uno nuevo.",Map.of());}
    throw new ApiException(HttpStatus.BAD_REQUEST,"ACTIVATION_CODE_INVALID","El código de activación es incorrecto. Intentos restantes: "+(ACTIVATION_CODE_MAX_ATTEMPTS-attempts),Map.of());
   }
+  // Verifica si ya existe una cuenta con el nombre de usuario elegido.
   if(users.existsByUsername(r.username().trim()))throw new ApiException(HttpStatus.CONFLICT,"El nombre de usuario ya existe"); u.setUsername(r.username().trim());u.setPasswordHash(encoder.encode(r.password()));u.setEstadoCuenta("ACTIVO");u.setDebeCambiarContrasena(false);a.setUsedAt(now());
+  // Envía de inmediato a la base la activación de la cuenta para que la restricción única detecte un nombre de usuario repetido.
   flushUnique(()->users.flush(),"El nombre de usuario ya existe","USERNAME_ALREADY_EXISTS");
   audit.record(null,u,"USER",u.getId(),"USUARIO_ACTIVADO",null,null);
  }
  @Transactional public UserView updateUser(Long id,UpdateUserRequest r,Long actorId){
+  // updateUser: Bloquea para escritura la fila de la cuenta de usuario indicada.
   users.lockById(id); // serializa con asignaciones, bajas y otros cambios de la misma cuenta antes de leer sus roles
   User u=user(id); Set<String> old=roleCodes(u); Set<String> next=new TreeSet<>(r.roles());
   if(id.equals(actorId)&&!old.equals(next))throw new ApiException(HttpStatus.FORBIDDEN,"No puede modificar sus propios roles");
   boolean removesLastActiveAdmin=Boolean.TRUE.equals(u.getActivo())&&old.contains("ADMINISTRADOR")&&(!r.activo()||!next.contains("ADMINISTRADOR"));
+  // Obtiene y bloquea para escritura las cuentas activas con rol ADMINISTRADOR para verificar que no se quite el último.
   if(removesLastActiveAdmin&&users.lockActiveAdministrators().size()<=1)throw new ApiException(HttpStatus.BAD_REQUEST,"No se puede desactivar o quitar el rol al último administrador activo.");
   boolean activeChanged=!Objects.equals(u.getActivo(),r.activo()); if(activeChanged)throw new ApiException(HttpStatus.CONFLICT,"USER_STATUS_CHANGE_REQUIRES_ACTION","Use las acciones específicas de desactivar o reactivar usuario",Map.of());
   if(!Boolean.TRUE.equals(u.getActivo())&&!old.equals(next))throw new ApiException(HttpStatus.CONFLICT,"USER_INACTIVE_ROLES","Los roles de una cuenta desactivada se definen al reactivarla",Map.of());
   for(String removed:old){if(next.contains(removed))continue;if(responsibilities!=null)responsibilities.requireNone(responsibilities.roleRemovalBlockers(id,removed),"USER_ROLE_HAS_OPERATIONAL_ASSIGNMENTS","No se puede retirar el rol "+removed+" mientras la cuenta tenga responsabilidades vigentes. Reasígnelas antes de continuar.");}
   Person p=u.getPerson();String beforeData=personalData(p);p.setNombre(r.nombre().trim());p.setApellido(r.apellido().trim());p.setFechaNacimiento(r.fechaNacimiento());ensureCommanderProfile(p,next,r.licenciaAeronautica(),actorId);
+  // Elimina todas las asignaciones de rol actuales del usuario.
+  // Envía de inmediato a la base la eliminación de esas asignaciones de rol antes de registrar las nuevas.
   if(!old.equals(next)){userRoles.deleteAll(u.getUserRoles());userRoles.flush();u.getUserRoles().clear();assignRoles(u,next);u.invalidateCredentials();} // los privilegios anteriores no sobreviven en ninguna sesión abierta
   String afterData=personalData(p);if(!beforeData.equals(afterData))audit(actorId,"USER",u.getId(),"USUARIO_ACTUALIZADO",beforeData,afterData);
   if(!old.equals(next))audit(actorId,"USER_ROLE",u.getId(),"UPDATE","{\"roles\":"+jsonList(old)+"}","{\"roles\":"+jsonList(next)+"}");
@@ -90,12 +108,16 @@ import java.util.*;
  }
  @Transactional public UserView deactivateUser(Long id,Long actorId,String motivo){
   if(id.equals(actorId))throw new ApiException(HttpStatus.BAD_REQUEST,"CANNOT_DEACTIVATE_SELF","No puede eliminar su propia cuenta.",Map.of()); User u=lockedUser(id); if(!Boolean.TRUE.equals(u.getActivo()))throw new ApiException(HttpStatus.CONFLICT,"USER_ALREADY_INACTIVE","El usuario ya está inactivo.",Map.of());if(u.getUsername()==null)throw new ApiException(HttpStatus.CONFLICT,"USER_PENDING_ACTIVATION","La cuenta aún no fue activada; gestione su código de activación en lugar de eliminarla.",Map.of());
+  // deactivateUser: Obtiene y bloquea para escritura las cuentas activas con rol ADMINISTRADOR para impedir dar de baja al último.
   if(roleCodes(u).contains("ADMINISTRADOR")&&users.lockActiveAdministrators().size()<=1)throw new ApiException(HttpStatus.CONFLICT,"LAST_ACTIVE_ADMINISTRATOR","No se puede eliminar este usuario porque es el último administrador activo del sistema.",Map.of());
   if(responsibilities!=null)responsibilities.requireNone(responsibilities.deactivationBlockers(id),"USER_HAS_OPERATIONAL_ASSIGNMENTS","El usuario tiene responsabilidades operativas vigentes (vuelos, informes o solicitudes). Reasígnelas o espere a que finalicen antes de desactivarlo; no se modificó nada.");
   int released=responsibilities==null?0:responsibilities.releaseDocumentLocks(id);
+  // Obtiene la cuenta del administrador que realiza la baja para registrarla como responsable.
   u.setActivo(false);u.setEstadoCuenta("DESACTIVADO");u.setFechaBaja(now());u.setBajaPor(actorId==null?null:users.findById(actorId).orElse(null));u.setMotivoBaja(blank(motivo));u.invalidateCredentials();audit(actorId,"USER",u.getId(),"USUARIO_DESACTIVADO",null,"{\"motivo\":"+jsonString(blank(motivo))+",\"bloqueosDocumentalesLiberados\":"+released+"}");return view(u);
  }
  @Transactional public ReactivationResponse reactivateUser(Long id,ReactivateUserRequest r,Long actorId){
+  // reactivateUser: Elimina todas las asignaciones de rol actuales del usuario.
+  // Envía de inmediato a la base la eliminación de esas asignaciones de rol antes de registrar las nuevas.
   User u=lockedUser(id);if(Boolean.TRUE.equals(u.getActivo()))throw new ApiException(HttpStatus.CONFLICT,"USER_ALREADY_ACTIVE","El usuario ya está activo.",Map.of());if(u.getUsername()==null)throw new ApiException(HttpStatus.CONFLICT,"USER_HAS_NO_USERNAME","La cuenta pendiente no puede reactivarse: regenere su código de activación.",Map.of()); Set<String> old=roleCodes(u),next=new TreeSet<>(r.roles()); Person p=u.getPerson();String beforeData=personalData(p);p.setNombre(r.nombre().trim());p.setApellido(r.apellido().trim());if(r.fechaNacimiento()!=null)p.setFechaNacimiento(r.fechaNacimiento());ensureCommanderProfile(p,next,r.licenciaAeronautica(),actorId);userRoles.deleteAll(u.getUserRoles());userRoles.flush();u.getUserRoles().clear();assignRoles(u,next);
   String password=newTemporaryPassword();u.setPasswordHash(encoder.encode(password));u.setDebeCambiarContrasena(true);u.setActivo(true);u.setEstadoCuenta("ACTIVO");u.setFechaBaja(null);u.setBajaPor(null);u.setMotivoBaja(null);u.invalidateCredentials();
   String afterData=personalData(p);if(!beforeData.equals(afterData))audit(actorId,"USER",u.getId(),"USUARIO_ACTUALIZADO",beforeData,afterData);
@@ -112,54 +134,84 @@ import java.util.*;
   String st=status==null||status.isBlank()?"ACTIVOS":status.trim().toUpperCase(Locale.ROOT); if(!Set.of("ACTIVOS","INACTIVOS","PENDIENTES","TODOS").contains(st))throw new ApiException(HttpStatus.BAD_REQUEST,"Estado de consulta inválido");
   String rl=blank(role); if(rl!=null&&!rl.matches("[A-Za-z_]{1,30}"))throw new ApiException(HttpStatus.BAD_REQUEST,"Rol de consulta inválido");
   String tx=blank(text); if(tx!=null&&tx.length()>100)throw new ApiException(HttpStatus.BAD_REQUEST,"El texto de búsqueda es demasiado largo");
+  // search: Cuenta las cuentas de usuario que cumplen el filtro de texto, rol y estado.
   var filter=new UserDirectoryRepository.Filter(tx,rl==null?null:rl.toUpperCase(Locale.ROOT),st); long total=directory.count(filter);
+  // Obtiene la página solicitada de cuentas que cumplen el filtro, ordenadas por apellido, nombre e identificador.
   List<UserDirectoryRepository.Row> rows=total==0||(long)pg*sz>=total?List.of():directory.page(filter,pg*sz,sz);
+  // Obtiene los códigos de rol activos de cada usuario de la página.
+  // Obtiene la provincia actual del perfil de comandante de cada persona de la página.
   Map<Long,Set<String>> byRoles=directory.roles(rows.stream().map(UserDirectoryRepository.Row::id).toList());Map<Long,String> provinces=directory.provinces(rows.stream().map(UserDirectoryRepository.Row::personId).toList());
   return new UserPage(rows.stream().map(x->new UserSummary(x.id(),x.firstName(),x.lastName(),x.dni(),x.username(),x.accountState(),x.active(),x.deactivatedAt(),x.deactivatedBy(),x.deactivationReason(),byRoles.getOrDefault(x.id(),Set.of()),provinces.get(x.personId()),x.mustChangePassword())).toList(),total,pg,sz,(int)((total+sz-1)/sz));
  }
+ // counts: Cuenta las cuentas activas, las pendientes de activación y las inactivas en una sola consulta.
  @Transactional(readOnly=true) public UserCounts counts(){long[] c=directory.counts();return new UserCounts(c[0],c[1],c[2]);}
+ // roleOptions: Obtiene todos los roles registrados (luego se filtran los activos).
  @Transactional(readOnly=true) public List<RoleOption> roleOptions(){return roles.findAll().stream().filter(x->Boolean.TRUE.equals(x.getActivo())).map(x->new RoleOption(x.getCodigo(),x.getNombre())).sorted(Comparator.comparing(RoleOption::codigo)).toList();}
  @Transactional(readOnly=true) public UserDetail detail(Long id,Long viewerId){
   User u=user(id);Person p=u.getPerson();Set<String> rs=roleCodes(u);CommanderProfile cp=p.getCommanderProfile();
   List<Blocker> blockers=responsibilities==null||!Boolean.TRUE.equals(u.getActivo())?List.of():responsibilities.deactivationBlockers(id);
+  // detail: Cuenta las cuentas activas con rol ADMINISTRADOR para saber si esta es la última.
   boolean lastAdmin=Boolean.TRUE.equals(u.getActivo())&&rs.contains("ADMINISTRADOR")&&users.countActiveAdministrators()<=1;
   User by=u.getBajaPor();String byName=by==null?null:(by.getPerson().getNombre()+" "+by.getPerson().getApellido()).trim();
   return new UserDetail(u.getId(),p.getNombre(),p.getApellido(),p.getDni(),p.getFechaNacimiento(),u.getUsername(),u.getEstadoCuenta(),Boolean.TRUE.equals(u.getActivo()),Boolean.TRUE.equals(u.getDebeCambiarContrasena()),u.getCreatedAt(),u.getFechaBaja(),by==null?null:by.getId(),byName,u.getMotivoBaja(),rs,
+   // Obtiene los correos vigentes de la persona, el principal primero.
+   // Obtiene los teléfonos vigentes de la persona, el principal primero.
+   // Busca el paciente asociado a la persona para devolver su identificador.
    emailViews(emails.findActiveByPersonId(p.getId())),phones.findActiveByPersonId(p.getId()).stream().map(this::phoneView).toList(),cp==null?null:cp.getLicenseNumber(),cp==null||cp.getProvinciaActual()==null?null:cp.getProvinciaActual().getNombre(),blockers,lastAdmin,id.equals(viewerId),p.getVersion(),patients==null?null:patients.findByPersonId(p.getId()).map(x->x.getId()).orElse(null));
  }
+ // listUsers: Obtiene todas las cuentas de usuario con su persona y sus roles.
  @Transactional(readOnly=true) public List<UserView> listUsers(){return users.findAllWithPersonAndRoles().stream().map(this::view).toList();}
+ // listActiveCommanders: Obtiene las cuentas activas que tienen asignado el rol COMANDANTE.
  @Transactional(readOnly=true) public List<CommanderView> listActiveCommanders(){return users.findActiveByRoleCode("COMANDANTE").stream().filter(u->"ACTIVO".equals(u.getEstadoCuenta())&&u.getUsername()!=null&&u.getPerson().getCommanderProfile()!=null&&!u.getPerson().getCommanderProfile().getLicenseNumber().isBlank()).map(u->new CommanderView(u.getId(),u.getUsername(),u.getPerson().getNombre(),u.getPerson().getApellido(),u.getPerson().getCommanderProfile().getLicenseNumber(),u.getPerson().getCommanderProfile().getProvinciaActual()==null?null:u.getPerson().getCommanderProfile().getProvinciaActual().getNombre())).toList();}
  @Transactional(readOnly=true) public UserView myAccount(Long id){return view(user(id));}
  /** Compatibility entry point used internally by older callers; administrative HTTP calls use the locked variant. */
  @Transactional public void setTemporaryPassword(Long id,TemporaryPasswordRequest r){User u=user(id);if(!Boolean.TRUE.equals(u.getActivo())||u.getUsername()==null)throw new ApiException(HttpStatus.BAD_REQUEST,"La cuenta debe estar activa antes de asignar una contraseña temporal");u.setPasswordHash(encoder.encode(r.password()));u.setDebeCambiarContrasena(true);u.invalidateCredentials();}
+ // createBootstrapAdmin: Obtiene todas las cuentas con su persona y roles para comprobar si ya existe un administrador.
+ // Guarda la persona del administrador inicial.
+ // Guarda la cuenta activa del administrador inicial.
+ // Guarda el correo principal del administrador inicial.
  @Transactional public void createBootstrapAdmin(String username,String password,String email){ if(users.findAllWithPersonAndRoles().stream().anyMatch(u->roleCodes(u).contains("ADMINISTRADOR")))return; Person p=new Person();p.setNombre("Administrador");p.setApellido("Inicial");persons.save(p);User u=new User();u.setPerson(p);u.setUsername(username);u.setPasswordHash(encoder.encode(password));u.setEstadoCuenta("ACTIVO");users.save(u);assignRoles(u,Set.of("ADMINISTRADOR"));EmailContact e=new EmailContact();e.setPerson(p);e.setDireccion(email);e.setPrincipal(true);emails.save(e); }
  /** Mantiene los ceros iniciales: el OTP siempre es texto decimal de seis posiciones. */
  static String decimalActivationCode(int value){return String.format(Locale.ROOT,"%0"+ACTIVATION_CODE_LENGTH+"d",value);}
+ // newActivation: Guarda el nuevo código de activación (cifrado) con su fecha de vencimiento.
  private String newActivation(User u,Long actorId){String code=decimalActivationCode(random.nextInt(ACTIVATION_CODE_SPACE));AccountActivation a=new AccountActivation();a.setUser(u);a.setTokenHash(encoder.encode(code));a.setNumericCode(true);a.setFailedAttempts(0);a.setCreatedAt(now());a.setExpiresAt(a.getCreatedAt().plusMinutes(ACTIVATION_CODE_MINUTES));if(actorId!=null)a.setCreatedBy(user(actorId));activations.save(a);return code;}
+ // assignRoles: Busca el rol por su código.
+ // Guarda la asignación del rol al usuario.
  private void assignRoles(User u,Set<String> codes){for(String code:codes){Role role=roles.findByCodigo(code).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Rol inexistente: "+code));UserRole assignment=new UserRole(u,role);userRoles.save(assignment);u.getUserRoles().add(assignment);}}
  /** La consulta previa no basta ante dos altas simultáneas: el índice único de V57 es la garantía y su violación se informa como el mismo conflicto. */
+ // saveProfile: Guarda el perfil de comandante y lo envía de inmediato a la base para que el índice único detecte una licencia repetida.
  private void saveProfile(CommanderProfile profile){try{commanderProfiles.saveAndFlush(profile);}catch(org.springframework.dao.DataIntegrityViolationException e){throw new ApiException(HttpStatus.CONFLICT,"La licencia aeronáutica ya existe");}}
+ // ensureCommanderProfile: Verifica si ya existe un perfil de comandante con esa licencia aeronáutica (sin distinguir mayúsculas), antes de crear el perfil.
+ // Verifica si ya existe un perfil de comandante con la nueva licencia aeronáutica (sin distinguir mayúsculas), antes de cambiarla.
  private void ensureCommanderProfile(Person p,Set<String> roles,String license,Long actorId){if(!roles.contains("COMANDANTE"))return; String value=canonicalLicense(license); CommanderProfile profile=p.getCommanderProfile(); if(profile==null){if(value==null)throw new ApiException(HttpStatus.BAD_REQUEST,"La licencia aeronáutica es obligatoria para COMANDANTE");if(commanderProfiles.existsByLicenseNumberIgnoreCase(value))throw new ApiException(HttpStatus.CONFLICT,"La licencia aeronáutica ya existe");profile=new CommanderProfile();profile.setPerson(p);profile.setLicenseNumber(value);saveProfile(profile);p.setCommanderProfile(profile);audit(actorId,"COMMANDER_PROFILE",p.getId(),"CREATE",null,"{\"profileCreated\":true}");}else if(value!=null&&!value.equals(profile.getLicenseNumber())){if(commanderProfiles.existsByLicenseNumberIgnoreCase(value))throw new ApiException(HttpStatus.CONFLICT,"La licencia aeronáutica ya existe");profile.setLicenseNumber(value);saveProfile(profile);audit(actorId,"COMMANDER_PROFILE",p.getId(),"UPDATE_LICENSE", "{\"licenseChanged\":true}","{\"licenseChanged\":true}");}}
  /** Provincia o CABA de ubicación operativa inicial del comandante recién registrado. Sólo se fija si el perfil todavía no tiene una ubicación (nunca pisa una existente). */
  private void applyInitialLocation(Person p,Set<String> roles,Long provinceId,Long actorId){
   if(provinceId==null||provinces==null||!roles.contains("COMANDANTE"))return;
   CommanderProfile profile=p.getCommanderProfile();if(profile==null||profile.getProvinciaActual()!=null)return;
+  // applyInitialLocation: Busca la provincia indicada por su identificador (luego se exige que esté activa).
   var province=provinces.findById(provinceId).filter(x->Boolean.TRUE.equals(x.getActivo())).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Seleccione una provincia o la Ciudad Autónoma de Buenos Aires válida"));
+  // Obtiene la cuenta del usuario que registra la ubicación.
+  // Guarda la ubicación inicial del perfil de comandante y la envía de inmediato a la base.
   profile.setProvinciaActual(province);profile.setUbicacionActualizadaEn(now());profile.setUbicacionActualizadaPor(actorId==null?null:users.findById(actorId).orElse(null));commanderProfiles.saveAndFlush(profile);
   audit(actorId,"COMMANDER_PROFILE",p.getId(),"COMMANDER_LOCATION_UPDATE",null,"{\"provincia\":\""+province.getNombre().replace("\"","")+"\",\"origen\":\"alta\"}");
  }
+ // audit: Obtiene la cuenta del usuario que realiza la acción auditada.
  private void audit(Long actorId,String type,Long entityId,String operation,String before,String after){audit.record(null,actorId==null?null:users.findById(actorId).orElse(null),type,entityId,operation,before,after);}
+ // user: Obtiene la cuenta de usuario con su persona por identificador.
  private User user(Long id){return users.findWithPersonById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));}
+ // lockedUser: Obtiene y bloquea para escritura la cuenta de usuario con su persona y sus roles.
  private User lockedUser(Long id){return users.lockWithPersonAndRolesById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));}
  private long credentialVersion(User u){return u.getVersionCredenciales()==null?1L:u.getVersionCredenciales();}
  private String newTemporaryPassword(){byte[] bytes=new byte[18];random.nextBytes(bytes);return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);}
  private String jsonString(String value){return value==null?"null":"\""+value.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n").replace("\r","\\r")+"\"";}
  private Set<String> roleCodes(User u){Set<String> result=new TreeSet<>();for(UserRole r:u.getUserRoles())if(Boolean.TRUE.equals(r.getRole().getActivo()))result.add(r.getRole().getCodigo());return result;}
+ // view: Obtiene los correos vigentes de la persona, el principal primero.
+ // Obtiene los teléfonos vigentes de la persona, el principal primero.
  private UserView view(User u){Person p=u.getPerson();List<ContactView> es=emailViews(emails.findActiveByPersonId(p.getId()));List<ContactView> ps=phones.findActiveByPersonId(p.getId()).stream().map(this::phoneView).toList();CommanderProfile cp=p.getCommanderProfile();return new UserView(u.getId(),p.getNombre(),p.getApellido(),p.getDni(),u.getUsername(),u.getEstadoCuenta(),Boolean.TRUE.equals(u.getActivo()),u.getFechaBaja(),roleCodes(u),es,ps,cp==null||cp.getProvinciaActual()==null?null:cp.getProvinciaActual().getNombre());}
  /** Correos con su estado de verificación (una sola consulta de las últimas verificaciones). */
  private List<ContactView> emailViews(List<EmailContact> list){Map<Long,String> states=emailVerification==null?Map.of():emailVerification.states(list);return list.stream().map(e->new ContactView(e.getId(),e.getDireccion(),e.getTipo(),Boolean.TRUE.equals(e.getPrincipal()),e.getVersion(),null,states.getOrDefault(e.getId(),e.isVerificado()?"VERIFICADO":"SIN_VERIFICAR"),null)).toList();}
  private ContactView phoneView(PhoneContact p){return new ContactView(p.getId(),p.getNumero(),p.getTipo(),Boolean.TRUE.equals(p.getPrincipal()),p.getVersion(),p.getCodigoPais(),null,null);}
- private String blank(String v){return v==null||v.isBlank()?null:v.trim();} private String canonicalLicense(String v){String value=blank(v);if(value==null)return null;value=value.toUpperCase(Locale.ROOT);if(!value.matches("[A-Z0-9]+"))throw new ApiException(HttpStatus.BAD_REQUEST,"La licencia debe ser alfanumérica");return value;} private String canonicalDni(String v){String value=v==null?"":v.replaceAll("\\D","");if(value.isBlank())throw new ApiException(HttpStatus.BAD_REQUEST,"El DNI debe contener dígitos");return value;}private String contactType(String v){String type=ContactNormalizer.type(v);if(type==null)throw new ApiException(HttpStatus.BAD_REQUEST,"CONTACT_INVALID","El tipo de contacto debe ser PERSONAL o LABORAL",Map.of());return type;} private ApiException invalidCredentials(){return new ApiException(HttpStatus.UNAUTHORIZED,"Credenciales inválidas");}private ApiException forbidden(){return new ApiException(HttpStatus.FORBIDDEN,"Acceso denegado");}
+ private String blank(String v){return v==null||v.isBlank()?null:v.trim();} private String canonicalLicense(String v){String value=blank(v);if(value==null)return null;value=value.toUpperCase(Locale.ROOT);if(!value.matches("[A-Z0-9]+"))throw new ApiException(HttpStatus.BAD_REQUEST,"La licencia debe ser alfanumérica");return value;} private String canonicalDni(String v){String value=v==null?"":v.replaceAll("\\D","");if(value.isBlank())throw new ApiException(HttpStatus.BAD_REQUEST,"El DNI debe contener dígitos");return value;}private String contactType(String v){String type=ContactNormalizer.type(v);if(type==null)throw new ApiException(HttpStatus.BAD_REQUEST,"CONTACT_INVALID","El tipo de contacto debe ser PERSONAL o LABORAL",Map.of());return type;} private ApiException invalidCredentials(){return new ApiException(HttpStatus.UNAUTHORIZED,"Credenciales inválidas");}
  private LocalDateTime now(){return LocalDateTime.now(clock);}
  private String jsonList(Collection<String> values){StringBuilder b=new StringBuilder("[");boolean first=true;for(String v:values){if(!first)b.append(',');b.append(jsonString(v));first=false;}return b.append(']').toString();}
  private boolean sameName(Person known,CreatePendingUserRequest r){return norm(known.getNombre()).equals(norm(r.nombre()))&&norm(known.getApellido()).equals(norm(r.apellido()));}
@@ -171,9 +223,13 @@ import java.util.*;
  /** Sin una persona existente se guardan todos los contactos; con una persona existente sólo los que todavía no tiene y sin disputar su contacto principal. */
  private void saveContacts(Person p,List<ContactRequest> es,List<PhoneRequest> ps,boolean existingPerson){
   Set<String> knownEmails=new HashSet<>(),knownPhones=new HashSet<>();boolean hasMainEmail=false,hasMainPhone=false;
+  // saveContacts: Obtiene los correos vigentes de la persona existente para no duplicarlos.
+  // Obtiene los teléfonos vigentes de la persona existente para no duplicarlos.
   if(existingPerson){for(EmailContact e:emails.findActiveByPersonId(p.getId())){knownEmails.add(e.getDireccionNormalizada());hasMainEmail|=Boolean.TRUE.equals(e.getPrincipal());}for(PhoneContact ph:phones.findActiveByPersonId(p.getId())){knownPhones.add(ph.getNumeroNormalizado());hasMainPhone|=Boolean.TRUE.equals(ph.getPrincipal());}}
   // Los correos nuevos nacen sin verificar (el titular los confirma desde "Mi cuenta"); los teléfonos exigen país y se validan con sus reglas de numeración.
+  // Guarda el nuevo correo de la persona.
   for(int i=0;i<es.size();i++){String address=es.get(i).direccion().trim();String problem=ContactNormalizer.emailProblem(address);if(problem!=null)throw new ApiException(HttpStatus.BAD_REQUEST,"CONTACT_INVALID",problem,Map.of("campo","correo"));String type=contactType(es.get(i).tipo());if(!knownEmails.add(ContactNormalizer.email(address)))continue;EmailContact e=new EmailContact();e.setPerson(p);e.setDireccion(address);e.setTipo(type);e.setPrincipal(!hasMainEmail);hasMainEmail=true;emails.save(e);}
+  // Guarda el nuevo teléfono validado de la persona.
   for(int i=0;i<ps.size();i++){PhoneNumbers.Parsed number;try{number=PhoneNumbers.parse(ps.get(i).numero(),ps.get(i).pais());}catch(PhoneNumbers.Rejected r){throw new ApiException(HttpStatus.BAD_REQUEST,"CONTACT_INVALID",r.getMessage(),Map.of("campo","telefono","motivo",r.reason()));}String type=contactType(ps.get(i).tipo());if(!knownPhones.add(number.e164()))continue;PhoneContact ph=new PhoneContact();ph.setPerson(p);ph.setValidated(number);ph.setTipo(type);ph.setPrincipal(!hasMainPhone);hasMainPhone=true;phones.save(ph);}
  }
 }

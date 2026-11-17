@@ -30,11 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 
  @Transactional(readOnly=true) public AirportCandidates candidates(Long flightId,Long actorId,String type,String q){
   boolean departure=switch(type==null?"":type.trim().toUpperCase(Locale.ROOT)){case "SALIDA"->true;case "LLEGADA"->false;default->throw new ApiException(HttpStatus.BAD_REQUEST,"Indique si busca aeropuertos de SALIDA o de LLEGADA");};
+  // Carga el vuelo por su ID; si no existe responde 404 (Vuelo inexistente).
   Flight f=flights.findById(flightId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));
+  // Carga el usuario actor por su ID junto con sus roles (join fetch de userRoles y role).
   User actor=users.findWithRolesById(actorId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
   boolean operations=actor.getUserRoles().stream().anyMatch(r->Set.of("OPERACIONES","CENTRO_OPERACIONES").contains(r.getRole().getCodigo()));
   boolean assignedCommander=f.getComandante()!=null&&f.getComandante().getId().equals(actorId);
   if(!operations&&!assignedCommander)throw new ApiException(HttpStatus.FORBIDDEN,"Sólo Operaciones o el comandante asignado pueden consultar los aeropuertos candidatos");
+  // Obtiene la solicitud de vuelo sanitario asociada al vuelo; si no existe rechaza la consulta.
   SanitaryFlight s=sanitary.findByFlightId(f.getId()).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"El vuelo no posee solicitud sanitaria"));
   String state=f.getEstadoVuelo()==null?null:f.getEstadoVuelo().getCodigo();
   if(!"APROBADO".equals(s.getEstadoSolicitud().getCodigo())||(state!=null&&!"PLANIFICADO".equals(state)))throw new ApiException(HttpStatus.CONFLICT,"El vuelo ya no admite cambios de aeropuertos en su estado actual");
@@ -46,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
   boolean commanderKnown=departure&&f.getComandante()!=null;
   String text=fold(q);
   List<AirportCandidate> same=new ArrayList<>(),other=new ArrayList<>();
+  // Obtiene todos los aeropuertos con su provincia referencial y su localidad precargadas, ordenados por nombre.
   for(Airport a:airports.findAllDetailedOrderByNombre()){
    if(!Boolean.TRUE.equals(a.getActivo())||a.getProvinciaReferencial()==null)continue;
    if(!text.isEmpty()&&!matches(a,text))continue;

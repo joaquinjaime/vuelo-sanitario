@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.
 const dt = (v) => (v ? String(v).replace("T", " ").slice(0, 16) : "—");

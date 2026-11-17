@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { dt } from "../../../utils/format";
 import { openProposal, CancellationFields, NegotiationHistory } from "../negotiation";
 import { Urgency } from "./Urgency";

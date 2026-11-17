@@ -1,4 +1,3 @@
-import React from "react";
 import { dt } from "../../../utils/format";
 
 export function Urgency({ flight, detail = false }) {

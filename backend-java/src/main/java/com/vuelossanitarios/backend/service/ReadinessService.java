@@ -34,6 +34,7 @@ public class ReadinessService {
   var template=jdbc.getIfAvailable();
   if(template==null) return new Item("PRIVILEGIOS_BD","Privilegios de la cuenta de la aplicación","ERROR",production,"No hay acceso JDBC para comprobar los privilegios");
   try{
+   // Consulta en SQL Server si la cuenta de la aplicación es db_owner o db_ddladmin y si tiene permisos para crear tablas, alterar usuarios o actualizar flyway_schema_history
    var row=template.queryForMap("SELECT CAST(ISNULL(IS_MEMBER('db_owner'),0) AS int) AS owner, CAST(ISNULL(IS_MEMBER('db_ddladmin'),0) AS int) AS ddl, CAST(ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','CREATE TABLE'),0) AS int) AS create_table, CAST(ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','ALTER ANY USER'),0) AS int) AS alter_user, CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.flyway_schema_history','OBJECT','UPDATE'),0) AS int) AS history_write");
    boolean ownerOrDdl=((Number)row.get("owner")).intValue()==1||((Number)row.get("ddl")).intValue()==1;
    boolean canChangeSchema=((Number)row.get("create_table")).intValue()==1||((Number)row.get("alter_user")).intValue()==1;
@@ -49,11 +50,13 @@ public class ReadinessService {
   boolean production="produccion".equals(environment);List<Item> items=new ArrayList<>();
   String version="desconocida";Flyway f=flyway.getIfAvailable();
   if(f!=null){
+   // Consulta a Flyway el historial de migraciones para obtener la versión aplicada actual y la cantidad de migraciones pendientes
    var current=f.info().current();int pending=f.info().pending().length;version=current==null?"sin migraciones":String.valueOf(current.getVersion());
    items.add(new Item("MIGRACION","Esquema de base de datos",pending==0?"OK":"PENDIENTE",true,"Versión "+version+(pending==0?"":"; migraciones pendientes: "+pending)));
   }else{
    // Con las migraciones automáticas deshabilitadas (producción: sólo las aplica el procedimiento controlado) se lee la versión aplicada del historial.
    var template=jdbc.getIfAvailable();
+   // Obtiene de flyway_schema_history la versión de la última migración aplicada con éxito
    if(template!=null)try{version=String.valueOf(template.queryForObject("SELECT TOP 1 version FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank DESC",String.class));
     items.add(new Item("MIGRACION","Esquema de base de datos","OK",true,"Versión "+version+" (migraciones automáticas deshabilitadas: las aplica el procedimiento controlado)"));}
    catch(RuntimeException e){items.add(new Item("MIGRACION","Esquema de base de datos","ERROR",true,"No se pudo leer la versión aplicada del esquema"));}

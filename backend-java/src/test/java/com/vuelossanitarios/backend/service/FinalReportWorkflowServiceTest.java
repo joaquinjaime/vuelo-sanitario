@@ -28,7 +28,7 @@ class FinalReportWorkflowServiceTest {
  private final AuditService audit=mock(AuditService.class); private final CommanderReportAccessService access=mock(CommanderReportAccessService.class); private final ReportAttachmentService attachments=mock(ReportAttachmentService.class);
  private final Clock clock=Clock.fixed(Instant.parse("2026-10-13T12:00:00Z"),ZoneOffset.UTC);
  private final OffsetDateTime now=OffsetDateTime.ofInstant(clock.instant(),ZoneOffset.UTC);
- private final FinalReportWorkflowService service=new FinalReportWorkflowService(obligations,reports,sanitaryFlights,statuses,users,notifications,audit,access,attachments,new ObjectMapper().findAndRegisterModules(),clock);
+ private final FinalReportWorkflowService service=new FinalReportWorkflowService(obligations,reports,sanitaryFlights,statuses,users,notifications,audit,access,attachments,new ObjectMapper().findAndRegisterModules(),clock,mock(FlightAuthorizationService.class));
  private User commander,operator; private Flight flight; private FinalReportObligation obligation; private final List<FlightFinalReport> saved=new ArrayList<>();
 
  @BeforeEach void setUp(){

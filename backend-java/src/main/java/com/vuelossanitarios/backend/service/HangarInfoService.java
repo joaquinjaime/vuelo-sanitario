@@ -39,16 +39,17 @@ public class HangarInfoService {
     private final UserRepository users;
     private final AuditService audit;
     private final ObjectMapper json;
+    private final FlightAuthorizationService access;
 
-    public HangarInfoService(FlightRepository flights, HangarInfoRepository records, AircraftRepository aircraft, UserRepository users, AuditService audit, ObjectMapper json, CommanderReportAccessService commanderAccess) {
-        this.commanderAccess=commanderAccess;
+    public HangarInfoService(FlightRepository flights, HangarInfoRepository records, AircraftRepository aircraft, UserRepository users, AuditService audit, ObjectMapper json, CommanderReportAccessService commanderAccess, FlightAuthorizationService access) {
+        this.commanderAccess=commanderAccess; this.access=access;
         this.flights=flights; this.records=records; this.aircraft=aircraft; this.users=users; this.audit=audit; this.json=json;
     }
 
     @Transactional(readOnly=true)
     public View get(Long id, Long actor) {
         Flight flight=flight(id, false); User user=user(actor);
-        if (!operations(user) && !FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(user)) && !commander(flight,user)) throw forbidden();
+        if (!operations(user) && !FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(user)) && !commander(flight,user) && !access.copilotOf(flight,actor)) throw forbidden();
         return view(flight,user);
     }
 
@@ -62,6 +63,7 @@ public class HangarInfoService {
         if (input.requiereHangar() && input.preparacionCompleta()) {
             if (flight.getEstadoVuelo()!=null && "EN_CURSO".equals(flight.getEstadoVuelo().getCodigo())) throw bad("La preparación de salida sólo puede completarse antes del inicio");
             if (flight.getAircraft()==null || flight.getOrigen()==null) throw bad("La preparación completa requiere aeronave y aeropuerto de origen");
+            // Carga la aeronave asignada al vuelo con bloqueo pesimista de escritura para verificar su ubicación actual
             Aircraft plane=aircraft.lockById(flight.getAircraft().getId()).orElseThrow(()->bad("Aeronave inexistente"));
             if (plane.getAeropuertoActual()==null || !flight.getOrigen().getId().equals(plane.getAeropuertoActual().getId()))
                 throw new ApiException(HttpStatus.CONFLICT,"La ubicación confirmada de la aeronave no coincide con el origen planificado");
@@ -97,10 +99,13 @@ public class HangarInfoService {
     }
     private void persist(Flight f,User u,HangarInfo old,HangarInfo n,String op) {
         String before=old==null?null:serialize(snapshot(old));
+        // persist: Guarda la versión anterior de la información de hangar marcada como no vigente y fuerza su escritura inmediata
         if(old!=null){old.setEsVersionActual(false); records.saveAndFlush(old);}
+        // persist: Guarda la nueva versión vigente de la información de hangar y fuerza su escritura inmediata
         records.saveAndFlush(n); audit.record(f,u,"HANGAR_INFO",n.getId(),op,before,serialize(snapshot(n)));
     }
     private View view(Flight f,User u) {
+        // view: Obtiene todas las versiones de la información de hangar del vuelo, de la más nueva a la más antigua
         List<HangarInfo> history=records.findByFlightIdOrderByVersionDesc(f.getId());
         HangarInfo current=history.stream().filter(x->Boolean.TRUE.equals(x.getEsVersionActual())).findFirst().orElse(null);
         boolean beforeDeparture=f.getFechaSalidaReal()==null&&f.getFechaCancelacion()==null;
@@ -118,8 +123,12 @@ public class HangarInfoService {
     private boolean mutable(Flight f){if(f.getEstadoVuelo()!=null)return !Set.of("CANCELADO","FINALIZADO","COMPLETADO").contains(f.getEstadoVuelo().getCodigo());return f.getSanitario()!=null&&f.getSanitario().getEstadoSolicitud()!=null&&!"RECHAZADO".equals(f.getSanitario().getEstadoSolicitud().getCodigo());}
     private void requireMutable(Flight f){PreparationStageGate.require(f,"registrar la preparación terrestre");if(!mutable(f))throw bad("El vuelo no admite cambios en su estado actual");}
     private void checkVersion(HangarInfo r,Integer version){if(version==null||version!=(r==null?0:r.getVersion()))throw new ApiException(HttpStatus.CONFLICT,"La información cambió; vuelva a cargarla antes de guardar");}
+    // current: Busca la versión vigente de la información de hangar del vuelo
     private HangarInfo current(Long id){return records.findByFlightIdAndEsVersionActualTrue(id).orElse(null);}
+    // flight: Carga el vuelo por su ID con bloqueo pesimista de escritura si se pide bloqueo, o sin bloqueo en caso contrario
     private Flight flight(Long id,boolean lock){return (lock?flights.lockById(id):flights.findById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));}
+    // user: Busca el usuario por su ID
+    // user: Carga el mismo usuario por su nombre de usuario junto con sus roles asignados
     private User user(Long id){User u=users.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));return users.findWithRolesByUsername(u.getUsername()).orElseThrow();}
     private boolean role(User u,String... roles){return u.getUserRoles().stream().anyMatch(r->Arrays.asList(roles).contains(r.getRole().getCodigo()));}
     private boolean operations(User u){return role(u,"OPERACIONES","CENTRO_OPERACIONES");}

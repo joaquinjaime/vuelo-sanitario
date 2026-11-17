@@ -4,11 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.api.dto.AircraftDtos.*;
-import com.vuelossanitarios.backend.domain.audit.AuditEvent;
 import com.vuelossanitarios.backend.domain.catalog.Aircraft;
 import com.vuelossanitarios.backend.domain.catalog.Airport;
 import com.vuelossanitarios.backend.domain.flight.Flight;
-import com.vuelossanitarios.backend.domain.flight.FlightCrew;
 import com.vuelossanitarios.backend.domain.flight.SanitaryFlight;
 import com.vuelossanitarios.backend.domain.user.User;
 import com.vuelossanitarios.backend.repository.*;
@@ -36,30 +34,46 @@ public class AircraftAdminService {
  private ApiException bad(String message){return new ApiException(HttpStatus.BAD_REQUEST,message);}
  private ApiException conflict(String code,String message,Map<String,Object> details){return new ApiException(HttpStatus.CONFLICT,code,message,details);}
  private ApiException notFound(){return new ApiException(HttpStatus.NOT_FOUND,"Aeronave inexistente");}
+ // Busca el usuario actor por su ID; si no existe responde 404.
  private User actor(Long id){return users.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));}
  private String plate(String raw){return raw.trim().toUpperCase(Locale.ROOT);}
  private String blank(String v){return v==null||v.isBlank()?null:v.trim();}
  private String json(Map<String,Object> values){try{return JSON.writeValueAsString(values);}catch(JsonProcessingException e){throw new IllegalStateException(e);}}
  private Map<String,Object> snapshot(Aircraft x){Map<String,Object> m=new LinkedHashMap<>();m.put("matricula",x.getMatricula());m.put("modelo",x.getModelo());m.put("tipo",x.getTipo());m.put("capacidadPacientes",x.getCapacidadPacientes());m.put("capacidadTripulacion",x.getCapacidadTripulacion());m.put("equipamientoMedico",x.getEquipamientoMedico());m.put("activo",Boolean.TRUE.equals(x.getActivo()));m.put("aeropuertoActualId",x.getAeropuertoActual()==null?null:x.getAeropuertoActual().getId());return m;}
+ // Bloquea para escritura (PESSIMISTIC_WRITE) la aeronave por su ID; si no existe responde 404.
  private Aircraft locked(Long id){return aircraft.lockById(id).orElseThrow(this::notFound);}
+ // Bloquea para escritura el aeropuerto por su ID y relee su estado confirmado en la base.
+ // Carga el aeropuerto por su ID y lo descarta si no está activo.
  private Airport activeAirport(Long id){if(id==null)return null;airportLocks.lockAll(id);return airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElse(null);}
 
  // ---------- Consultas ----------
+ // Obtiene todas las aeronaves con su aeropuerto actual precargado, ordenadas por matrícula (luego se filtran las activas).
  @Transactional(readOnly=true) public List<AircraftView> activeList(){return aircraft.findAllWithCurrentAirportOrderByMatricula().stream().filter(x->Boolean.TRUE.equals(x.getActivo())).map(this::view).toList();}
  @Transactional(readOnly=true) public List<AircraftAdminView> adminList(){
+  // Obtiene los vuelos comprometidos (pendientes, planificados o en curso) de todas las aeronaves, con aeronave y estado precargados.
   Map<Long,List<Flight>> committed=flights.committedWithAircraft(FlightStates.COMMITTED).stream().collect(Collectors.groupingBy(f->f.getAircraft().getId()));
+  // Obtiene todas las aeronaves con su aeropuerto actual precargado, ordenadas por matrícula.
   return aircraft.findAllWithCurrentAirportOrderByMatricula().stream().map(x->adminView(x,committed.getOrDefault(x.getId(),List.of()))).toList();
  }
+ // Carga la aeronave por su ID; si no existe responde 404.
+ // Obtiene los vuelos de la aeronave en estados comprometidos (pendientes, planificados o en curso).
  @Transactional(readOnly=true) public AircraftAdminView get(Long id){Aircraft x=aircraft.findById(id).orElseThrow(this::notFound);return adminView(x,flights.activeAircraftAssignments(id,FlightStates.COMMITTED));}
  /** Vuelos que usan o usaron la aeronave, vigentes primero (por salida) y luego el historial. No incluye datos de pacientes. */
+ // Verifica que la aeronave exista por su ID; si no, responde 404.
+ // Obtiene todos los vuelos de la aeronave, del más reciente al más antiguo por salida planificada e ID.
  @Transactional(readOnly=true) public List<FlightSummary> flights(Long id){aircraft.findById(id).orElseThrow(this::notFound);return flights.findByAircraftIdOrderByFechaPlanificadaSalidaDescIdDesc(id).stream().map(this::summary).toList();}
+ // Verifica que la aeronave exista por su ID; si no, responde 404.
+ // Obtiene los eventos de auditoría de la entidad AIRCRAFT con ese ID, del más reciente al más antiguo.
  @Transactional(readOnly=true) public List<AircraftHistoryEntry> history(Long id){aircraft.findById(id).orElseThrow(this::notFound);return events.findByEntityTypeAndEntityIdOrderByOccurredAtDesc("AIRCRAFT",id).stream().map(e->new AircraftHistoryEntry(e.getId(),e.getOperation(),e.getActor()==null?"Sistema":e.getActor().getUsername(),AuditService.toLocal(e.getOccurredAt(),clock.getZone()),e.getFlight()==null?null:e.getFlight().getId(),e.getOldValues(),e.getNewValues())).toList();}
  /** Aeronaves activas con su disponibilidad en [from, to): activa, fuera de vuelo y sin vuelos comprometidos superpuestos. */
  @Transactional(readOnly=true) public List<AircraftAvailabilityView> availability(LocalDateTime from,LocalDateTime to){
   if(from==null||to==null||!to.isAfter(from))throw bad("Indique un intervalo válido: la llegada debe ser posterior a la salida");
   List<AircraftAvailabilityView> out=new ArrayList<>();
+  // Obtiene todas las aeronaves con su aeropuerto actual precargado, ordenadas por matrícula.
   for(Aircraft x:aircraft.findAllWithCurrentAirportOrderByMatricula()){
    if(!Boolean.TRUE.equals(x.getActivo()))continue;
+   // Obtiene los vuelos de la aeronave que están EN_CURSO.
+   // Obtiene los vuelos comprometidos de la aeronave que se superponen con el intervalo [from, to).
    List<Flight> inFlight=flights.activeAircraftAssignments(x.getId(),List.of("EN_CURSO"));List<Flight> busy=flights.aircraftBusyIn(x.getId(),from,to);
    Map<Long,Flight> conflicts=new LinkedHashMap<>();for(Flight f:inFlight)conflicts.put(f.getId(),f);for(Flight f:busy)conflicts.put(f.getId(),f);
    String reason=x.getAeropuertoActual()==null?"Sin ubicación registrada":!inFlight.isEmpty()?"Actualmente en vuelo":!busy.isEmpty()?"Tiene un vuelo comprometido en ese intervalo":null;
@@ -73,8 +87,10 @@ public class AircraftAdminService {
  @Transactional public AircraftAdminView create(AircraftRequest r,Long actorId){
   User by=actor(actorId);String plate=plate(r.matricula());Airport airport=activeAirport(r.aeropuertoActualId());
   if(airport==null)throw bad("Seleccione un aeropuerto actual válido");
+  // Verifica si ya existe una aeronave con la misma matrícula (sin distinguir mayúsculas).
   if(aircraft.existsByMatriculaIgnoreCase(plate))throw conflict("DUPLICATE_PLATE","Ya existe una aeronave con la matrícula "+plate,Map.of());
   Aircraft x=new Aircraft();x.setMatricula(plate);x.setModelo(r.modelo().trim());x.setTipo(r.tipo().trim());x.setCapacidadPacientes(r.capacidadPacientes());x.setCapacidadTripulacion(r.capacidadTripulacion());x.setEquipamientoMedico(blank(r.equipamientoMedico()));x.setActivo(r.activo()==null||r.activo());x.setAeropuertoActual(airport);
+  // Inserta la nueva aeronave y sincroniza de inmediato con la base para detectar matrículas duplicadas.
   try{aircraft.saveAndFlush(x);}catch(DataIntegrityViolationException e){throw conflict("DUPLICATE_PLATE","Ya existe una aeronave con la matrícula "+plate,Map.of());}
   audit.record(null,by,"AIRCRAFT",x.getId(),"CREATE",null,json(snapshot(x)));
   return adminView(x,List.of());
@@ -85,9 +101,11 @@ public class AircraftAdminService {
   User by=actor(actorId);Aircraft x=locked(id);
   if(r.activo()!=null&&r.activo()!=Boolean.TRUE.equals(x.getActivo()))throw bad("El estado activo/inactivo se modifica con su propia operación");
   if(r.aeropuertoActualId()!=null&&(x.getAeropuertoActual()==null||!x.getAeropuertoActual().getId().equals(r.aeropuertoActualId())))throw bad("La ubicación se modifica con su propia operación");
+  // Obtiene los vuelos de la aeronave en estados comprometidos (pendientes, planificados o en curso).
   List<Flight> committed=flights.activeAircraftAssignments(id,FlightStates.COMMITTED);
   if(committed.stream().anyMatch(f->"EN_CURSO".equals(f.getEstadoVuelo().getCodigo())))throw conflict("AIRCRAFT_IN_FLIGHT","La aeronave está en vuelo: sus datos no pueden modificarse hasta que finalice",Map.of("vuelos",codes(committed)));
   String plate=plate(r.matricula());
+  // Verifica si otra aeronave (distinto ID) ya usa la misma matrícula.
   if(!plate.equalsIgnoreCase(x.getMatricula())&&aircraft.existsByMatriculaIgnoreCaseAndIdNot(plate,id))throw conflict("DUPLICATE_PLATE","Ya existe una aeronave con la matrícula "+plate,Map.of());
   String equipment=blank(r.equipamientoMedico());
   assertCapacityConsistent(x,r.capacidadTripulacion(),equipment,committed);
@@ -95,6 +113,7 @@ public class AircraftAdminService {
   x.setMatricula(plate);x.setModelo(r.modelo().trim());x.setTipo(r.tipo().trim());x.setCapacidadPacientes(r.capacidadPacientes());x.setCapacidadTripulacion(r.capacidadTripulacion());x.setEquipamientoMedico(equipment);
   Map<String,Object> after=snapshot(x);
   if(before.equals(after))return adminView(x,committed);
+  // Actualiza los datos de la aeronave y sincroniza de inmediato con la base para detectar matrículas duplicadas.
   try{aircraft.saveAndFlush(x);}catch(DataIntegrityViolationException e){throw conflict("DUPLICATE_PLATE","Ya existe una aeronave con la matrícula "+plate,Map.of());}
   audit.record(null,by,"AIRCRAFT",x.getId(),"UPDATE",json(before),json(after));
   return adminView(x,committed);
@@ -102,10 +121,12 @@ public class AircraftAdminService {
  /** La capacidad y el equipamiento no pueden contradecir los vuelos que ya usan la aeronave. */
  private void assertCapacityConsistent(Aircraft x,short newCrewCapacity,String newEquipment,List<Flight> committed){
   if(committed.isEmpty())return;
+  // Obtiene la tripulación vigente (sin baja) de los vuelos comprometidos de la aeronave, con el vuelo precargado.
   Map<Long,Long> crewByFlight=crews.activeCrewOfAircraftFlights(x.getId(),FlightStates.COMMITTED).stream().collect(Collectors.groupingBy(c->c.getFlight().getId(),Collectors.counting()));
   List<String> tooBig=committed.stream().filter(f->crewByFlight.getOrDefault(f.getId(),0L)>newCrewCapacity).map(Flight::getCodigo).toList();
   if(!tooBig.isEmpty())throw conflict("AIRCRAFT_CAPACITY_CONFLICT","La capacidad de tripulación indicada es menor que la tripulación ya asignada en: "+String.join(", ",tooBig),Map.of("vuelos",tooBig));
   if(newEquipment==null&&x.getEquipamientoMedico()!=null&&!x.getEquipamientoMedico().isBlank()){
+   // Obtiene la información médica de cada vuelo sanitario para saber si requiere equipamiento especial.
    List<String> needing=committed.stream().filter(f->f.getSanitario()!=null&&medical.findByFlightId(f.getId()).map(m->Boolean.TRUE.equals(m.getRequiereEquipamientoEspecial())).orElse(false)).map(Flight::getCodigo).toList();
    if(!needing.isEmpty())throw conflict("AIRCRAFT_EQUIPMENT_CONFLICT","No puede quitarse el equipamiento médico: hay vuelos asignados que requieren equipamiento especial: "+String.join(", ",needing),Map.of("vuelos",needing));
   }
@@ -115,6 +136,7 @@ public class AircraftAdminService {
  @Transactional public AircraftAdminView setActive(Long id,boolean active,String reason,Long actorId){
   User by=actor(actorId);Aircraft x=locked(id);boolean current=Boolean.TRUE.equals(x.getActivo());
   if(active==current)throw conflict(active?"AIRCRAFT_ALREADY_ACTIVE":"AIRCRAFT_ALREADY_INACTIVE",active?"La aeronave ya está activa":"La aeronave ya está desactivada",Map.of());
+  // Obtiene los vuelos de la aeronave en estados comprometidos (pendientes, planificados o en curso).
   List<Flight> committed=flights.activeAircraftAssignments(id,FlightStates.COMMITTED);
   if(!active){
    if(committed.stream().anyMatch(f->"EN_CURSO".equals(f.getEstadoVuelo().getCodigo())))throw conflict("AIRCRAFT_IN_FLIGHT","La aeronave participa en un vuelo en curso y no puede desactivarse",Map.of("vuelos",codes(committed)));
@@ -134,6 +156,7 @@ public class AircraftAdminService {
   if(target==null)throw bad("Seleccione un aeropuerto válido");
   Airport old=x.getAeropuertoActual();
   if(old!=null&&old.getId().equals(target.getId()))throw bad("La aeronave ya se encuentra en ese aeropuerto");
+  // Obtiene los vuelos de la aeronave en estados comprometidos (pendientes, planificados o en curso).
   List<Flight> committed=flights.activeAircraftAssignments(id,FlightStates.COMMITTED);
   if(committed.stream().anyMatch(f->"EN_CURSO".equals(f.getEstadoVuelo().getCodigo())))throw conflict("AIRCRAFT_IN_FLIGHT","La aeronave está en vuelo: su ubicación se actualiza al finalizar el vuelo",Map.of("vuelos",codes(committed)));
   List<String> contradicted=new ArrayList<>();for(Flight f:committed)if(contradicts(f,target))contradicted.add(f.getCodigo());

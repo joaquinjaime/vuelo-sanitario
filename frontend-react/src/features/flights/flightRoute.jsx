@@ -1,5 +1,5 @@
 import { PlanningPanel } from "./components/PlanningPanel";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.

@@ -1,6 +1,5 @@
 /* Chrome real (Playwright) sobre el stack aislado :18081 / :18080: "Mi cuenta" con el selector internacional de teléfonos (país, prefijo, validación
- * en vivo, número final) y la verificación de correos con el código recibido en la bandeja de pruebas SMTP (Mailpit); el formulario del DTS con el
- * teléfono de coordinación por país. Cada paso se comprueba en SQL Server. La bandeja es un transporte controlado: no prueba entrega a un proveedor externo.
+ * en vivo, número final) y la verificación de correos con el código recibido en la bandeja de pruebas SMTP (Mailpit). Cada paso se comprueba en SQL Server. La bandeja es un transporte controlado: no prueba entrega a un proveedor externo.
  * Requiere `playwright` resoluble (NODE_PATH) y Chrome (E2E_CHROME opcional). */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -101,18 +100,6 @@ const personOf = (u) => Number(one(`SELECT id_personas FROM usuarios WHERE id_us
     // recarga: el estado persiste
     await page.reload(); await page.getByRole('heading', { name: 'Mis datos de contacto' }).waitFor(); await rowOf(page, addr).getByText('Verificado', { exact: true }).waitFor();
     pass('verificación de correos desde la interfaz: pendiente, código incorrecto, confirmación, principal sólo tras verificar, reenvío con límite, código anterior inválido y estado persistente');
-
-    // ---- 3. Teléfono de coordinación por país en la solicitud del DTS ----
-    const dtsPage = await login(user);
-    await dtsPage.getByRole('heading', { name: 'Nueva solicitud DTS' }).waitFor();
-    await dtsPage.getByRole('button', { name: 'Agregar contacto de coordinación' }).click();
-    const block = dtsPage.locator('.transfer-contact-block').first();
-    await block.getByLabel('Relación con el paciente').selectOption('PACIENTE');
-    assert.equal(await block.getByLabel('País del teléfono').inputValue(), 'AR');
-    await block.getByLabel('País del teléfono').selectOption('US'); assert.equal((await block.getByLabel('Prefijo internacional').innerText()).trim(), '+1');
-    await block.getByLabel('Teléfono', { exact: true }).fill('416 555 0123'); await block.getByText(/no es un teléfono válido de Estados Unidos/).waitFor();
-    await block.getByLabel('País del teléfono').selectOption('CA'); await block.getByText(/Se guardará como \+1 416 555 0123/).waitFor();
-    pass('el contacto de coordinación del traslado usa el mismo selector (Canadá y Estados Unidos comparten +1 y se validan por región)');
   } finally { await browser.close(); }
   console.log(`\nOK: ${passed} bloques aprobados (bandeja de pruebas SMTP: sin entrega a un proveedor externo)`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

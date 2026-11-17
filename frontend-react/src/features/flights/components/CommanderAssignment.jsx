@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { api } from "../../../services/api";
 
 export function CommanderAssignment({ flight, done, msg, reload }) {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSession } from "../../../app/providers/SessionProvider";
 import { appPath } from "../../../app/navigation";
@@ -9,6 +9,7 @@ import { RouteReviewQueue, RouteStateBadge } from "../flightRoute";
 import { useRouteStatuses } from "../useRouteStatuses";
 import { useOperationalData } from "../../../app/providers/OperationalDataProvider";
 import { ATTENTION_STATES } from "../../dashboard/attention";
+import { isCopilotFlight } from "../../../utils/flightAdapter";
 import { isOpenState } from "../../../utils/format";
 
 const detailPath = (flight) => appPath(`vuelos/${flight.id}`);
@@ -34,7 +35,8 @@ export const COMMANDER_FLIGHT_CONFIG = {
   breadcrumbs: requestsHome("Mis vuelos"), detailPath, order: byDeparture, dateHeader: "Salida", noun: "vuelos", searchLabel: "Buscar mis vuelos",
   emptyTitle: "No tiene vuelos asignados", emptyText: "Cuando el Centro de Operaciones le asigne un vuelo aparecerá aquí y recibirá una notificación.",
   filters: [
-    { value: "accion", label: "Requieren mi acción", predicate: (f) => ATTENTION_STATES.COMANDANTE.includes(f.estado) },
+    { value: "accion", label: "Requieren mi acción", predicate: (f) => ATTENTION_STATES.COMANDANTE.includes(f.estado) && !isCopilotFlight(f) },
+    { value: "copiloto", label: "Como copiloto", predicate: (f) => isCopilotFlight(f) },
     ...BASE_FILTERS,
   ],
 };

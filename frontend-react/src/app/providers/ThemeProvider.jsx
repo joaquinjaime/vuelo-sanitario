@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const ThemeContext = createContext({ dark: false, toggle: () => {} });
 const readDark = () => { try { return localStorage.getItem("vs-theme") === "dark"; } catch { return false; } };

@@ -1,7 +1,5 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "./Icon";
-import { EmptyState } from "./feedback";
 
 /**
  * Tabla de datos: contenedor con desplazamiento horizontal propio (no desborda la página), encabezados asociados y filas con una acción.
@@ -65,6 +63,3 @@ export function StatCard({ label, value, hint, to, tone = "neutral" }) {
   return to ? <Link className={`stat-card stat-${tone}`} to={to}>{body}</Link> : <article className={`stat-card stat-${tone}`}>{body}</article>;
 }
 
-export function EmptyRow({ title, children, action }) {
-  return <EmptyState title={title} action={action}>{children}</EmptyState>;
-}

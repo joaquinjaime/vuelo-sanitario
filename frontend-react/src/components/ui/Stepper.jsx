@@ -1,4 +1,3 @@
-import React from "react";
 import { STAGE } from "../../features/flights/flightStages";
 
 // Etapas del proceso tal como las deriva flightStages (el estado real del servidor), de la solicitud al cierre.

@@ -71,12 +71,6 @@ body[data-theme="dark"] .urgent-row, body[data-theme="dark"] .report-blocked { b
 .contact-owner { margin: .25rem 0; }
 
 /* Contactos de coordinación del traslado (solicitud DTS y detalle de Operaciones) */
-.transfer-contacts-fieldset { border: 1px solid var(--border, #c9d1d9); border-radius: .5rem; padding: .75rem; display: grid; gap: .75rem; }
-.transfer-contact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .5rem; }
-.transfer-contact-block { display: grid; gap: .5rem; }
-.transfer-contact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
-.transfer-contact-edit { display: grid; gap: .5rem; width: 100%; }
-.transfer-contact-phone { font-weight: 600; margin: 0 .5rem; }
 .crew-contacts { display: grid; gap: .5rem; margin: .5rem 0; }
 .crew-contact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
 .crew-contact-values { margin: .15rem 0; }

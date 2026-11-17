@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useSession } from "./providers/SessionProvider";
-import { APP_BASE, appPath, legacyHashTarget, workspacesFor } from "./navigation";
+import { appPath, legacyHashTarget, workspacesFor } from "./navigation";
 import { EmptyState } from "../components/ui/feedback";
 
 /** Exige sesión. Sin ella lleva a /login recordando la ruta pedida para volver tras ingresar; con contraseña temporal obliga a cambiarla. */
@@ -55,4 +55,3 @@ export function LegacyHashRedirect() {
   return <Navigate to={target} replace />;
 }
 
-export const HomeRedirect = () => <Navigate to={`${APP_BASE}/inicio`} replace />;

@@ -38,7 +38,9 @@ public class CrewItineraryService {
  /** Vuelos abiertos de la persona: como comandante (incluso reservado) o con una asignación vigente de copiloto. */
  @Transactional(readOnly=true) public List<Flight> openFlightsOf(Long userId){
   Map<Long,Flight> out=new LinkedHashMap<>();
+  // Obtiene los vuelos abiertos donde la persona es comandante (incluye los que aún no tienen estado y excluye FINALIZADO, COMPLETADO, CANCELADO y RECHAZADO).
   for(Flight f:flights.openOfCommander(userId))out.put(f.getId(),f);
+  // Obtiene las asignaciones de tripulación vigentes (sin fecha de baja) de la persona.
   for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(userId)){Flight f=c.getFlight();if(f.getEstadoVuelo()==null||!FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo()))out.putIfAbsent(f.getId(),f);}
   return out.values().stream().sorted(Comparator.comparing(Flight::getFechaPlanificadaSalida,Comparator.nullsLast(Comparator.naturalOrder()))).toList();
  }
@@ -57,10 +59,12 @@ public class CrewItineraryService {
  @Transactional(readOnly=true) public Map<Long,Position> projectionsAt(LocalDateTime when,Long excludeFlightId){
   Map<Long,Flight> latest=new HashMap<>();
   if(when==null)return Map.of();
+  // Obtiene los vuelos abiertos con comandante cuya llegada planificada es anterior o igual al instante indicado, con comandante y destino precargados.
   for(Flight f:flights.openArrivingBy(when)){
    if(Objects.equals(f.getId(),excludeFlightId)||arrivalProvince(f)==null||f.getComandante()==null)continue;
    latest.merge(f.getComandante().getId(),f,(a,b)->laterArrival(b,a)?b:a);
   }
+  // Obtiene las asignaciones vigentes de copiloto en vuelos abiertos cuya llegada planificada es anterior o igual al instante indicado, con vuelo, usuario y destino precargados.
   for(FlightCrew c:crews.openCopilotArrivingBy(when)){
    Flight f=c.getFlight();if(Objects.equals(f.getId(),excludeFlightId)||arrivalProvince(f)==null)continue;
    latest.merge(c.getUser().getId(),f,(a,b)->laterArrival(b,a)?b:a);
@@ -81,6 +85,7 @@ public class CrewItineraryService {
  @Transactional public int revalidate(Collection<Long> userIds,User actor){
   int flagged=0;
   for(Long id:new TreeSet<>(userIds)){
+   // Busca el usuario por su ID; si no existe se omite.
    User u=users.findById(id).orElse(null);if(u==null)continue;
    for(Flight f:openFlightsOf(id)){
     if(f.getFechaPlanificadaSalida()==null||f.getOrigen()==null||f.getOrigen().getProvinciaReferencial()==null)continue;
@@ -88,6 +93,7 @@ public class CrewItineraryService {
     Province from=f.getOrigen().getProvinciaReferencial();
     if(pos.provinceId()!=null&&pos.provinceId().equals(from.getId()))continue;
     String function=functionIn(f,id);
+    // Obtiene las excepciones geográficas vigentes (no reemplazadas) del vuelo, con comandante, autorizante y localidad del comandante precargados.
     boolean covered=exceptions.findCurrentByFlightId(f.getId()).stream().anyMatch(e->e.getCommander().getId().equals(id)&&function.equals(e.getFunction())&&e.getDepartureProvince()!=null&&e.getDepartureProvince().getId().equals(from.getId()));
     if(covered)continue;
     String where=pos.province()==null?"no tiene una ubicación operativa registrada":pos.projected()?"estará en "+pos.provinceName()+" al terminar el vuelo "+pos.afterFlight():"se encuentra en "+pos.provinceName();

@@ -1,4 +1,3 @@
-import React from "react";
 import { useSession } from "../../app/providers/SessionProvider";
 import { AuthLayout } from "./AuthLayout";
 

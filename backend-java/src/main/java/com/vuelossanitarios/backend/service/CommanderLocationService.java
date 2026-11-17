@@ -40,14 +40,17 @@ import org.springframework.transaction.annotation.Transactional;
    default:throw new ApiException(HttpStatus.BAD_REQUEST,"Estado de ubicación no reconocido");
   }
   jpql.append(" order by p.apellido, p.nombre, u.id");
+  // Prepara la consulta JPQL de comandantes con cuenta activa, su persona, perfil y provincia actual, con los filtros de texto, provincia y estado de ubicación, ordenados por apellido, nombre e ID
   var query=em.createQuery(jpql.toString(),User.class);
   if(!text.isEmpty())query.setParameter("q","%"+text+"%");
   if(provinceId!=null)query.setParameter("province",provinceId);
+  // Ejecuta la consulta de comandantes limitada a uno más que el máximo pedido para saber si hay más resultados
   List<User> found=query.setMaxResults(max+1).getResultList();
   return new CommanderLocationList(found.stream().limit(max).map(CommanderLocationService::row).toList(),found.size()>max);
  }
 
  @Transactional(readOnly=true) public CommanderLocationRow get(Long userId){
+  // Carga el usuario por su ID junto con su persona asociada
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Comandante inexistente"));
   if(u.getPerson().getCommanderProfile()==null)throw new ApiException(HttpStatus.BAD_REQUEST,"El usuario no tiene perfil de comandante");
   return row(u);
@@ -55,18 +58,22 @@ import org.springframework.transaction.annotation.Transactional;
 
   /** Fija la ubicación operativa actual: una provincia o la Ciudad Autónoma de Buenos Aires (que es otra jurisdicción distinta de la provincia de Buenos Aires). {@code provinceId} null la marca como desconocida. */
  @Transactional public CommanderLocationRow update(Long userId,Long provinceId,String reason,Long actorId){
+  // Busca el usuario actor por su ID
   User actor=users.findById(actorId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  // Carga el usuario comandante por su ID con su persona y roles, con bloqueo pesimista de escritura
   User target=users.lockWithPersonAndRolesById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Comandante inexistente"));
   CommanderProfile profile=target.getPerson().getCommanderProfile();
   if(profile==null||target.getUserRoles().stream().noneMatch(r->"COMANDANTE".equals(r.getRole().getCodigo())))throw new ApiException(HttpStatus.BAD_REQUEST,"El usuario no tiene perfil de comandante");
   if(!Boolean.TRUE.equals(target.getActivo()))throw new ApiException(HttpStatus.CONFLICT,"La cuenta del comandante está desactivada; reactívela antes de registrar su ubicación");
   Province next=null;
   if(provinceId!=null){
+   // Busca la provincia seleccionada por su ID
    next=provinces.findById(provinceId).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Seleccione una provincia o la Ciudad Autónoma de Buenos Aires válida"));
    if(!Boolean.TRUE.equals(next.getActivo()))throw new ApiException(HttpStatus.BAD_REQUEST,"La provincia seleccionada está deshabilitada");
   }
   String why=reason==null||reason.isBlank()?null:reason.trim();
   String before=snapshot(profile,null);
+  // Modifica la ubicación del perfil de comandante (entidad gestionada); el cambio se actualiza en la base de datos al confirmar la transacción
   profile.setProvinciaActual(next);profile.setUbicacionActualizadaEn(LocalDateTime.now(clock));profile.setUbicacionActualizadaPor(actor);
   audit.record(null,actor,"COMMANDER_PROFILE",target.getPerson().getId(),"COMMANDER_LOCATION_UPDATE",before,snapshot(profile,why));
   return row(target);

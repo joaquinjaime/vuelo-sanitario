@@ -1,4 +1,3 @@
-import React from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -106,7 +105,7 @@ const serveOperations = (state) => vi.mocked(api).mockImplementation((path, opti
   return Promise.resolve([]);
 });
 const requested = () => vi.mocked(api).mock.calls.map(([path]) => path).filter((path) => path.startsWith("/flights/7/"));
-const STAGE_LATER = ["/flights/7/hangar", "/flights/7/airport-coordinations", "/flights/7/documents", "/flights/7/documents/access", "/flights/7/log", "/flights/7/weather", "/flights/7/crew", "/flights/7/route", "/flights/7/transfer-contacts"];
+const STAGE_LATER = ["/flights/7/hangar", "/flights/7/airport-coordinations", "/flights/7/documents", "/flights/7/documents/access", "/flights/7/log", "/flights/7/weather", "/flights/7/crew", "/flights/7/route"];
 
 const ops = () => ({ roles: [ROLE.ops], username: "ops" });
 

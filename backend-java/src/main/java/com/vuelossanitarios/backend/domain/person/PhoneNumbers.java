@@ -10,8 +10,7 @@ import java.util.regex.Pattern;
 
 /**
  * Validación y normalización <b>internacional</b> de teléfonos con los metadatos de numeración de Google (libphonenumber).
- * Es la única regla de teléfonos del servidor: la usan el autoservicio, el alta administrativa y los contactos de coordinación del
- * traslado. El país lo elige quien carga el dato (no se infiere); el número es válido sólo si lo es <i>para ese país</i>.
+ * Es la única regla de teléfonos del servidor: la usan el autoservicio y el alta administrativa. El país lo elige quien carga el dato (no se infiere); el número es válido sólo si lo es <i>para ese país</i>.
  *
  * <ul>
  * <li>Se acepta formato nacional (con o sin prefijo troncal y con los formatos móviles propios del país, p. ej. 0 y 15 en Argentina)

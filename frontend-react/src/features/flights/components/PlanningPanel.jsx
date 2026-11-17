@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useId, useRef, useState } from "react";
+import { createContext, useContext, useId, useRef, useState } from "react";
 
 export const DRAFT_WARNING = "Hay un formulario abierto. ¿Descartar los cambios sin guardar?";
 const OpenPanel = createContext(null);

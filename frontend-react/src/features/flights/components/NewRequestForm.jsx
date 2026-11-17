@@ -1,13 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../services/api";
 import { isTodayOrTomorrow } from "../../../utils/format";
 import { PatientSearch } from "../../patients/patients";
-import { TransferContactFields, contactsPayload, rowsProblem } from "../transferContacts";
 import { LocalityPicker } from "./LocalityPicker";
 
 export function NewRequestForm({ d, done, msg }) {
   const submitLock = useRef(false);
-  const [patientMode, setPatientMode] = useState("new"), [selectedPatient, setSelectedPatient] = useState(null), [contactRows, setContactRows] = useState([]),
+  const [patientMode, setPatientMode] = useState("new"), [selectedPatient, setSelectedPatient] = useState(null),
     [submitting, setSubmitting] = useState(false),
     [provinces, setProvinces] = useState([]), [originProvince, setOriginProvince] = useState(""), [destinationProvince, setDestinationProvince] = useState(""), [origin, setOrigin] = useState(null), [destination, setDestination] = useState(null), [locationError, setLocationError] = useState(""),
     [f, setF] = useState({
@@ -19,7 +18,7 @@ export function NewRequestForm({ d, done, msg }) {
       prioridad: "ALTA",
       motivo: "",
       diagnostico: "",
-      condicion: "ESTABLE",
+      condicion: "",
       solicitada: "",
       urgente: false,
       justificacion: "",
@@ -52,8 +51,6 @@ export function NewRequestForm({ d, done, msg }) {
           if (!origin || !destination) { setLocationError("Seleccione una localidad válida de origen y destino."); return; }
           if (patientMode === "search" && !selectedPatient) { msg("Busque y seleccione un paciente registrado.", true); return; }
           if (patientMode === "new" && f.dni && !f.identidadConfirmada) { msg("Confirme el cotejo de identidad para continuar.", true); return; }
-          const contactProblem = rowsProblem(contactRows);
-          if (contactProblem) { msg(contactProblem, true); return; }
           submitLock.current = true;
           setSubmitting(true);
           try {
@@ -61,7 +58,6 @@ export function NewRequestForm({ d, done, msg }) {
               method: "POST",
               body: JSON.stringify({
                 ...(patientMode === "search" ? { patientId: selectedPatient.id } : { patient: { nombre: f.nombre, apellido: f.apellido, dni: f.dni || null, fechaNacimiento: f.fechaNacimiento || null }, identidadConfirmada: f.identidadConfirmada }),
-                contactos: contactsPayload(contactRows),
                 localidadOrigenId: origin.id,
                 localidadDestinoId: destination.id,
                 priorityCode: f.prioridad,
@@ -81,7 +77,6 @@ export function NewRequestForm({ d, done, msg }) {
               }),
             });
             msg("Solicitud registrada");
-            setContactRows([]);
             done();
           } catch (x) {
             msg(x.message, true);
@@ -202,11 +197,16 @@ export function NewRequestForm({ d, done, msg }) {
         </label>
         <label>
           Condición
-          <input
+          <select
             required
             value={f.condicion}
             onChange={(e) => change("condicion", e.target.value)}
-          />
+          >
+            <option value="">Seleccione la condición</option>
+            {(d.conditions || []).map((x) => (
+              <option key={x.codigo} value={x.codigo}>{x.nombre}</option>
+            ))}
+          </select>
         </label>
         <label className="wide">
           Motivo
@@ -217,7 +217,6 @@ export function NewRequestForm({ d, done, msg }) {
           />
         </label>
         </div></fieldset>
-        <TransferContactFields rows={contactRows} setRows={setContactRows} />
         <div className="form-actions wide"><button disabled={submitting}>{submitting ? "Registrando solicitud..." : "Crear solicitud"}</button></div>
       </form>
     </section>

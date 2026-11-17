@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { formatInstant } from "../audit/audit";
 import { DniRectification } from "../../components/forms/DniRectification";

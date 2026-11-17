@@ -35,10 +35,12 @@ public class PatientService {
   if(blank(request.nombre())||blank(request.apellido()))throw new ApiException(HttpStatus.BAD_REQUEST,"Nombre y apellido son obligatorios");
   String dni=canonicalDni(request.dni());
   if(allowExisting&&dni!=null&&!identityAttested)throw identityConflict();
+  // Busca la persona con ese DNI aplicando bloqueo pesimista de escritura
   Person person=dni==null?null:persons.findByDniForUpdate(dni).orElse(null);
   boolean linkedExisting=person!=null;
   if(linkedExisting){
    if(!allowExisting||!identityAttested||!sameIdentity(person,request))throw identityConflict();
+   // Verifica si la persona ya tiene una ficha de paciente asociada
    if(patients.findByPersonId(person.getId()).isPresent())throw identityConflict();
   }else{
    person=new Person();
@@ -46,8 +48,10 @@ public class PatientService {
    person.setApellido(request.apellido().trim());
    person.setDni(dni);
    person.setFechaNacimiento(request.fechaNacimiento());
+   // Guarda la nueva persona (nombre, apellido, DNI y fecha de nacimiento) y fuerza su escritura inmediata
    persons.saveAndFlush(person);
   }
+  // Guarda la nueva ficha de paciente vinculada a la persona y fuerza su escritura inmediata
   Patient patient=new Patient();patient.setPerson(person);patients.saveAndFlush(patient);
   return new Registration(new PatientView(patient.getId(),person.getId(),person.getNombre(),person.getApellido()),linkedExisting);
  }

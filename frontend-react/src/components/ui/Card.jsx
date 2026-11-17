@@ -30,7 +30,3 @@ export function Field({ label, hint, error, required, children, className = "", 
   );
 }
 
-/** Grupo de acciones de un formulario: primaria + cancelar. */
-export function FormActions({ children }) {
-  return <div className="form-actions">{children}</div>;
-}

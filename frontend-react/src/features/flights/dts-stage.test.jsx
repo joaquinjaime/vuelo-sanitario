@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { api } from "../../services/api";
 import { renderApp, ROLE } from "../../test-utils";

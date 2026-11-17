@@ -51,9 +51,9 @@ export function flightStage(flight, events = []) {
  *  aeronave       cambio de aeronave                       tripulacion  tripulación con cuenta (comandante y copiloto)   ruta   ruta del comandante
  *  personal       personal sanitario del vuelo (médicos y enfermeros que asigna el DTS; sin cuenta)
  *  ciclo          iniciar / finalizar                      cierre       informe final
- *  documentos / coordinaciones / hangar / contactos / bitacora / clima / auditoria
+ *  documentos / coordinaciones / hangar / bitacora / clima / auditoria
  */
-const COMMON_PREPARATION = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "contactos", "auditoria", "personal"];
+const COMMON_PREPARATION = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "personal"];
 const BY_STAGE = {
   [STAGE.NEGOCIACION]: ["resumen", "negociacion"],
   [STAGE.ACORDADO]: [...COMMON_PREPARATION, "aeropuertos", "recursos", "cancelar"],
@@ -62,7 +62,7 @@ const BY_STAGE = {
   [STAGE.CIERRE]: ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "personal", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima", "cierre"],
 };
 const HISTORY_ONLY = ["resumen", "negociacion", "documentos", "coordinaciones", "hangar", "auditoria", "personal", "aeropuertos", "tripulacion", "ruta", "bitacora", "clima"];
-const ALL = ["resumen", "negociacion", "recursos", "aeronave", "tripulacion", "personal", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "contactos", "bitacora", "clima", "auditoria"];
+const ALL = ["resumen", "negociacion", "recursos", "aeronave", "tripulacion", "personal", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "bitacora", "clima", "auditoria"];
 
 export function visibleSections(flight, events = [], role = "OPERACIONES") {
   const stage = flightStage(flight, events);
@@ -72,7 +72,7 @@ export function visibleSections(flight, events = [], role = "OPERACIONES") {
   else if (stage.key === STAGE.CERRADA) keys = stage.agreed ? HISTORY_ONLY : ["resumen", "negociacion", "auditoria"];
   else keys = BY_STAGE[stage.key];
   const set = new Set(keys);
-  // El DTS no usa herramientas de gestión operativa: sólo su solicitud, la negociación, contactos propios, documentos (consulta) e historial.
+  // El DTS no usa herramientas de gestión operativa: sólo su solicitud, la negociación, documentos (consulta) e historial.
   if (role === "DTS") set.add("auditoria");
   if (role === "DTS") for (const key of ["aeropuertos", "recursos", "aeronave", "tripulacion", "ruta", "ciclo", "cierre", "coordinaciones", "hangar", "bitacora", "clima"]) set.delete(key);
   return set;

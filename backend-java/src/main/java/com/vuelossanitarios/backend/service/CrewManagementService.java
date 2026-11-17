@@ -43,8 +43,11 @@ public class CrewManagementService {
  public CrewManagementService(FlightRepository f,FlightCrewRepository c,UserRepository u,CrewRoleRepository r,AuditService a,NotificationService n,Clock clock){flights=f;crews=c;users=u;roles=r;audit=a;notifications=n;this.clock=clock;}
  private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}
  private ApiException conflict(String s){return new ApiException(HttpStatus.CONFLICT,s);}
+ // Bloquea para escritura (PESSIMISTIC_WRITE) el usuario por su ID; si no existe rechaza la operación.
  private User lockUser(Long id){return users.lockById(id).orElseThrow(()->bad("Usuario inexistente"));}
+ // Bloquea para escritura (PESSIMISTIC_WRITE) el vuelo por su ID; si no existe rechaza la operación.
  private Flight lockFlight(Long id){return flights.lockById(id).orElseThrow(()->bad("Vuelo inexistente"));}
+ // Busca la función de tripulación por su código; si no existe rechaza la operación.
  private CrewRole role(String code){if(code==null||!RULES.containsKey(code))throw bad("Sólo el comandante y el copiloto se asignan como tripulación con cuenta; el personal sanitario lo asigna el DTS");return roles.findByCodigo(code).orElseThrow(()->bad("Función inexistente"));}
  private void mutable(Flight f){if(f.getEstadoVuelo()!=null&&!FlightStates.MUTABLE_BEFORE_START.contains(f.getEstadoVuelo().getCodigo()))throw bad("El estado del vuelo no permite modificar la tripulación");}
  private void departureKnown(Flight f){if(f.getFechaPlanificadaSalida()==null)throw bad("El vuelo requiere una salida definida para asignar tripulación");}
@@ -76,7 +79,9 @@ public class CrewManagementService {
  Optional<Clash> conflictingFlight(Flight f,User u){
   Clash indeterminate=null;
   List<Flight> others=new ArrayList<>();
+  // Obtiene las asignaciones de tripulación vigentes (sin fecha de baja) de la persona.
   for(FlightCrew c:crews.findByUserIdAndFechaBajaIsNull(u.getId()))others.add(c.getFlight());
+  // Obtiene todos los vuelos donde la persona figura como comandante.
   others.addAll(flights.findByComandanteId(u.getId()));
   for(Flight other:others){
    if(Objects.equals(other.getId(),f.getId())||!committed(other))continue;
@@ -102,7 +107,9 @@ public class CrewManagementService {
  /** Personas del vuelo (comandante, copiloto y personal sanitario) que ocupan lugar en la aeronave. */
  private int crewSize(Flight f,FlightCrew excluded){
   int size=0;boolean commanderCounted=false;
+  // Obtiene la tripulación vigente (sin fecha de baja) del vuelo, ordenada por ID.
   for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId())){if(excluded!=null&&Objects.equals(excluded.getId(),c.getId()))continue;size++;if(f.getComandante()!=null&&f.getComandante().getId().equals(c.getUser().getId()))commanderCounted=true;}
+  // Obtiene el personal sanitario vigente (sin baja) asignado al vuelo para sumarlo a la ocupación.
   if(healthStaff!=null)size+=healthStaff.findCurrentByFlightId(f.getId()).size();
   return size+(f.getComandante()!=null&&!commanderCounted?1:0);
  }
@@ -153,6 +160,8 @@ public class CrewManagementService {
  @Transactional public void assign(Long id,Crew request,Long actor){
   Flight f=lockFlight(id);mutable(f);departureKnown(f);User member=lockUser(request.userId());CrewRole role=role(request.crewRoleCode());
   validate(f,member,role,null);
+  // assign: busca el usuario que realiza la asignación por su ID.
+  // assign: inserta la nueva asignación de tripulación y sincroniza de inmediato con la base.
   User by=users.findById(actor).orElseThrow();FlightCrew c=new FlightCrew();c.setFlight(f);c.setUser(member);c.setCrewRole(role);c.setAsignadoPor(by);crews.saveAndFlush(c);
   audit.record(f,by,"FLIGHT_CREW",c.getId(),"CREATE",null,snapshot(c));
   notifications.createOnce(member,f,"CREW_ASSIGNED","Fue asignado como "+role.getNombre()+" al vuelo "+f.getCodigo()+" (salida "+f.getFechaPlanificadaSalida()+"). No recibe tareas del comandante principal.","CREW_ASSIGNED:"+c.getId());
@@ -161,6 +170,7 @@ public class CrewManagementService {
  /** Reemplazo: la asignación anterior se da de baja (REEMPLAZO) y se crea una nueva; ambas permanecen en el historial. */
  @Transactional public void replace(Long id,Long crewId,Crew request,Long actor){
   Flight f=lockFlight(id);mutable(f);departureKnown(f);
+  // Busca la asignación de tripulación por su ID y exige que pertenezca al vuelo.
   FlightCrew old=crews.findById(crewId).filter(x->x.getFlight().getId().equals(id)).orElseThrow(()->bad("Asignación inexistente"));
   if(!old.isVigente())throw conflict("La asignación ya fue retirada o reemplazada; actualice la tripulación");
   if(f.getComandante()!=null&&f.getComandante().getId().equals(old.getUser().getId()))throw bad("El comandante se modifica mediante recursos");
@@ -168,8 +178,11 @@ public class CrewManagementService {
   Map<Long,User> locked=new HashMap<>();for(Long uid:ids)locked.put(uid,lockUser(uid));
   User member=locked.get(request.userId());CrewRole role=role(request.crewRoleCode());
   validate(f,member,role,old);
+  // Busca el usuario que realiza el reemplazo por su ID.
   User by=users.findById(actor).orElseThrow();String before=snapshot(old);boolean samePerson=old.getUser().getId().equals(member.getId());
+  // Guarda la baja por reemplazo de la asignación anterior y sincroniza de inmediato con la base.
   old.darDeBaja(LocalDateTime.now(clock),by,FlightCrew.BAJA_REEMPLAZO);crews.saveAndFlush(old);
+  // Inserta la nueva asignación de tripulación que reemplaza a la anterior y sincroniza de inmediato con la base.
   FlightCrew next=new FlightCrew();next.setFlight(f);next.setUser(member);next.setCrewRole(role);next.setAsignadoPor(by);crews.saveAndFlush(next);
   audit.record(f,by,"FLIGHT_CREW",next.getId(),"REPLACE",before,"{\"userId\":"+member.getId()+",\"crewRoleCode\":\""+role.getCodigo()+"\",\"reemplazaAsignacionId\":"+old.getId()+"}");
   if(samePerson)notifications.createOnce(member,f,"CREW_ASSIGNED","Su función en el vuelo "+f.getCodigo()+" cambió a "+role.getNombre()+".","CREW_ASSIGNED:"+next.getId());
@@ -182,10 +195,13 @@ public class CrewManagementService {
  /** Retiro antes del inicio del vuelo: libera a la persona (deja de bloquear su disponibilidad) y conserva el registro. */
  @Transactional public void remove(Long id,Long crewId,Long actor){
   Flight f=lockFlight(id);mutable(f);
+  // Busca la asignación de tripulación por su ID y exige que pertenezca al vuelo; si no, responde 404.
   FlightCrew c=crews.findById(crewId).filter(x->x.getFlight().getId().equals(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Asignación de tripulación inexistente"));
   if(!c.isVigente())throw conflict("La asignación ya fue retirada o reemplazada; actualice la tripulación");
   if(f.getComandante()!=null&&f.getComandante().getId().equals(c.getUser().getId()))throw bad("El comandante debe cambiarse mediante la asignación de recursos del vuelo");
+  // Busca el usuario que realiza el retiro por su ID.
   lockUser(c.getUser().getId());User by=users.findById(actor).orElseThrow();String before=snapshot(c);
+  // Guarda la baja por retiro de la asignación de tripulación y sincroniza de inmediato con la base.
   c.darDeBaja(LocalDateTime.now(clock),by,FlightCrew.BAJA_RETIRO);crews.saveAndFlush(c);
   audit.record(f,by,"FLIGHT_CREW",c.getId(),"REMOVE",before,removalSnapshot(c));
   notifications.createOnce(c.getUser(),f,"CREW_REMOVED","Fue retirado de la tripulación del vuelo "+f.getCodigo()+".","CREW_REMOVED:"+c.getId());
@@ -195,6 +211,7 @@ public class CrewManagementService {
   if("COMANDANTE".equals(role.getCodigo()))throw bad("El comandante se asigna mediante recursos");
   Eligibility eligibility=evaluate(f,member,role.getCodigo(),true);if(!eligibility.eligible())throw eligibility.conflict(member.getId(),role.getCodigo());
   if(f.getComandante()!=null&&f.getComandante().getId().equals(member.getId()))throw conflict("El usuario ya es el comandante principal del vuelo: no puede ser también su copiloto");
+  // Obtiene la tripulación vigente del vuelo para verificar que el usuario no la integre ya.
   if(crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()).stream().anyMatch(c->c.getUser().getId().equals(member.getId())&&(existing==null||!c.getId().equals(existing.getId()))))throw conflict("El usuario ya integra la tripulación");
   if(f.getAircraft()!=null&&f.getAircraft().getCapacidadTripulacion()!=null&&crewSize(f,existing)+1>f.getAircraft().getCapacidadTripulacion())throw conflict("La aeronave "+f.getAircraft().getMatricula()+" admite como máximo "+f.getAircraft().getCapacidadTripulacion()+" tripulantes");
  }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../services/api";
 
 // La API entrega DATETIME2 como hora civil de la zona de negocio; no se convierte al huso del navegador.

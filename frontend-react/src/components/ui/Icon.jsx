@@ -1,4 +1,3 @@
-import React from "react";
 
 // Iconos de trazo (24×24) propios: sin dependencias y heredan el color del texto. Son decorativos salvo que se pase `label`.
 const PATHS = {

@@ -15,4 +15,7 @@ export const adaptFlight = (flight) => {
   };
 };
 
+/** The viewer is the flight's copilot: a read-only spectator (the commander operates the flight). */
+export const isCopilotFlight = (flight) => flight?.miFuncion === "COPILOTO";
+
 export const adaptDetail = (detail) => (detail ? { ...detail, vuelo: adaptFlight(detail.vuelo) } : detail);

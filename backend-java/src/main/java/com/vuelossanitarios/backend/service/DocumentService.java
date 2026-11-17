@@ -38,6 +38,7 @@ public class DocumentService {
 
  @Transactional
  public DocumentView createPdf(Long flightId, String documentTypeCode, String nombreDocumento, MultipartFile file, Long actorId) {
+  // Bloquea para escritura (PESSIMISTIC_WRITE) el vuelo por su ID; si no existe responde 404.
   Flight flight=flights.lockById(flightId).orElseThrow(()->notFound("Vuelo"));
   mayChange(flight,actorId);
   String location=storage.storePdf(file);
@@ -45,9 +46,12 @@ public class DocumentService {
    FlightDocumentItem item=newItem(flight,documentTypeCode,nombreDocumento);
    requireCompatible(item.getDocumentType(),flight,true);
    // El vuelo está bloqueado en esta transacción: la comprobación no admite altas simultáneas con el mismo nombre.
+   // Verifica si el vuelo ya tiene un documento activo con el mismo nombre (sin distinguir mayúsculas).
    if (items.existsByFlightIdAndActivoTrueAndNombreDocumentoIgnoreCase(flightId,item.getNombreDocumento())) throw conflict("Ya existe un documento con ese nombre en el vuelo; registre una nueva versión del existente");
+   // Inserta el nuevo documento del vuelo.
    items.save(item);
    FlightDocument version=pdfVersion(item,file,location,user(actorId));
+   // Inserta la primera versión PDF del documento.
    versions.save(version);
    audit.record(flight,user(actorId),"DOCUMENT",version.getId(),"CREATE",null,"{\"numeroVersion\":1}");
    return view(item,version,actorId,()->actorId);
@@ -56,6 +60,7 @@ public class DocumentService {
 
  @Transactional
  public DocumentView replacePdf(Long itemId, MultipartFile file, Long actorId) {
+  // Bloquea para escritura (PESSIMISTIC_WRITE) el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento"));
   // El estado del horario se evalúa con el vuelo bloqueado: un cambio de estado concurrente espera a esta transacción (o ésta a aquél).
   Flight flight=lockFlightOf(item);
@@ -78,10 +83,13 @@ public class DocumentService {
 
  @Transactional(readOnly=true)
  public List<DocumentView> list(Long flightId, Long actorId) {
+  // Carga el vuelo por su ID; si no existe responde 404.
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayRead(flight,actorId);
   DocumentScheduleGate.require(flight);
+  // Obtiene los documentos activos del vuelo, del más reciente al más antiguo.
   return items.findByFlightIdAndActivoTrueOrderByCreatedAtDesc(flightId).stream().map(item -> {
+   // Obtiene la versión vigente de cada documento; si falta responde con conflicto.
    FlightDocument current=versions.findByDocumentItemIdAndEsVersionActualTrue(item.getId())
        .orElseThrow(()->conflict("El documento no tiene una versión vigente"));
    return view(item,current,actorId,()->firstAuthor(item));
@@ -94,6 +102,7 @@ public class DocumentService {
   */
  @Transactional(readOnly=true)
  public DocumentAccessView accessStatus(Long flightId, Long actorId) {
+  // Carga el vuelo por su ID; si no existe responde 404.
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayRead(flight,actorId);
   DocumentScheduleGate.Access state=DocumentScheduleGate.of(flight);
@@ -103,13 +112,17 @@ public class DocumentService {
  /** Documentos retirados del uso operativo (baja lógica) con su motivo y responsable; sólo Operaciones y el comandante del vuelo. */
  @Transactional(readOnly=true)
  public List<RetiredDocumentView> listRetired(Long flightId, Long actorId) {
+  // Carga el vuelo por su ID; si no existe responde 404.
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayReadRetired(flight,actorId);
   DocumentScheduleGate.require(flight);
+  // Obtiene los documentos retirados (inactivos) del vuelo, del más reciente al más antiguo por fecha de baja.
   return items.findByFlightIdAndActivoFalseOrderByFechaBajaDesc(flightId).stream().map(item -> {
    DocumentType type=item.getDocumentType();
+   // Obtiene la última versión vigente del documento retirado, si existe.
    FlightDocument last=versions.findByDocumentItemIdAndEsVersionActualTrue(item.getId()).orElse(null);
    return new RetiredDocumentView(item.getId().toString(),item.getNombreDocumento(),new DocumentTypeView(type.getCodigo(),type.getNombre()),
+       // Cuenta cuántas versiones tiene el documento.
        last==null?null:versionView(last),versions.countByDocumentItemId(item.getId()),civil(item.getFechaBaja()),
        item.getBajaPor()==null?null:item.getBajaPor().getUsername(),item.getMotivoBaja());
   }).toList();
@@ -118,9 +131,11 @@ public class DocumentService {
  /** Tipos que admite el vuelo: el catálogo filtrado por la regla de compatibilidad, que vive sólo en el servidor. */
  @Transactional(readOnly=true)
  public List<DocumentTypeView> allowedTypes(Long flightId, Long actorId) {
+  // Carga el vuelo por su ID; si no existe responde 404.
   Flight flight=flights.findById(flightId).orElseThrow(()->notFound("Vuelo"));
   access.mayRead(flight,actorId);
   DocumentScheduleGate.require(flight);
+  // Obtiene todos los tipos documentales (luego se filtran los compatibles con el vuelo).
   return types.findAll().stream().filter(t->compatible(t,flight)).sorted(java.util.Comparator.comparing(DocumentType::getNombre))
       .map(t->new DocumentTypeView(t.getCodigo(),t.getNombre())).toList();
  }
@@ -131,6 +146,7 @@ public class DocumentService {
   */
  @Transactional
  public void deactivate(Long flightId, Long itemId, String motivo, Long actorId) {
+  // Bloquea para escritura (PESSIMISTIC_WRITE) el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento"));
   if (!item.getFlight().getId().equals(flightId)) throw notFound("Documento"); // el documento debe pertenecer al vuelo indicado
   Flight flight=lockFlightOf(item);
@@ -140,33 +156,42 @@ public class DocumentService {
   String reason=motivo==null ? "" : motivo.trim();
   if (reason.isEmpty()) throw bad("El motivo de la baja es obligatorio");
   if (reason.length()>MAX_REASON || reason.chars().anyMatch(c->c<0x20&&c!='\n'&&c!='\r'&&c!='\t')) throw bad("El motivo no puede superar "+MAX_REASON+" caracteres ni incluir caracteres de control");
+  // Busca el bloqueo de edición del documento, si existe.
   DocumentLock lock=locks.findByDocumentItemId(itemId).orElse(null); boolean released=false;
   if (lock!=null) {
    if (lock.getExpiresAt().isAfter(now()) && !lock.getOwner().getId().equals(actorId)) throw conflict("El documento está bloqueado por "+lock.getOwner().getUsername()+": espere a que lo libere o venza");
+   // Elimina el bloqueo de edición del documento al retirarlo.
    locks.delete(lock); released=true;
   }
   User actor=user(actorId);
   item.setActivo(false); item.setFechaBaja(now()); item.setBajaPor(actor); item.setMotivoBaja(reason);
+  // Guarda la baja del documento (inactivo, fecha, responsable y motivo) y sincroniza de inmediato con la base.
   items.saveAndFlush(item);
   audit.record(flight,actor,"DOCUMENT",itemId,"DEACTIVATE","{\"activo\":true}",
+      // Cuenta cuántas versiones tiene el documento para registrarlo en la auditoría.
       "{\"activo\":false,\"motivoBaja\":"+jsonString(reason)+",\"versiones\":"+versions.countByDocumentItemId(itemId)+",\"bloqueoLiberado\":"+released+"}");
  }
 
  @Transactional(readOnly=true)
  public DocumentLockView lockView(Long itemId,Long actorId){
+  // Carga el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.findById(itemId).orElseThrow(()->notFound("Documento")); requireVisible(item,actorId);
   requireActive(item);
+  // Busca el bloqueo de edición del documento, si existe.
   return locks.findByDocumentItemId(itemId).map(x->lockView(item,x,actorId)).orElseGet(()->availableLock(item,actorId));
  }
 
  @Transactional
  public DocumentLockView acquireLock(Long itemId,Long actorId){
   // La fila documental actúa como cerrojo breve y serializa incluso la primera inserción del lease.
+  // Bloquea para escritura (PESSIMISTIC_WRITE) el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento")); Flight flight=lockFlightOf(item); mayChange(flight,actorId);
   requireActive(item); requireCompatible(item.getDocumentType(),flight,false);
+  // Busca el bloqueo de edición actual del documento, si existe.
   User actor=user(actorId); LocalDateTime now=now(); DocumentLock lock=locks.findByDocumentItemId(itemId).orElse(null);
   if(lock!=null && lock.getExpiresAt().isAfter(now) && !lock.getOwner().getId().equals(actorId)) throw conflict("El documento está bloqueado por otro usuario");
   boolean recovered=lock!=null && !lock.getOwner().getId().equals(actorId);
+  // Inserta o actualiza el bloqueo de edición con su titular y vencimiento, y sincroniza de inmediato con la base.
   if(lock==null){lock=new DocumentLock();lock.setDocumentItem(item);} lock.setOwner(actor);lock.setAcquiredAt(now);lock.setExpiresAt(now.plusSeconds(lockSeconds));locks.saveAndFlush(lock);
   audit.record(item.getFlight(),actor,"DOCUMENT_LOCK",itemId,recovered?"RECOVER":"ACQUIRE",null,"{\"expiresAt\":\""+lock.getExpiresAt()+"\"}");
   return lockView(item,lock,actorId);
@@ -175,25 +200,31 @@ public class DocumentService {
  @Transactional
  public void releaseLock(Long itemId,Long actorId){
   // Liberar no exige un vuelo editable (debe poder hacerse cuando ya es de sólo consulta), pero sigue sujeto al bloqueo del comandante.
+  // Bloquea para escritura (PESSIMISTIC_WRITE) el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.lockById(itemId).orElseThrow(()->notFound("Documento")); mayOperate(item.getFlight(),actorId);
+  // Busca el bloqueo de edición del documento; si no existe responde 404.
   DocumentLock lock=locks.findByDocumentItemId(itemId).orElseThrow(()->notFound("Bloqueo"));
   if(!lock.getOwner().getId().equals(actorId)) throw forbidden("Sólo el propietario puede liberar el bloqueo");
+  // Elimina el bloqueo de edición del documento (liberación).
   locks.delete(lock); audit.record(item.getFlight(),user(actorId),"DOCUMENT_LOCK",itemId,"RELEASE",null,null);
  }
 
  @Transactional(readOnly=true)
  public DocumentHistoryView history(Long itemId, Long actorId) {
+  // Carga el documento por su ID; si no existe responde 404.
   FlightDocumentItem item=items.findById(itemId).orElseThrow(()->notFound("Documento"));
   requireVisible(item,actorId);
   DocumentType type=item.getDocumentType();
   return new DocumentHistoryView(item.getId().toString(), item.getNombreDocumento(),
       new DocumentTypeView(type.getCodigo(),type.getNombre()),
+      // Obtiene todas las versiones del documento, de la más nueva a la más antigua.
       versions.findByDocumentItemIdOrderByNumeroVersionDesc(itemId).stream().map(this::versionView).toList());
  }
 
  /** La descarga se audita (sin contenido): los documentos pueden incluir información sanitaria sensible. */
  @Transactional
  public Download download(Long versionId, Long actorId) {
+  // Carga la versión del documento por su ID; si no existe responde 404.
   FlightDocument version=versions.findById(versionId).orElseThrow(()->notFound("Versión"));
   Flight flight=version.getDocumentItem().getFlight();
   requireVisible(version.getDocumentItem(),actorId);
@@ -204,6 +235,7 @@ public class DocumentService {
 
  private FlightDocumentItem newItem(Flight flight, String typeCode, String nombreDocumento) {
   if (nombreDocumento==null || nombreDocumento.trim().isEmpty() || nombreDocumento.trim().length()>255) throw bad("El nombre del documento es obligatorio y no puede superar 255 caracteres");
+  // Busca el tipo documental por su código; si no existe rechaza la operación.
   DocumentType type=types.findByCodigo(typeCode).orElseThrow(()->bad("Tipo documental inexistente"));
   FlightDocumentItem item=new FlightDocumentItem(); item.setFlight(flight); item.setDocumentType(type); item.setNombreDocumento(nombreDocumento.trim());
   return item;
@@ -218,17 +250,21 @@ public class DocumentService {
  }
 
  private int nextNumeroVersion(FlightDocumentItem item) {
+  // Obtiene el mayor número de versión registrado para el documento.
   Integer max=versions.maxNumeroVersion(item.getId()); return max==null ? 1 : max+1;
  }
 
  private void advance(FlightDocumentItem item, FlightDocument version) {
+  // Obtiene la versión vigente actual del documento, si existe, para desmarcarla.
   versions.findByDocumentItemIdAndEsVersionActualTrue(item.getId()).ifPresent(old -> {
    old.setEsVersionActual(false);
    // SQL Server mantiene un índice único filtrado para la versión vigente.
    // Forzamos primero el UPDATE de la versión anterior; de lo contrario
    // Hibernate puede intentar insertar la nueva y violar ese índice.
+   // Sincroniza con la base (UPDATE) la versión anterior desmarcada antes de insertar la nueva.
    versions.flush();
   });
+  // Inserta la nueva versión del documento como vigente.
   versions.save(version);
  }
 
@@ -240,6 +276,7 @@ public class DocumentService {
  /** Orden de las respuestas: sin acceso al vuelo 403; sin horario acordado 409 (estado); vuelo cerrado 400 (sólo consulta). */
  private void mayChange(Flight flight, Long actorId) {
   mayOperate(flight,actorId);
+  if (access.copilotOf(flight,actorId)) throw new ApiException(HttpStatus.FORBIDDEN,"El copiloto sólo puede consultar los documentos del vuelo");
   DocumentScheduleGate.require(flight);
   if (readOnly(flight)) throw bad("El vuelo en estado "+stateCode(flight).toLowerCase(java.util.Locale.ROOT)+" es de sólo consulta documental");
  }
@@ -262,6 +299,7 @@ public class DocumentService {
   DocumentScheduleGate.require(item.getFlight());
  }
  /** Bloquea el vuelo del documento (el documento ya está bloqueado: orden documento → vuelo, sin otro camino en sentido inverso). */
+ // Bloquea para escritura (PESSIMISTIC_WRITE) el vuelo del documento; si no existe responde 404.
  private Flight lockFlightOf(FlightDocumentItem item) { return flights.lockById(item.getFlight().getId()).orElseThrow(()->notFound("Vuelo")); }
  /** Política de baja: Operaciones retira cualquier documento del vuelo; el comandante, sólo los que él cargó y mientras no esté bloqueado. */
  private boolean canRetire(Flight flight, Long actorId, java.util.function.Supplier<Long> firstAuthor) {
@@ -271,6 +309,7 @@ public class DocumentService {
   return commander && actorId.equals(firstAuthor.get()) && !commanderAccess.isBlocked(actorId);
  }
  private Long firstAuthor(FlightDocumentItem item) {
+  // Obtiene la primera versión del documento (menor número) para identificar a su autor.
   return versions.findFirstByDocumentItemIdOrderByNumeroVersionAsc(item.getId()).map(v->v.getCreadoPor()==null ? null : v.getCreadoPor().getId()).orElse(null);
  }
  private static String jsonString(String value) {
@@ -284,6 +323,7 @@ public class DocumentService {
   return b.append('"').toString();
  }
  private void requireEditableLock(FlightDocumentItem item,Long actorId){
+  // Busca el bloqueo de edición del documento; si no existe rechaza con conflicto.
   DocumentLock lock=locks.findByDocumentItemId(item.getId()).orElseThrow(()->conflict("Debe adquirir un bloqueo antes de crear una versión"));
   if(!lock.getOwner().getId().equals(actorId) || !lock.getExpiresAt().isAfter(now())) throw conflict("El bloqueo documental no es válido o venció");
  }
@@ -296,6 +336,7 @@ public class DocumentService {
  }
  private LocalDateTime civil(LocalDateTime utc){return AuditService.toLocal(utc,clock.getZone());}
  private LocalDateTime now(){return LocalDateTime.ofInstant(Instant.now(clock),ZoneOffset.UTC);}
+ // Busca el usuario por su ID; si no existe responde 404.
  private User user(Long id) { return users.findById(id).orElseThrow(()->notFound("Usuario")); }
  private String originalFileName(String value) {
   if (value==null || value.isBlank() || value.length()>255 || value.chars().anyMatch(c->c<0x20||c==0x7f)) throw bad("El nombre original del archivo es inválido");

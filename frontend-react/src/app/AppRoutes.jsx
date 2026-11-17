@@ -1,4 +1,4 @@
-import React, { lazy } from "react";
+import { lazy } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth, RedirectIfAuthenticated, RequireWorkspace, NotFound } from "./guards";
 import { AppLayout } from "./layouts/AppLayout";

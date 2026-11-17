@@ -4,7 +4,6 @@ import com.vuelossanitarios.backend.api.dto.GeographicCatalogDtos.*;
 import com.vuelossanitarios.backend.security.CurrentUser;
 import com.vuelossanitarios.backend.service.GeographicCatalogService;
 import jakarta.validation.Valid;
-import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;

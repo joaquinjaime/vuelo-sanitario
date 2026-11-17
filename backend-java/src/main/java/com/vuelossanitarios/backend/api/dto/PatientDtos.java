@@ -7,7 +7,7 @@ import java.util.List;
 
 public final class PatientDtos {
  private PatientDtos(){}
- /** Identidad del paciente. No lleva teléfono: los contactos para coordinar el traslado se informan en la solicitud (TransferContactDtos.Input) y un campo desconocido se rechaza. */
+ /** Identidad del paciente. No lleva teléfono y un campo desconocido se rechaza. */
  @StrictJson
  public record CreatePatient(Long personId,@Size(max=100) String nombre,@Size(max=100) String apellido,@Size(max=20) String dni,LocalDate fechaNacimiento){}
  public record PatientView(Long id,Long personId,String nombre,String apellido){}

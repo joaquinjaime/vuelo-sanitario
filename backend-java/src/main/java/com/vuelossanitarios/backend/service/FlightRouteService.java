@@ -64,9 +64,12 @@ public class FlightRouteService {
  private final FlightRepository flights; private final FlightRouteRepository routes; private final AirportRepository airports; private final UserRepository users; private final FlightAuthorizationService access; private final AuditService audit; private final NotificationService notifications; private final ObjectMapper json; private final CommanderReportAccessService commanderAccess; private final AirportLocks airportLocks; private final Clock clock;
  public FlightRouteService(FlightRepository f,FlightRouteRepository r,AirportRepository a,UserRepository u,FlightAuthorizationService x,AuditService au,NotificationService n,ObjectMapper j,CommanderReportAccessService ca,AirportLocks al,Clock c){airportLocks=al;commanderAccess=ca;flights=f;routes=r;airports=a;users=u;access=x;audit=au;notifications=n;json=j;clock=c;}
 
+ // get: Obtiene el vuelo por su identificador.
  @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flights.findById(id).orElseThrow(()->missing("Vuelo"));access.mayRead(f,actor);return view(f,actor);}
  @Transactional(readOnly=true) public List<Status> statuses(){
+  // statuses: Obtiene la versión vigente de la ruta de cada vuelo, junto con su aeropuerto alternativo.
   Map<Long,FlightRoute> current=new HashMap<>();for(FlightRoute r:routes.findByEsVersionActualTrue())current.put(r.getFlight().getId(),r);
+  // Obtiene todos los vuelos registrados para evaluar el estado de su ruta.
   return flights.findAll().stream().map(f->{FlightRoute c=current.get(f.getId());Assessment a=assess(f,c);return new Status(f.getId(),a.estado(),c==null?null:c.getVersion(),!a.permiteIniciar());}).toList();
  }
 
@@ -77,6 +80,8 @@ public class FlightRouteService {
   if(!ready(f))throw new ApiException(HttpStatus.BAD_REQUEST,"Complete primero los aeropuertos y horarios del vuelo");
   FlightRoute old=current(id);int version=old==null?0:old.getVersion();
   if(input.version()!=version)throw stale("La ruta cambió; vuelva a cargarla antes de guardar");
+  // save: Bloquea para escritura la fila del aeropuerto alternativo y relee su estado confirmado.
+  // Obtiene el aeropuerto alternativo indicado (luego se exige que esté activo).
   Airport alternate=null;if(input.alternativoId()!=null){airportLocks.lockAll(input.alternativoId());alternate=airports.findById(input.alternativoId()).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"Aeropuerto alternativo inexistente o inactivo"));if(alternate.getId().equals(f.getDestino().getId()))throw new ApiException(HttpStatus.BAD_REQUEST,"El alternativo debe ser distinto del destino");}
   String route=input.recorrido().trim(),notes=clean(input.observaciones()),state=old==null?null:old.getEstadoRevision();
   boolean unchanged=old!=null&&sameContent(old,route,alternate,input,notes)&&Objects.equals(old.getContexto(),context(f));
@@ -84,7 +89,9 @@ public class FlightRouteService {
   String reason=clean(input.motivoModificacion());
   if(state!=null&&PRESENTED.contains(state)&&!meaningful(reason,8))throw new ApiException(HttpStatus.BAD_REQUEST,"MOTIVO_MODIFICACION_REQUERIDO","Indique el motivo de la modificación (al menos 8 caracteres con sentido): la versión anterior ya fue presentada a Operaciones",Map.of());
   User author=user(actor);String before=old==null?null:serialize(auditView(old));
+  // Guarda la versión anterior de la ruta marcada como no vigente y la envía de inmediato a la base.
   if(old!=null){old.setEsVersionActual(false);if(UNDECIDED.contains(state))old.setEstadoRevision(FlightRoute.SIN_REVISION);routes.saveAndFlush(old);}
+  // Guarda la nueva versión vigente de la ruta en estado BORRADOR y la envía de inmediato a la base.
   FlightRoute r=new FlightRoute();r.setFlight(f);r.setVersion(version+1);r.setRecorrido(route);r.setAlternativo(alternate);r.setAltitudPies(input.altitudPies());r.setDistanciaNm(input.distanciaNm());r.setTiempoEstimadoMinutos(input.tiempoEstimadoMinutos());r.setObservaciones(notes);r.setContexto(context(f));r.setCreadoPor(author);r.setEstadoRevision(FlightRoute.BORRADOR);r.setMotivoModificacion(reason);routes.saveAndFlush(r);
   audit.record(f,author,"FLIGHT_ROUTE",r.getId(),old==null?"CREATE":"UPDATE",before,serialize(auditView(r)));
   if(Boolean.TRUE.equals(input.presentar()))present(f,r,author);
@@ -109,6 +116,8 @@ public class FlightRouteService {
   if(!FlightRoute.PENDIENTE_REVISION.equals(r.getEstadoRevision()))throw transition(r,"aprobar");
   requireNoSelfReview(r,reviewer);
   Assessment a=assess(f,r);if(!FlightRoute.PENDIENTE_REVISION.equals(a.estado()))throw new ApiException(HttpStatus.CONFLICT,"RUTA_REQUIERE_REVISION","La ruta ya no es consistente con el vuelo ("+String.join("; ",a.causas())+"); el comandante debe presentarla nuevamente",details(r,a.estado()));
+  // approve: Bloquea para escritura la fila del aeropuerto alternativo de la ruta y relee su estado confirmado.
+  // Obtiene el aeropuerto alternativo de la ruta para comprobar que siga activo.
   Airport alternate=r.getAlternativo();if(alternate!=null)airportLocks.lockAll(alternate.getId());if(alternate!=null&&!Boolean.TRUE.equals(airports.findById(alternate.getId()).map(Airport::getActivo).orElse(false)))throw new ApiException(HttpStatus.CONFLICT,"RUTA_REQUIERE_REVISION","El aeropuerto alternativo ya no está activo; el comandante debe corregir la ruta",details(r,FlightRoute.REQUIERE_REVISION));
   decide(f,r,reviewer,FlightRoute.APROBADA,clean(input.comentario()),"APPROVE");return view(f,actor);
  }
@@ -134,6 +143,7 @@ public class FlightRouteService {
   if(r==null||!Set.of(FlightRoute.PENDIENTE_REVISION,FlightRoute.APROBADA).contains(r.getEstadoRevision()))return;
   List<String> causes=causes(f,r);if(causes.isEmpty())return;
   String before=serialize(auditView(r));
+  // reassess: Guarda la ruta marcada como REQUIERE_REVISION con la fecha y la causa de invalidación, y la envía de inmediato a la base.
   r.setEstadoRevision(FlightRoute.REQUIERE_REVISION);r.setFechaInvalidacion(LocalDateTime.now(clock));r.setCausaInvalidacion(limit(String.join("; ",causes),500));routes.saveAndFlush(r);
   audit.record(f,actor,"FLIGHT_ROUTE",r.getId(),"INVALIDATE",before,serialize(auditView(r)));
   notifyCommander(f,r,"ROUTE_REVIEW_REQUIRED","La ruta del vuelo "+f.getCodigo()+" requiere una nueva revisión: "+r.getCausaInvalidacion(),"ROUTE_INVALIDATED:");
@@ -148,6 +158,7 @@ public class FlightRouteService {
 
  /** El inicio rechazado revirtió su transacción: el rechazo se registra en una propia, sin ocultar el error original. */
  @Transactional public void auditRejectedStart(Long id,Long actor,String code,String message){
+  // auditRejectedStart: Obtiene el vuelo por su identificador.
   Flight f=flights.findById(id).orElseThrow(()->missing("Vuelo"));if(!access.operationsStaff(actor))return;FlightRoute r=current(id);
   Map<String,Object> after=new LinkedHashMap<>();after.put("codigo",code);after.put("mensaje",message);after.put("version",r==null?null:r.getVersion());after.put("estado",r==null?SIN_PLANIFICAR:r.getEstadoRevision());
   audit.record(f,user(actor),"FLIGHT_ROUTE",r==null?null:r.getId(),"START_REJECTED",null,serialize(after));
@@ -189,12 +200,14 @@ public class FlightRouteService {
 
  private void present(Flight f,FlightRoute r,User actor){
   String before=serialize(auditView(r));
+  // present: Guarda la ruta en estado PENDIENTE_REVISION con quién y cuándo la presentó, y la envía de inmediato a la base.
   r.setEstadoRevision(FlightRoute.PENDIENTE_REVISION);r.setPresentadoPor(actor);r.setFechaPresentacion(LocalDateTime.now(clock));routes.saveAndFlush(r);
   audit.record(f,actor,"FLIGHT_ROUTE",r.getId(),"SUBMIT",before,serialize(auditView(r)));
   notifyOperations(f,r,"ROUTE_PENDING_REVIEW","La ruta versión "+r.getVersion()+" del vuelo "+f.getCodigo()+" está pendiente de revisión.","ROUTE_SUBMITTED:");
  }
  private void decide(Flight f,FlightRoute r,User reviewer,String state,String note,String op){
   String before=serialize(auditView(r));
+  // decide: Guarda la decisión de revisión de la ruta (estado, revisor, fecha y observaciones) y la envía de inmediato a la base.
   r.setEstadoRevision(state);r.setRevisadoPor(reviewer);r.setFechaRevision(LocalDateTime.now(clock));r.setObservacionesRevision(note);routes.saveAndFlush(r);
   audit.record(f,reviewer,"FLIGHT_ROUTE",r.getId(),op,before,serialize(auditView(r)));
   if(FlightRoute.APROBADA.equals(state))notifyCommander(f,r,"ROUTE_APPROVED","Operaciones aprobó la ruta versión "+r.getVersion()+" del vuelo "+f.getCodigo()+".","ROUTE_APPROVED:");
@@ -210,6 +223,7 @@ public class FlightRouteService {
  }
 
  private View view(Flight f,Long actor){
+  // view: Obtiene todas las versiones de la ruta del vuelo, de la más reciente a la más antigua.
   List<FlightRoute> rows=routes.findByFlightIdOrderByVersionDesc(f.getId());
   FlightRoute current=rows.stream().filter(r->Boolean.TRUE.equals(r.getEsVersionActual())).findFirst().orElse(null);
   Assessment a=assess(f,current);boolean planned=mutable(f),assigned=f.getComandante()!=null&&f.getComandante().getId().equals(actor),ops=access.operationsStaff(actor);
@@ -242,6 +256,7 @@ public class FlightRouteService {
  }
  private Map<Long,String> airportNames(List<FlightRoute> rows){
   Set<Long> ids=new HashSet<>();for(FlightRoute r:rows)if(r.getContexto()!=null){String[] p=r.getContexto().split("\\|",-1);if(p.length==6){Long o=parseId(p[0]),d=parseId(p[1]);if(o!=null)ids.add(o);if(d!=null)ids.add(d);}}
+  // airportNames: Obtiene los aeropuertos con los identificadores indicados para resolver sus nombres.
   return ids.isEmpty()?Map.of():airports.findAllById(ids).stream().collect(Collectors.toMap(Airport::getId,Airport::getNombre,(x,y)->x));
  }
  private Long parseId(String s){try{return s.isEmpty()?null:Long.valueOf(s);}catch(NumberFormatException e){return null;}}
@@ -273,8 +288,11 @@ public class FlightRouteService {
  private ApiException selfReviewError(){return new ApiException(HttpStatus.FORBIDDEN,"AUTOREVISION_RUTA_NO_PERMITIDA","Quien planificó o presentó la ruta no puede revisarla",Map.of());}
  private void requireAssignedCommander(Flight f,Long actor){if(f.getComandante()==null||!f.getComandante().getId().equals(actor))throw new ApiException(HttpStatus.FORBIDDEN,"Sólo el comandante asignado puede modificar la ruta");}
  private void requirePlanned(Flight f,String message){if(!mutable(f))throw new ApiException(HttpStatus.BAD_REQUEST,message);}
+ // lock: Obtiene y bloquea para escritura la fila del vuelo indicado.
  private Flight lock(Long id){return flights.lockById(id).orElseThrow(()->missing("Vuelo"));}
+ // current: Obtiene la versión vigente de la ruta del vuelo, junto con su aeropuerto alternativo.
  private FlightRoute current(Long flightId){return routes.findByFlightIdAndEsVersionActualTrue(flightId).orElse(null);}
+ // user: Obtiene la cuenta de usuario por su identificador.
  private User user(Long id){return users.findById(id).orElseThrow(()->missing("Usuario"));}
  private boolean mutable(Flight f){return f.getEstadoVuelo()!=null&&"PLANIFICADO".equals(f.getEstadoVuelo().getCodigo());}
  private boolean ready(Flight f){return f.getOrigen()!=null&&f.getDestino()!=null&&f.getFechaPlanificadaSalida()!=null&&f.getFechaPlanificadaLlegada()!=null&&f.getFechaPlanificadaLlegada().isAfter(f.getFechaPlanificadaSalida());}

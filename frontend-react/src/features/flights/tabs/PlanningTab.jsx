@@ -1,4 +1,3 @@
-import React from "react";
 import { AIRPORT_STATE_LABEL, AirportPlanning, CommanderAirportPlanning } from "../airportPlanning";
 import { ResourceAssignment } from "../resourceAssignment";
 import { FlightAircraft } from "../../aircraft/aircraft";
@@ -12,7 +11,7 @@ export function PlanningTab({ ctx }) {
   const { flight, detail, show, id, workspace } = ctx;
   const sanitary = Boolean(flight.datosSanitarios);
   const commander = workspace === "COMANDANTE";
-  const commanderCanWrite = commander && !ctx.commanderBlocked;
+  const commanderCanWrite = commander && !ctx.commanderReadOnly;
   const ops = workspace === "OPERACIONES";
   const planned = flight.estado === "PLANIFICADO";
   const agreedState = flight.estado === "APROBADO" || planned;

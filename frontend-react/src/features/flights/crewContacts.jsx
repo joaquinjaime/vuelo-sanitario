@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
 /** Estados en los que el servidor ya no permite consultar: el botón ni siquiera se ofrece. */

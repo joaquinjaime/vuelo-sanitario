@@ -1,4 +1,3 @@
-import React from "react";
 import { useOperationalData } from "../../app/providers/OperationalDataProvider";
 import { useNotify } from "../../app/providers/NotifyProvider";
 import { appPath } from "../../app/navigation";

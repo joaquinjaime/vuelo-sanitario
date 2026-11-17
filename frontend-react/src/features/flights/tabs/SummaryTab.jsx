@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { appPath } from "../../../app/navigation";
 import { Alert } from "../../../components/ui/feedback";
@@ -47,7 +46,7 @@ export function SummaryTab({ ctx, basePath }) {
     <div className="tab-stack">
       <NextStepCard ctx={ctx} basePath={basePath} />
       <CancellationNote flight={flight} />
-      {workspace === "COMANDANTE" && !ctx.commanderBlocked && <CommanderAssignment flight={flight} done={ctx.done} msg={ctx.notify} reload={ctx.reload} />}
+      {workspace === "COMANDANTE" && !ctx.commanderReadOnly && <CommanderAssignment flight={flight} done={ctx.done} msg={ctx.notify} reload={ctx.reload} />}
       {sanitary ? <RequestSummary flight={flight} medical={detail.medical} /> : <Card title="Vuelo operativo"><Urgency flight={flight} detail /></Card>}
       <Card title="Situación del vuelo"><Facts flight={flight} detail={detail} /></Card>
     </div>

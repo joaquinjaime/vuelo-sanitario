@@ -3,7 +3,7 @@ import { STAGE, flightStage, hadAgreement, pendingParty, visibleSections } from 
 
 const sanitary = (estado, extra = {}) => ({ id: 1, estado, datosSanitarios: { estadoSolicitud: estado }, ...extra });
 const keys = (flight, events = [], role = "OPERACIONES") => [...visibleSections(flight, events, role)].sort();
-const LATER = ["recursos", "aeronave", "tripulacion", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "contactos", "bitacora", "clima", "auditoria"];
+const LATER = ["recursos", "aeronave", "tripulacion", "ruta", "ciclo", "cierre", "cancelar", "documentos", "coordinaciones", "hangar", "bitacora", "clima", "auditoria"];
 
 test("the stage comes from the real state, never from a planned date", () => {
   expect(flightStage(sanitary("SOLICITADO", { salida: "2026-11-10T09:00:00" })).key).toBe(STAGE.NEGOCIACION);   // una fecha no es un acuerdo
@@ -33,7 +33,7 @@ test("during the negotiation only the summary and the negotiation are shown, for
 
 test("once the schedule is agreed, preparation tools appear progressively and execution tools wait for the assigned resources", () => {
   const agreed = keys(sanitary("APROBADO"));
-  expect(agreed).toEqual(expect.arrayContaining(["recursos", "documentos", "coordinaciones", "hangar", "contactos", "cancelar", "auditoria"]));
+  expect(agreed).toEqual(expect.arrayContaining(["recursos", "documentos", "coordinaciones", "hangar", "cancelar", "auditoria"]));
   for (const later of ["bitacora", "clima", "ruta", "ciclo", "aeronave", "tripulacion", "cierre"]) expect(agreed).not.toContain(later);
   const prepared = keys(sanitary("PLANIFICADO"));
   expect(prepared).toEqual(expect.arrayContaining(["aeronave", "tripulacion", "ruta", "bitacora", "clima", "ciclo", "documentos", "hangar", "cancelar"]));
@@ -52,7 +52,7 @@ test("a closed request keeps its decision history; only a cancelled flight that 
   expect(hadAgreement(sanitary("CANCELADO"), accepted)).toBe(true);
   const history = keys(sanitary("CANCELADO"), accepted);
   expect(history).toEqual(expect.arrayContaining(["documentos", "hangar", "coordinaciones", "bitacora", "auditoria"]));
-  for (const action of ["recursos", "cancelar", "ciclo", "contactos"]) expect(history).not.toContain(action);
+  for (const action of ["recursos", "cancelar", "ciclo"]) expect(history).not.toContain(action);
   expect(flightStage(sanitary("RECHAZADO"), accepted).agreed).toBe(false);                             // un rechazo nunca tuvo acuerdo
 });
 
@@ -61,6 +61,6 @@ test("operational flights keep every section, and the DTS never gets operations 
   for (const key of ["hangar", "coordinaciones", "documentos", "bitacora", "ruta", "tripulacion", "cancelar"]) expect(all).toContain(key);
   const dts = keys(sanitary("PLANIFICADO"), [], "DTS");
   for (const key of ["recursos", "aeronave", "tripulacion", "ruta", "ciclo", "cierre", "coordinaciones", "hangar", "bitacora", "clima"]) expect(dts).not.toContain(key);
-  expect(dts).toEqual(expect.arrayContaining(["documentos", "contactos", "auditoria", "negociacion"]));
+  expect(dts).toEqual(expect.arrayContaining(["documentos", "auditoria", "negociacion"]));
   expect(keys(sanitary("SOLICITADO"), [], "DTS")).toEqual(["auditoria", "negociacion", "resumen"]);
 });

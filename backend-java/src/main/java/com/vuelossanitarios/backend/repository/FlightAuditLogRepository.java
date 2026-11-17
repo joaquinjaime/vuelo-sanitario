@@ -5,7 +5,9 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import java.util.*;
 public interface FlightAuditLogRepository extends JpaRepository<FlightAuditLog,Long> {
+ // Obtiene una porción paginada del historial del vuelo con origen informado, del más reciente al más antiguo (fecha de ocurrencia e ID).
  @Query("select e from FlightAuditLog e where e.flight.id=:flight and e.origen is not null order by e.ocurrido desc,e.id desc")
  Slice<FlightAuditLog> history(@Param("flight") Long flight,Pageable page);
+ // Verifica si ya existe un registro del historial del vuelo con el origen y el tipo indicados.
  boolean existsByFlightIdAndOrigenAndTipo(Long flight,String origin,String type);
 }

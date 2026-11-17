@@ -22,18 +22,21 @@ import org.springframework.web.multipart.MultipartFile;
 @Service public class FinalReportWorkflowService {
  public static final long DEADLINE_HOURS=48;
  public record Download(String filename,byte[] data){}
- private final FinalReportObligationRepository obligations; private final FlightFinalReportRepository reports; private final SanitaryFlightRepository sanitaryFlights; private final FlightStatusRepository statuses; private final UserRepository users; private final NotificationService notifications; private final AuditService audit; private final CommanderReportAccessService access; private final ReportAttachmentService attachments; private final ObjectMapper json; private final Clock clock;
- public FinalReportWorkflowService(FinalReportObligationRepository o,FlightFinalReportRepository r,SanitaryFlightRepository sf,FlightStatusRepository s,UserRepository u,NotificationService n,AuditService a,CommanderReportAccessService ac,ReportAttachmentService att,ObjectMapper j,Clock c){obligations=o;reports=r;sanitaryFlights=sf;statuses=s;users=u;notifications=n;audit=a;access=ac;attachments=att;json=j;clock=c;}
+ private final FlightAuthorizationService flightAccess; private final FinalReportObligationRepository obligations; private final FlightFinalReportRepository reports; private final SanitaryFlightRepository sanitaryFlights; private final FlightStatusRepository statuses; private final UserRepository users; private final NotificationService notifications; private final AuditService audit; private final CommanderReportAccessService access; private final ReportAttachmentService attachments; private final ObjectMapper json; private final Clock clock;
+ public FinalReportWorkflowService(FinalReportObligationRepository o,FlightFinalReportRepository r,SanitaryFlightRepository sf,FlightStatusRepository s,UserRepository u,NotificationService n,AuditService a,CommanderReportAccessService ac,ReportAttachmentService att,ObjectMapper j,Clock c,FlightAuthorizationService fa){flightAccess=fa;obligations=o;reports=r;sanitaryFlights=sf;statuses=s;users=u;notifications=n;audit=a;access=ac;attachments=att;json=j;clock=c;}
 
  /** Se invoca dentro de la transición de finalización (vuelo ya bloqueado); es idempotente por vuelo. */
  @Transactional public void createObligationAfterFinish(Flight flight,User actor){
   if(flight.getComandante()==null)throw bad("El vuelo finalizado debe tener comandante asignado");
+  // createObligationAfterFinish: Busca la obligación de informe final vigente del vuelo para no crear una duplicada.
   if(obligations.findByFlightIdAndCurrentTrue(flight.getId()).isPresent())return;
   OffsetDateTime due=now().plusHours(DEADLINE_HOURS);
+  // Guarda la nueva obligación de informe final en estado PENDIENTE con su fecha de vencimiento.
   FinalReportObligation o=new FinalReportObligation();o.setFlight(flight);o.setCommander(flight.getComandante());o.setFinisher(actor);o.setObligationNumber(1);o.setStatus(FinalReportStatus.PENDIENTE);o.setOriginalDueAt(due);o.setDueAt(due);obligations.save(o);
   audit.record(flight,actor,"FINAL_REPORT_OBLIGATION",o.getId(),"CREATE",null,toJson(mapOf("estado","PENDIENTE","vencimiento",due.toString())));
   notifications.createOnce(o.getCommander(),flight,"FINAL_REPORT_PENDING","El vuelo "+flight.getCodigo()+" finalizó. Debe presentar el informe final antes de "+due,"FINAL_REPORT_PENDING:"+o.getId());
   notifications.createOnce(o.getCommander(),flight,"FLIGHT_FINISHED","El Centro de Operaciones finalizó el vuelo "+flight.getCodigo()+".","FLIGHT_FINISHED:"+flight.getId());
+  // Busca el registro de vuelo sanitario asociado al vuelo.
   SanitaryFlight sanitary=sanitaryFlights.findByFlightId(flight.getId()).orElse(null);
   if(sanitary!=null&&!sanitary.getSolicitadoPor().getId().equals(o.getCommander().getId()))notifications.createOnce(sanitary.getSolicitadoPor(),flight,"FLIGHT_FINISHED","El vuelo sanitario "+flight.getCodigo()+" fue finalizado.","FLIGHT_FINISHED:"+flight.getId());
  }
@@ -52,10 +55,14 @@ import org.springframework.web.multipart.MultipartFile;
   try{
    boolean resubmission=o.getStatus()==FinalReportStatus.DEVUELTO,wasBlocked=access.isBlocked(o.getCommander().getId());
    FinalReportStatus before=o.getStatus();
+   // submit: Busca la versión vigente del informe final del vuelo.
    Optional<FlightFinalReport> previous=reports.findByFlightIdAndEsVersionActualTrue(flight.getId());
+   // Guarda la versión anterior del informe final marcada como no vigente y la envía de inmediato a la base.
    previous.ifPresent(x->{x.setEsVersionActual(false);reports.saveAndFlush(x);});
+   // Cuenta las versiones del informe final ya registradas para el vuelo, para numerar la nueva.
    FlightFinalReport r=new FlightFinalReport();r.setFlight(flight);r.setVersion(reports.countByFlightId(flight.getId())+1);r.setEsVersionActual(true);r.setEstadoRevision(ReportReviewStatus.PRESENTADO);r.setOrigenDecision(ReportDecisionOrigin.FLUJO_ACTUAL);r.setHorasVuelo(req.horasVuelo());r.setCombustibleConsumidoLitros(req.combustibleConsumidoLitros());r.setIncidentes(blank(req.incidentes()));r.setResumen(text);r.setCreadoPor(user(actorId));
    if(stored!=null){r.setAdjuntoNombreOriginal(stored.originalName());r.setAdjuntoUbicacion(stored.key());r.setAdjuntoTamanioBytes(stored.size());r.setAdjuntoSha256(stored.sha256());}
+   // Guarda la nueva versión vigente del informe final en estado PRESENTADO y la envía de inmediato a la base.
    reports.saveAndFlush(r);
    o.setReport(r);o.setStatus(FinalReportStatus.PRESENTADO);o.setPresentedAt(now());
    audit.record(flight,user(actorId),"FINAL_REPORT",r.getId(),resubmission?"RESUBMIT":"SUBMIT",toJson(mapOf("estadoObligacion",before.name(),"version",previous.map(FlightFinalReport::getVersion).orElse(null))),toJson(mapOf("estadoObligacion","PRESENTADO","version",r.getVersion(),"formato",format(r),"adjuntoBytes",stored==null?null:stored.size(),"adjuntoSha256",stored==null?null:stored.sha256())));
@@ -86,7 +93,9 @@ import org.springframework.web.multipart.MultipartFile;
   if(flight.getEstadoVuelo()==null||!"FINALIZADO".equals(flight.getEstadoVuelo().getCodigo()))throw bad("Sólo se revisa el informe de un vuelo finalizado");
   User reviewer=user(actorId);OffsetDateTime now=now();
   if(Boolean.TRUE.equals(req.aprobar())){
+   // review: Guarda el informe final como APROBADO con su fecha y revisor, y lo envía de inmediato a la base.
    report.setEstadoRevision(ReportReviewStatus.APROBADO);report.setFechaRevision(now);report.setRevisor(reviewer);reports.saveAndFlush(report);
+   // Guarda la obligación de informe final como APROBADO con su fecha y responsable, y la envía de inmediato a la base.
    o.setStatus(FinalReportStatus.APROBADO);o.setApprovedAt(now);o.setApprovedBy(reviewer);obligations.saveAndFlush(o);
    // El trigger de SQL Server exige que versión y obligación ya consten aprobadas cuando el vuelo pasa a COMPLETADO.
    flight.setEstadoVuelo(status("COMPLETADO"));
@@ -95,6 +104,7 @@ import org.springframework.web.multipart.MultipartFile;
    String key=o.getId().toString();
    notifications.createOnce(o.getCommander(),flight,"FINAL_REPORT_APPROVED","Informe final aprobado para el vuelo "+flight.getCodigo()+".","FINAL_REPORT_APPROVED:"+report.getId());
    notifications.createOnce(o.getCommander(),flight,"FLIGHT_COMPLETED","El vuelo "+flight.getCodigo()+" fue completado.","FLIGHT_COMPLETED:"+key);
+   // Busca el registro de vuelo sanitario del vuelo para notificar a quien lo solicitó.
    sanitaryFlights.findByFlightId(flight.getId()).ifPresent(s->notifications.createOnce(s.getSolicitadoPor(),flight,"FLIGHT_COMPLETED","El vuelo sanitario "+flight.getCodigo()+" fue completado.","FLIGHT_COMPLETED:"+key));
   }else{
    if(req.motivoDevolucion()==null||req.motivoDevolucion().trim().isEmpty())throw bad("La devolución requiere un motivo");
@@ -108,29 +118,38 @@ import org.springframework.web.multipart.MultipartFile;
   return view(o);
  }
 
+ // mine: Obtiene las obligaciones de informe final vigentes del comandante, ordenadas por vencimiento ascendente.
  @Transactional(readOnly=true) public List<ObligationView> mine(Long commander){return obligations.findByCommanderIdAndCurrentTrueOrderByDueAtAsc(commander).stream().map(this::view).toList();}
+ // pendingReview: Obtiene las obligaciones vigentes en estado PRESENTADO, de la presentación más antigua a la más reciente.
  @Transactional(readOnly=true) public List<ObligationView> pendingReview(){return obligations.findByStatusAndCurrentTrueOrderByPresentedAtAsc(FinalReportStatus.PRESENTADO).stream().map(this::view).toList();}
  /** Obligaciones que esperan una presentación (pendientes o devueltas), las vencidas primero por su vencimiento. */
+ // awaitingCommander: Obtiene las obligaciones vigentes en estado PENDIENTE o DEVUELTO, ordenadas por vencimiento ascendente.
  @Transactional(readOnly=true) public List<ObligationView> awaitingCommander(){return obligations.findByStatusInAndCurrentTrueOrderByDueAtAsc(List.of(FinalReportStatus.PENDIENTE,FinalReportStatus.DEVUELTO)).stream().map(this::view).toList();}
 
  @Transactional(readOnly=true) public ObligationDetail detail(Long obligationId,Long actorId){
+  // detail: Obtiene la obligación de informe final por su identificador.
   FinalReportObligation o=obligations.findById(obligationId).orElseThrow(()->notFound());requireReader(o,actorId);return detailOf(o);
  }
  @Transactional(readOnly=true) public ObligationDetail byFlight(Long flightId,Long actorId){
+  // byFlight: Obtiene la obligación de informe final vigente del vuelo.
   FinalReportObligation o=obligations.findByFlightIdAndCurrentTrue(flightId).orElseThrow(()->notFound());requireReader(o,actorId);return detailOf(o);
  }
  /** Descarga autenticada del PDF de una versión: mismo control de acceso que la consulta del informe. */
  @Transactional(readOnly=true) public Download download(Long obligationId,int version,Long actorId){
+  // download: Obtiene la obligación de informe final por su identificador.
   FinalReportObligation o=obligations.findById(obligationId).orElseThrow(()->notFound());requireReader(o,actorId);
+  // Obtiene todas las versiones del informe final del vuelo, de la más reciente a la más antigua, para elegir la solicitada.
   FlightFinalReport r=reports.findByFlightIdOrderByVersionDesc(o.getFlight().getId()).stream().filter(x->x.getVersion()==version).findFirst().orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Versión de informe inexistente"));
   if(!r.hasAttachment())throw new ApiException(HttpStatus.NOT_FOUND,"La versión no tiene un PDF adjunto");
   return new Download("informe-final-"+o.getFlight().getCodigo()+"-v"+r.getVersion()+".pdf",attachments.read(r.getAdjuntoUbicacion()));
  }
  /** Estado administrativo del vuelo para su ficha; null si el vuelo no generó obligación de informe. */
  @Transactional(readOnly=true) public ClosureView closure(Flight f){
+  // closure: Busca la obligación de informe final vigente del vuelo.
   return obligations.findByFlightIdAndCurrentTrue(f.getId()).map(o->{
    boolean overdue=overdue(o);
    String admin=switch(o.getStatus()){case PENDIENTE->overdue?"INFORME_VENCIDO":"INFORME_PENDIENTE";case DEVUELTO->overdue?"INFORME_VENCIDO":"INFORME_DEVUELTO";case PRESENTADO->"EN_REVISION";case APROBADO->"CERRADO";};
+   // Cuenta las versiones del informe final registradas para el vuelo.
    return new ClosureView(o.getId(),admin,o.getStatus().name(),o.getDueAt(),overdue,access.isBlocked(o.getCommander().getId()),reports.countByFlightId(f.getId()),o.getApprovedAt(),f.getFechaSalidaReal(),f.getFechaLlegadaReal());
   }).orElse(null);
  }
@@ -142,20 +161,26 @@ import org.springframework.web.multipart.MultipartFile;
  static String format(FlightFinalReport r){boolean text=r.getResumen()!=null&&!r.getResumen().isBlank();return r.hasAttachment()?(text?"TEXTO_Y_PDF":"PDF"):"TEXTO";}
 
  private ObligationDetail detailOf(FinalReportObligation o){
+  // detailOf: Obtiene todas las versiones del informe final del vuelo, de la más reciente a la más antigua.
   List<ReportVersionView> versions=reports.findByFlightIdOrderByVersionDesc(o.getFlight().getId()).stream().map(r->new ReportVersionView(r.getId(),r.getVersion(),Boolean.TRUE.equals(r.getEsVersionActual()),r.getEstadoRevision().name(),r.getOrigenDecision().name(),format(r),r.getHorasVuelo(),r.getCombustibleConsumidoLitros(),r.getIncidentes(),r.getResumen(),
     r.hasAttachment()?new AttachmentView(r.getAdjuntoNombreOriginal(),r.getAdjuntoTamanioBytes(),r.getAdjuntoSha256(),"/api/final-reports/"+o.getId()+"/versions/"+r.getVersion()+"/file"):null,
     r.getCreadoPor().getUsername(),r.getCreatedAt(),r.getMotivoDevolucion(),r.getFechaRevision(),r.getRevisor()==null?null:r.getRevisor().getUsername())).toList();
   return new ObligationDetail(view(o),versions);
  }
  private void requireReader(FinalReportObligation o,Long actorId){
-  if(o.getCommander().getId().equals(actorId))return;
+  if(o.getCommander().getId().equals(actorId)||flightAccess.copilotOf(o.getFlight(),actorId))return;
+  // requireReader: Obtiene la cuenta del usuario que consulta.
+  // Vuelve a obtener esa cuenta por su nombre de usuario, junto con sus asignaciones de rol y los roles asociados.
   User u=users.findById(actorId).flatMap(x->users.findWithRolesByUsername(x.getUsername())).orElseThrow(()->new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a este informe"));
   if(!FlightAuthorizationService.readsAllFlights(FlightAuthorizationService.roleCodes(u)))throw new ApiException(HttpStatus.FORBIDDEN,"No tiene acceso a este informe");
  }
+ // locked: Obtiene y bloquea para escritura la obligación de informe final indicada.
  private FinalReportObligation locked(Long id){return obligations.lockById(id).orElseThrow(()->notFound());}
  private ApiException notFound(){return new ApiException(HttpStatus.NOT_FOUND,"Obligación de informe inexistente");}
  private void requireCommander(FinalReportObligation o,Long id){if(!o.getCommander().getId().equals(id))throw new ApiException(HttpStatus.FORBIDDEN,"Sólo el comandante responsable puede presentar este informe");}
+ // user: Obtiene la cuenta de usuario por su identificador.
  private User user(Long id){return users.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));}
+ // status: Busca el estado de vuelo del catálogo por su código.
  private FlightStatus status(String code){return statuses.findByCodigo(code).orElseThrow(()->new IllegalStateException("Catálogo de estados incompleto"));}
  private OffsetDateTime now(){return OffsetDateTime.ofInstant(Instant.now(clock),ZoneOffset.UTC);}
  private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}
@@ -165,6 +190,7 @@ import org.springframework.web.multipart.MultipartFile;
  ObligationView view(FinalReportObligation o){
   Flight f=o.getFlight();User c=o.getCommander();boolean open=o.getStatus()==FinalReportStatus.PENDIENTE||o.getStatus()==FinalReportStatus.DEVUELTO;
   return new ObligationView(o.getId(),f.getId(),f.getCodigo(),o.getStatus().name(),o.getDueAt(),o.getOriginalDueAt(),Boolean.TRUE.equals(o.getExtensionUsed()),o.getPresentedAt(),o.getReturnReason(),access.isBlocked(c.getId()),
+   // view: Cuenta las versiones del informe final registradas para el vuelo.
    f.getEstadoVuelo()==null?null:f.getEstadoVuelo().getCodigo(),f.getTipoVuelo().getCodigo(),c.getId(),c.getPerson().getNombre()+" "+c.getPerson().getApellido(),overdue(o),open?Duration.between(now(),o.getDueAt()).getSeconds():null,reports.countByFlightId(f.getId()),o.getApprovedAt());
  }
 }

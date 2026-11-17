@@ -1,4 +1,3 @@
-import React from "react";
 import { Icon } from "./Icon";
 
 /** Mensaje persistente dentro de la pantalla (no es un aviso transitorio). Los errores se anuncian como alerta. */

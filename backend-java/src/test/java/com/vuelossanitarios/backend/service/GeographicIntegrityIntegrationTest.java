@@ -41,7 +41,7 @@ import org.springframework.http.HttpStatus;
 class GeographicIntegrityIntegrationTest {
  @Autowired GeographicCatalogService geography; @Autowired FlightService flightService; @Autowired FlightRouteService routeService; @Autowired AircraftAdminService aircraftAdmin;
  @Autowired FlightRouteRepository routes; @Autowired AuditEventRepository auditEvents; @Autowired AircraftRepository aircraft; @Autowired AirportRepository airports; @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roleRepository; @Autowired UserRoleRepository userRoles; @Autowired CommanderProfileRepository commanderProfiles;
- @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CancellationReasonRepository reasons; @Autowired PatientRepository patients; @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightPriorityRepository priorities;
+ @Autowired FlightRepository flights; @Autowired FlightTypeRepository types; @Autowired PatientConditionRepository patientConditions; @Autowired FlightStatusRepository statuses; @Autowired CrewRoleRepository crewRoles; @Autowired CancellationReasonRepository reasons; @Autowired PatientRepository patients; @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightPriorityRepository priorities;
  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager; private org.springframework.transaction.support.TransactionTemplate tx;
  @MockBean CommanderReportAccessService commanderAccess; @MockBean FlightLogService flightLog;
 
@@ -70,6 +70,7 @@ class GeographicIntegrityIntegrationTest {
   ops=user("ops","CENTRO_OPERACIONES",false);admin=user("adm","ADMINISTRADOR",false);dts=user("dts","DTS",false);
   FlightType sanitary=new FlightType();sanitary.setCodigo("SANITARIO");sanitary.setNombre("Sanitario");types.save(sanitary);
   for(String c:List.of("SOLICITADO","APROBADO","RECHAZADO","CANCELADO","PENDIENTE_RESPUESTA_DTS")){SanitaryRequestStatus st=new SanitaryRequestStatus();st.setCodigo(c);st.setNombre(c);st.setOrden((short)1);requestStatuses.save(st);}
+  PatientCondition pc=new PatientCondition();pc.setCodigo("ESTABLE");pc.setNombre("Estable");pc.setOrden((short)1);patientConditions.save(pc);
   FlightPriority pr=new FlightPriority();pr.setCodigo("NORMAL");pr.setNombre("Normal");pr.setOrden((short)1);priorities.save(pr);priorityCode="NORMAL";
   FlightType t=new FlightType();t.setCodigo("REGRESO_BASE");t.setNombre("Regreso");types.save(t);
   for(String s:List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PLANIFICADO","CANCELADO","EN_CURSO","FINALIZADO","PENDIENTE_REPLANIFICACION"))status(s);
@@ -172,7 +173,7 @@ class GeographicIntegrityIntegrationTest {
 
  // ---------- Localidades y solicitudes sanitarias ----------
  private Patient patient(){int n=next();Person p=new Person();p.setNombre("Paciente");p.setApellido("P"+n);p.setDni(String.valueOf(70000000+n));persons.save(p);Patient pt=new Patient();pt.setPerson(p);return patients.save(pt);}
- private CreateFlight request(Patient patient,Locality origin,Locality destination){return new CreateFlight(patient.getId(),origin.getId(),destination.getId(),priorityCode,"Solicitud de integridad",LocalDateTime.now().plusDays(40).withHour(10).withMinute(0).withSecond(0).withNano(0),false,null,null,new Medical("Diagnóstico","ESTABLE",false,null),null);}
+ private CreateFlight request(Patient patient,Locality origin,Locality destination){return new CreateFlight(patient.getId(),origin.getId(),destination.getId(),priorityCode,"Solicitud de integridad",LocalDateTime.now().plusDays(40).withHour(10).withMinute(0).withSecond(0).withNano(0),false,null,null,new Medical("Diagnóstico","ESTABLE",false,null));}
  @Test void anOpenSanitaryRequestProtectsItsLocalitiesButAClosedOneIsHistory() {
   Locality origin=newLocality(province),destination=newLocality(province);Patient patient=patient();
   FlightView view=flightService.create(request(patient,origin,destination),dts.getId());

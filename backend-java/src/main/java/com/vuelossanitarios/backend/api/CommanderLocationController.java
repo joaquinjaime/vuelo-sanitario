@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
  /** Un comandante consulta su propia ubicación; Operaciones y Administrador consultan la de cualquiera. */
  @GetMapping("/api/commanders/{id}/location") @PreAuthorize("hasAnyRole('ADMINISTRADOR','OPERACIONES','CENTRO_OPERACIONES','COMANDANTE')")
  public CommanderLocationRow get(@PathVariable Long id,@AuthenticationPrincipal CurrentUser current){
+  // Carga el usuario autenticado por su ID junto con sus roles asignados
   boolean staff=users.findWithRolesById(current.id()).orElseThrow().getUserRoles().stream().anyMatch(r->java.util.Set.of("ADMINISTRADOR","OPERACIONES","CENTRO_OPERACIONES").contains(r.getRole().getCodigo()));
   if(!staff&&!id.equals(current.id()))throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN,"Sólo puede consultar su propia ubicación");
   return service.get(id);

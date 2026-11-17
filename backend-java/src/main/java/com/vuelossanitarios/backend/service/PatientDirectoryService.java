@@ -47,10 +47,12 @@ public class PatientDirectoryService {
   if(byDni){
    String key=canonicalDni(dni);
    if(key.length()<7||key.length()>12)throw bad("El DNI debe tener entre 7 y 12 dígitos");
+   // Busca el paciente cuya persona tiene exactamente ese DNI, cargando la persona en la misma consulta
    List<PatientSearchItem> found=page==0?patients.findWithPersonByDni(key).map(this::item).map(List::of).orElseGet(List::of):List.of();
    return new PatientSearchPage(found,page,size,false);
   }
   String first=prefix(nombre,"nombre"),last=prefix(apellido,"apellido");
+  // Obtiene una página de pacientes cuyo nombre y apellido comienzan con los prefijos indicados (sin distinguir mayúsculas), ordenados por apellido, nombre e ID
   Slice<Patient> found=patients.searchByName(first+"%",last+"%",PageRequest.of(page,size));
   return new PatientSearchPage(found.getContent().stream().map(this::item).toList(),page,size,found.hasNext());
  }
@@ -73,8 +75,10 @@ public class PatientDirectoryService {
   changed(before,after,"fechaNacimiento",person.getFechaNacimiento(),birth);
   if(before.isEmpty())throw bad("No hay cambios de identidad para guardar");
   person.setNombre(first);person.setApellido(last);person.setFechaNacimiento(birth);
+  // Envía a la base de datos los cambios pendientes de la persona (nombre, apellido y fecha de nacimiento) verificando su versión
   persons.flush(); // @Version detects concurrent changes, including those from AuthService.
   after.put("motivo",reason);
+  // Obtiene una referencia diferida al usuario actor por su ID, sin consultarlo, para registrar la auditoría
   audit.record(null,users.getReferenceById(actorId),"PATIENT_IDENTITY",patientId,"CORRECT",asJson(before),asJson(after));
   return detailOf(patient);
  }
@@ -91,6 +95,7 @@ public class PatientDirectoryService {
  public PatientCorrectionHistory history(Long patientId,int page,int size){
   patient(patientId);
   validatePage(page,size,20,1000);
+  // Obtiene una página de eventos de auditoría de identidad del paciente (corrección, rectificación o asignación de DNI), del más reciente al más antiguo
   Slice<AuditEvent> found=events.findByEntityTypeAndEntityIdAndOperationInOrderByIdDesc("PATIENT_IDENTITY",patientId,List.of("CORRECT","RECTIFY_DNI","ASSIGN_DNI"),PageRequest.of(page,size));
   return new PatientCorrectionHistory(found.getContent().stream().map(this::event).toList(),page,size,found.hasNext());
  }
@@ -107,9 +112,11 @@ public class PatientDirectoryService {
   Person person=patient.getPerson();String dni=person.getDni();
   return new PatientSearchItem(patient.getId(),person.getNombre(),person.getApellido(),dni==null?null:"••••"+dni.substring(Math.max(0,dni.length()-4)),person.getFechaNacimiento()==null?null:person.getFechaNacimiento().getYear());
  }
+ // detailOf: Busca el usuario vinculado a la persona del paciente para conocer el estado de su cuenta
  private PatientIdentityDetail detailOf(Patient patient){Person p=patient.getPerson();return new PatientIdentityDetail(patient.getId(),p.getNombre(),p.getApellido(),p.getDni(),p.getFechaNacimiento(),p.getVersion(),users.findByPersonId(p.getId()).map(User::getEstadoCuenta).orElse(null));}
  private static String maskedTail(String tail){return tail==null?"Sin DNI":"••••"+tail;}
  private ApiException stale(){return PersonIdentityService.stale();}
+ // patient: Busca el paciente por su ID
  private Patient patient(Long id){return patients.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Paciente inexistente"));}
  private void changed(Map<String,Object> before,Map<String,Object> after,String field,Object old,Object now){if(!Objects.equals(old,now)){before.put(field,old);after.put(field,now);}}
  private String asJson(Map<String,Object> values){try{return json.writeValueAsString(values);}catch(Exception e){throw new IllegalStateException("No se pudo registrar la auditoría",e);}}

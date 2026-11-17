@@ -20,8 +20,6 @@ export const isTodayOrTomorrow = (v) => {
 /** Acepta el lugar estructurado ({nombre, provincia}) o, en payloads antiguos, el nombre del aeropuerto como texto. */
 export const locationLabel = (location) => !location ? "—" : typeof location === "string" ? (location.trim() || "—") : ([location.nombre, location.provincia].filter(Boolean).join(", ") || "—");
 
-export const stateLabel = (state) => String(state || "SIN_ESTADO").replaceAll("_", " ");
-
 /** Hora (HH:mm) de la zona de negocio, para «última actualización». */
 export const updateStamp = () => new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: BUSINESS_ZONE }).format(new Date());
 

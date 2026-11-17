@@ -52,19 +52,24 @@ import org.springframework.transaction.annotation.Transactional;
  // ---- correos ----
  @Transactional public ContactView addEmail(Long userId,ContactRequest r){
   User u=lockOwner(userId);Long pid=u.getPerson().getId();String value=email(r.direccion()),type=type(r.tipo());
+  // addEmail: Obtiene los correos vigentes de la persona, el principal primero, para evitar duplicados.
   List<EmailContact> current=emails.findActiveByPersonId(pid);
   if(current.stream().anyMatch(x->x.getDireccionNormalizada().equals(ContactNormalizer.email(value))))throw duplicate("correo electrónico");
   EmailContact e=new EmailContact();e.setPerson(u.getPerson());e.setDireccion(value);e.setTipo(type);e.setPrincipal(current.isEmpty());
+  // Guarda el nuevo correo de la persona y lo envía de inmediato a la base.
   e=emails.saveAndFlush(e);audit(u,"PERSON_EMAIL",e.getId(),"CREATE",null,snapshot(ContactNormalizer.maskEmail(value),type,e.getPrincipal(),null,EmailVerificationService.UNVERIFIED));
   return emailView(e,EmailVerificationService.UNVERIFIED,null);
  }
  /** Estado actual de un correo propio (sin modificar nada). */
  @Transactional(readOnly=true) public ContactView emailContact(Long userId,Long id){
+  // emailContact: Obtiene la cuenta de usuario con su persona por identificador.
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  // Obtiene el correo vigente indicado, sólo si pertenece a la persona del usuario.
   EmailContact e=emails.findActiveByIdAndPersonId(id,u.getPerson().getId()).orElseThrow(()->notFound("Correo"));
   return emailView(e,verification.stateOf(e),null);
  }
  @Transactional public ContactView updateEmail(Long userId,Long id,ContactUpdateRequest r){
+  // updateEmail: Obtiene el correo vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();EmailContact e=emails.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Correo"));
   String type=type(r.tipo());
   if(!Objects.equals(e.getVersion(),r.version()))throw versionConflict();
@@ -72,6 +77,7 @@ import org.springframework.transaction.annotation.Transactional;
   String value=sameAddress?e.getDireccion():email(r.direccion());   // una dirección anterior que no cambia no se revalida (no se bloquea al titular por reglas nuevas)
   if(!sameAddress){
    if(e.isVerificado())throw new ApiException(HttpStatus.CONFLICT,"EMAIL_VERIFIED_IMMUTABLE","Un correo verificado no se reemplaza en el lugar: agregue el nuevo correo, confírmelo con el código y luego retire el anterior",Map.of());
+   // Obtiene los correos vigentes de la persona para rechazar una dirección repetida.
    if(emails.findActiveByPersonId(pid).stream().anyMatch(x->!x.getId().equals(id)&&x.getDireccionNormalizada().equals(ContactNormalizer.email(value))))throw duplicate("correo electrónico");
   }
   if(sameAddress&&type.equals(e.getTipo()))return emailView(e,verification.stateOf(e),null);
@@ -79,28 +85,37 @@ import org.springframework.transaction.annotation.Transactional;
   if(!sameAddress)e.setDireccion(value);
   e.setTipo(type);   // un solo cambio de versión por edición: ambos campos se modifican antes de cualquier flush
   if(!sameAddress)verification.invalidateOpen(id,EmailVerification.ADDRESS_CHANGED);
+  // Guarda la dirección y el tipo actualizados del correo y los envía de inmediato a la base.
   e=emails.saveAndFlush(e);String state=verification.stateOf(e);
   audit(u,"PERSON_EMAIL",e.getId(),"UPDATE",before,snapshot(ContactNormalizer.maskEmail(value),type,e.getPrincipal(),null,state));
   return emailView(e,state,null);
  }
  @Transactional public void removeEmail(Long userId,Long id){
+  // removeEmail: Obtiene el correo vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();EmailContact e=emails.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Correo"));
+  // Obtiene los correos vigentes de la persona, el principal primero.
   List<EmailContact> current=emails.findActiveByPersonId(pid);
   if(current.size()<=1)throw lastContact("correo electrónico");
   if(e.isVerificado()&&current.stream().noneMatch(x->!x.getId().equals(id)&&x.isVerificado()))
    throw new ApiException(HttpStatus.CONFLICT,"LAST_VERIFIED_EMAIL","Es su único correo verificado: confirme otro correo antes de retirar este",Map.of());
   String before=snapshot(ContactNormalizer.maskEmail(e.getDireccion()),e.getTipo(),e.getPrincipal(),null,e.isVerificado()?EmailVerificationService.VERIFIED:EmailVerificationService.UNVERIFIED);boolean wasMain=Boolean.TRUE.equals(e.getPrincipal());
+  // Guarda la baja lógica del correo (fecha, responsable y motivo RETIRO) y la envía de inmediato a la base.
   e.darDeBaja(now(),u,"RETIRO");emails.saveAndFlush(e);verification.invalidateOpen(id,EmailVerification.ADDRESS_REMOVED);
   Long promoted=null;
+  // Guarda como principal el correo que reemplaza al retirado y lo envía de inmediato a la base.
   if(wasMain){EmailContact next=current.stream().filter(x->!x.getId().equals(id)).min(Comparator.comparing((EmailContact x)->!x.isVerificado()).thenComparing(EmailContact::getId)).orElseThrow();next.setPrincipal(true);emails.saveAndFlush(next);promoted=next.getId();}
   audit(u,"PERSON_EMAIL",id,"REMOVE",before,removal(promoted));
  }
  @Transactional public void makePrimaryEmail(Long userId,Long id){
+  // makePrimaryEmail: Obtiene el correo vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();EmailContact target=emails.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Correo"));
   if(Boolean.TRUE.equals(target.getPrincipal()))return;
   if(!target.isVerificado())throw new ApiException(HttpStatus.CONFLICT,"EMAIL_NOT_VERIFIED","Confirme el correo con el código que recibe en esa dirección antes de hacerlo principal",Map.of());
   Long previous=null;
+  // Obtiene los correos vigentes de la persona para quitar la marca de principal al actual.
+  // Guarda el correo que deja de ser principal y lo envía de inmediato a la base.
   for(EmailContact x:emails.findActiveByPersonId(pid))if(Boolean.TRUE.equals(x.getPrincipal())){x.setPrincipal(false);emails.saveAndFlush(x);previous=x.getId();}
+  // Guarda el correo elegido como nuevo principal y lo envía de inmediato a la base.
   target.setPrincipal(true);emails.saveAndFlush(target);
   audit(u,"PERSON_EMAIL",id,"SET_PRIMARY",primary("principalAnteriorId",previous),primary("principalId",id));
  }
@@ -108,38 +123,51 @@ import org.springframework.transaction.annotation.Transactional;
  // ---- teléfonos ----
  @Transactional public ContactView addPhone(Long userId,PhoneRequest r){
   User u=lockOwner(userId);Long pid=u.getPerson().getId();PhoneNumbers.Parsed number=phone(r.numero(),r.pais());String type=type(r.tipo());
+  // addPhone: Obtiene los teléfonos vigentes de la persona, el principal primero, para evitar duplicados.
   List<PhoneContact> current=phones.findActiveByPersonId(pid);
   rejectDuplicate(current,null,number);
   PhoneContact p=new PhoneContact();p.setPerson(u.getPerson());p.setValidated(number);p.setTipo(type);p.setPrincipal(current.isEmpty());
+  // Guarda el nuevo teléfono validado de la persona y lo envía de inmediato a la base.
   p=phones.saveAndFlush(p);audit(u,"PERSON_PHONE",p.getId(),"CREATE",null,snapshot(ContactNormalizer.maskPhone(number.e164()),type,p.getPrincipal(),number.region(),null));
   return phoneView(p);
  }
  @Transactional public ContactView updatePhone(Long userId,Long id,PhoneUpdateRequest r){
+  // updatePhone: Obtiene el teléfono vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();PhoneContact p=phones.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Teléfono"));
   PhoneNumbers.Parsed number=phone(r.numero(),r.pais());String type=type(r.tipo());
   if(!Objects.equals(p.getVersion(),r.version()))throw versionConflict();
+  // Obtiene los teléfonos vigentes de la persona para rechazar un número repetido.
   rejectDuplicate(phones.findActiveByPersonId(pid),id,number);
   if(number.e164().equals(p.getNumeroNormalizado())&&number.region().equals(p.getCodigoPais())&&type.equals(p.getTipo()))return phoneView(p);
   String before=snapshot(ContactNormalizer.maskPhone(p.getNumeroNormalizado()),p.getTipo(),p.getPrincipal(),p.getCodigoPais(),null);
+  // Guarda el número, el país y el tipo actualizados del teléfono y los envía de inmediato a la base.
   p.setValidated(number);p.setTipo(type);p=phones.saveAndFlush(p);
   audit(u,"PERSON_PHONE",p.getId(),"UPDATE",before,snapshot(ContactNormalizer.maskPhone(number.e164()),type,p.getPrincipal(),number.region(),null));
   return phoneView(p);
  }
  @Transactional public void removePhone(Long userId,Long id){
+  // removePhone: Obtiene el teléfono vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();PhoneContact p=phones.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Teléfono"));
+  // Obtiene los teléfonos vigentes de la persona, el principal primero.
   List<PhoneContact> current=phones.findActiveByPersonId(pid);
   if(current.size()<=1)throw lastContact("teléfono");
   String before=snapshot(ContactNormalizer.maskPhone(p.getNumeroNormalizado()),p.getTipo(),p.getPrincipal(),p.getCodigoPais(),null);boolean wasMain=Boolean.TRUE.equals(p.getPrincipal());
+  // Guarda la baja lógica del teléfono (fecha, responsable y motivo RETIRO) y la envía de inmediato a la base.
   p.darDeBaja(now(),u,"RETIRO");phones.saveAndFlush(p);
   Long promoted=null;
+  // Guarda como principal el teléfono que reemplaza al retirado y lo envía de inmediato a la base.
   if(wasMain){PhoneContact next=current.stream().filter(x->!x.getId().equals(id)).min(Comparator.comparing((PhoneContact x)->!x.isValidado()).thenComparing(PhoneContact::getId)).orElseThrow();next.setPrincipal(true);phones.saveAndFlush(next);promoted=next.getId();}
   audit(u,"PERSON_PHONE",id,"REMOVE",before,removal(promoted));
  }
  @Transactional public void makePrimaryPhone(Long userId,Long id){
+  // makePrimaryPhone: Obtiene el teléfono vigente indicado, sólo si pertenece a la persona del usuario.
   User u=lockOwner(userId);Long pid=u.getPerson().getId();PhoneContact target=phones.findActiveByIdAndPersonId(id,pid).orElseThrow(()->notFound("Teléfono"));
   if(Boolean.TRUE.equals(target.getPrincipal()))return;
   Long previous=null;
+  // Obtiene los teléfonos vigentes de la persona para quitar la marca de principal al actual.
+  // Guarda el teléfono que deja de ser principal y lo envía de inmediato a la base.
   for(PhoneContact x:phones.findActiveByPersonId(pid))if(Boolean.TRUE.equals(x.getPrincipal())){x.setPrincipal(false);phones.saveAndFlush(x);previous=x.getId();}
+  // Guarda el teléfono elegido como nuevo principal y lo envía de inmediato a la base.
   target.setPrincipal(true);phones.saveAndFlush(target);
   audit(u,"PERSON_PHONE",id,"SET_PRIMARY",primary("principalAnteriorId",previous),primary("principalId",id));
  }
@@ -147,7 +175,9 @@ import org.springframework.transaction.annotation.Transactional;
  // ---- apoyo ----
  /** Carga la cuenta autenticada y bloquea la fila de su persona: nunca se opera sobre otra persona. */
  private User lockOwner(Long userId){
+  // lockOwner: Obtiene la cuenta de usuario con su persona por identificador.
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  // Bloquea para escritura la fila de la persona titular para serializar el mantenimiento de sus contactos.
   persons.lockById(u.getPerson().getId());return u;
  }
  private String email(String raw){String problem=ContactNormalizer.emailProblem(raw);if(problem!=null)throw invalid(problem,"correo",null);return raw.trim();}

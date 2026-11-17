@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  @Transactional(propagation=Propagation.MANDATORY) public Map<Long,Airport> lockAll(Long... ids){
   Map<Long,Airport> out=new LinkedHashMap<>();
   Arrays.stream(ids).filter(Objects::nonNull).distinct().sorted().forEach(id->{
+   // Busca el aeropuerto por su ID aplicando bloqueo pesimista de escritura
    Airport a=em.find(Airport.class,id,LockModeType.PESSIMISTIC_WRITE);
+   // Relee el aeropuerto desde la base de datos manteniendo el bloqueo pesimista de escritura, descartando la copia previa del contexto
    if(a!=null){em.refresh(a,LockModeType.PESSIMISTIC_WRITE);out.put(id,a);}
   });
   return out;

@@ -12,14 +12,10 @@ public final class FlightDtos { private FlightDtos(){}
  public record Medical(@Size(max=10000) String diagnostico,@Size(max=100) String condicionMedica,boolean requiereEquipamientoEspecial,@Size(max=10000) String observaciones){}
  /** DTS-only request. Type is deliberately absent: it is always SANITARIO. */
  @StrictJson
- public record CreateFlight(@NotNull Long patientId,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical,@Valid List<TransferContactDtos.Input> contactos){
-  public CreateFlight(Long patientId,Long localidadOrigenId,Long localidadDestinoId,String priorityCode,String motivoVuelo,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,Medical medical){this(patientId,localidadOrigenId,localidadDestinoId,priorityCode,motivoVuelo,fechaSolicitada,extremaUrgencia,justificacionExtremaUrgencia,fechaLimiteTraslado,medical,null);}
- }
+ public record CreateFlight(@NotNull Long patientId,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull Medical medical){}
  /** Alta de paciente y solicitud en una única transacción. La selección de pacientes existentes usa CreateFlight. */
  @StrictJson
- public record CreateFlightWithPatient(@NotNull @Valid CreatePatient patient,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull @Valid Medical medical,boolean identidadConfirmada,@Valid List<TransferContactDtos.Input> contactos){
-  public CreateFlightWithPatient(CreatePatient patient,Long localidadOrigenId,Long localidadDestinoId,String priorityCode,String motivoVuelo,LocalDateTime fechaSolicitada,boolean extremaUrgencia,String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,Medical medical,boolean identidadConfirmada){this(patient,localidadOrigenId,localidadDestinoId,priorityCode,motivoVuelo,fechaSolicitada,extremaUrgencia,justificacionExtremaUrgencia,fechaLimiteTraslado,medical,identidadConfirmada,null);}
- }
+ public record CreateFlightWithPatient(@NotNull @Valid CreatePatient patient,@NotNull Long localidadOrigenId,@NotNull Long localidadDestinoId,@NotBlank String priorityCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull LocalDateTime fechaSolicitada,boolean extremaUrgencia,@Size(max=10000) String justificacionExtremaUrgencia,LocalDateTime fechaLimiteTraslado,@NotNull @Valid Medical medical,boolean identidadConfirmada){}
  public record CreateOperationalFlight(@NotBlank @Size(max=40) String tipoVueloCode,@NotBlank @Size(max=10000) String motivoVuelo,@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
  public record ReplanOperationalFlight(@NotNull Long aircraftId,@NotNull Long comandanteId,@NotNull Long destinoId,@NotNull LocalDateTime salida,@NotNull LocalDateTime llegada){}
  public record Evaluation(@NotNull Boolean aprobar,Long motivoCancelacionId,@Size(max=10000) String motivoCancelacionPersonalizado,String priorityCode){}
@@ -56,7 +52,10 @@ public final class FlightDtos { private FlightDtos(){}
  public record CancellationView(String motivo,String codigoMotivo,LocalDateTime fecha,String canceladoPor){}
  public record PlaceView(Long id,String nombre,String provincia,Long provinciaId){}
  /** origen/destino conservan el nombre del aeropuerto; origenDetalle/destinoDetalle lo entregan estructurado (null mientras no hay aeropuerto planificado). */
- public record FlightView(Long id,String codigo,FlightTypeView tipo,String motivoVuelo,String estadoVuelo,SanitaryDataView datosSanitarios,LocalDateTime salida,LocalDateTime llegada,String origen,String destino,PlaceView origenDetalle,PlaceView destinoDetalle,CancellationView cancelacion){}
+ public record FlightView(Long id,String codigo,FlightTypeView tipo,String motivoVuelo,String estadoVuelo,SanitaryDataView datosSanitarios,LocalDateTime salida,LocalDateTime llegada,String origen,String destino,PlaceView origenDetalle,PlaceView destinoDetalle,CancellationView cancelacion,String miFuncion){
+  /** Same flight seen by a given viewer: miFuncion is COMANDANTE, COPILOTO or null (no crew function on the flight). */
+  public FlightView withMiFuncion(String function){return new FlightView(id,codigo,tipo,motivoVuelo,estadoVuelo,datosSanitarios,salida,llegada,origen,destino,origenDetalle,destinoDetalle,cancelacion,function);}
+ }
  public record PatientDetail(Long id,String nombre,String apellido,String dni){}
  public record AvailableAircraftView(Long id,String matricula,String modelo,String tipo,Long aeropuertoActualId,String aeropuertoActual,boolean disponible,String motivoNoDisponible,List<AircraftDtos.FlightSummary> conflictos){}
  public record ChangeAircraft(@NotNull Long aircraftId,@Size(max=500) String motivo){}

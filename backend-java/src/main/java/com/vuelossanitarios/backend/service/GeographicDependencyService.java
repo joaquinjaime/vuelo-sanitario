@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
   var q=em.createQuery(jpql,Object[].class).setParameter("ids",ids);
   if(jpql.contains(":terminal"))q.setParameter("terminal",TERMINAL);
   if(jpql.contains(":open"))q.setParameter("open",OPEN_REQUEST);
+  // grouped: Ejecuta la consulta de conteo agrupado por ID con los parámetros indicados y suma los resultados por ID
   Map<Long,Long> out=new HashMap<>();for(Object[] row:q.getResultList())out.merge(((Number)row[0]).longValue(),((Number)row[1]).longValue(),Long::sum);return out;
  }
  private static long get(Map<Long,Long> m,Long id){return m.getOrDefault(id,0L);}
@@ -40,16 +41,27 @@ import org.springframework.transaction.annotation.Transactional;
  /** Aeropuertos: aeronaves, vuelos (origen/destino), rutas alternativas, coordinaciones AA2000 y hangar. */
  @Transactional(readOnly=true) public Map<Long,DependencyView> airports(Collection<Long> ids){
   Map<Long,DependencyView> out=new HashMap<>();if(ids.isEmpty())return out;
+  // Cuenta las aeronaves activas ubicadas en cada aeropuerto
   Map<Long,Long> aircraftActive=grouped("select a.aeropuertoActual.id,count(a) from Aircraft a where a.aeropuertoActual.id in :ids and a.activo=true group by a.aeropuertoActual.id",ids),
+   // Cuenta las aeronaves inactivas ubicadas en cada aeropuerto
    aircraftInactive=grouped("select a.aeropuertoActual.id,count(a) from Aircraft a where a.aeropuertoActual.id in :ids and (a.activo=false or a.activo is null) group by a.aeropuertoActual.id",ids),
+   // Cuenta los vuelos no terminados que tienen cada aeropuerto como origen
    openOrigin=grouped("select f.origen.id,count(f) from Flight f left join f.estadoVuelo e where f.origen.id in :ids and (e is null or e.codigo not in :terminal) group by f.origen.id",ids),
+   // Cuenta los vuelos no terminados que tienen cada aeropuerto como destino
    openDestination=grouped("select f.destino.id,count(f) from Flight f left join f.estadoVuelo e where f.destino.id in :ids and (e is null or e.codigo not in :terminal) group by f.destino.id",ids),
+   // Cuenta los vuelos en estado terminal que tienen cada aeropuerto como origen
    closedOrigin=grouped("select f.origen.id,count(f) from Flight f join f.estadoVuelo e where f.origen.id in :ids and e.codigo in :terminal group by f.origen.id",ids),
+   // Cuenta los vuelos en estado terminal que tienen cada aeropuerto como destino
    closedDestination=grouped("select f.destino.id,count(f) from Flight f join f.estadoVuelo e where f.destino.id in :ids and e.codigo in :terminal group by f.destino.id",ids),
+   // Cuenta todas las versiones de ruta que usan cada aeropuerto como alternativo
    alternateAll=grouped("select r.alternativo.id,count(r) from FlightRoute r where r.alternativo.id in :ids group by r.alternativo.id",ids),
+   // Cuenta las versiones de ruta vigentes de vuelos no terminados que usan cada aeropuerto como alternativo
    alternateOpen=grouped("select r.alternativo.id,count(r) from FlightRoute r join r.flight f left join f.estadoVuelo e where r.alternativo.id in :ids and r.esVersionActual=true and (e is null or e.codigo not in :terminal) group by r.alternativo.id",ids),
+   // Cuenta todas las versiones de coordinaciones AA2000 registradas para cada aeropuerto
    coordinationAll=grouped("select c.aeropuerto.id,count(c) from Aa2000Coordination c where c.aeropuerto.id in :ids group by c.aeropuerto.id",ids),
+   // Cuenta las coordinaciones AA2000 vigentes de vuelos no terminados para cada aeropuerto
    coordinationOpen=grouped("select c.aeropuerto.id,count(c) from Aa2000Coordination c join c.flight f left join f.estadoVuelo e where c.aeropuerto.id in :ids and c.esVersionActual=true and (e is null or e.codigo not in :terminal) group by c.aeropuerto.id",ids),
+   // Cuenta los registros de información de hangar cuyo origen de contexto es cada aeropuerto
    hangar=grouped("select h.origenContexto.id,count(h) from HangarInfo h where h.origenContexto.id in :ids group by h.origenContexto.id",ids);
   for(Long id:ids){
    Map<String,Long> current=new LinkedHashMap<>(),history=new LinkedHashMap<>();
@@ -65,11 +77,17 @@ import org.springframework.transaction.annotation.Transactional;
  /** Localidades: aeropuertos asociados y solicitudes sanitarias (origen/destino solicitados). */
  @Transactional(readOnly=true) public Map<Long,DependencyView> localities(Collection<Long> ids){
   Map<Long,DependencyView> out=new HashMap<>();if(ids.isEmpty())return out;
+  // Cuenta los aeropuertos activos de cada localidad
   Map<Long,Long> airportsActive=grouped("select a.localidad.id,count(a) from Airport a where a.localidad.id in :ids and a.activo=true group by a.localidad.id",ids),
+   // Cuenta los aeropuertos inactivos de cada localidad
    airportsInactive=grouped("select a.localidad.id,count(a) from Airport a where a.localidad.id in :ids and (a.activo=false or a.activo is null) group by a.localidad.id",ids),
+   // Cuenta todas las solicitudes sanitarias con cada localidad como origen solicitado
    originAll=grouped("select s.localidadOrigenSolicitada.id,count(s) from SanitaryFlight s where s.localidadOrigenSolicitada.id in :ids group by s.localidadOrigenSolicitada.id",ids),
+   // Cuenta todas las solicitudes sanitarias con cada localidad como destino solicitado
    destinationAll=grouped("select s.localidadDestinoSolicitada.id,count(s) from SanitaryFlight s where s.localidadDestinoSolicitada.id in :ids group by s.localidadDestinoSolicitada.id",ids),
+   // Cuenta las solicitudes sanitarias abiertas (solicitadas, pendientes de respuesta DTS o aprobadas) de vuelos no terminados con cada localidad como origen
    originOpen=grouped("select s.localidadOrigenSolicitada.id,count(s) from SanitaryFlight s join s.flight f left join f.estadoVuelo e where s.localidadOrigenSolicitada.id in :ids and s.estadoSolicitud.codigo in :open and (e is null or e.codigo not in :terminal) group by s.localidadOrigenSolicitada.id",ids),
+   // Cuenta las solicitudes sanitarias abiertas (solicitadas, pendientes de respuesta DTS o aprobadas) de vuelos no terminados con cada localidad como destino
    destinationOpen=grouped("select s.localidadDestinoSolicitada.id,count(s) from SanitaryFlight s join s.flight f left join f.estadoVuelo e where s.localidadDestinoSolicitada.id in :ids and s.estadoSolicitud.codigo in :open and (e is null or e.codigo not in :terminal) group by s.localidadDestinoSolicitada.id",ids);
   for(Long id:ids){
    Map<String,Long> current=new LinkedHashMap<>(),history=new LinkedHashMap<>();
@@ -83,10 +101,15 @@ import org.springframework.transaction.annotation.Transactional;
  /** Provincias: la jerarquía activa bloquea; localidades y aeropuertos inactivos y perfiles de comandante se conservan. */
  @Transactional(readOnly=true) public Map<Long,DependencyView> provinces(Collection<Long> ids){
   Map<Long,DependencyView> out=new HashMap<>();if(ids.isEmpty())return out;
+  // Cuenta las localidades activas de cada provincia
   Map<Long,Long> localitiesActive=grouped("select l.provincia.id,count(l) from Locality l where l.provincia.id in :ids and l.activo=true group by l.provincia.id",ids),
+   // Cuenta las localidades inactivas de cada provincia
    localitiesInactive=grouped("select l.provincia.id,count(l) from Locality l where l.provincia.id in :ids and (l.activo=false or l.activo is null) group by l.provincia.id",ids),
+   // Cuenta los aeropuertos activos cuya provincia referencial es cada provincia
    airportsActive=grouped("select a.provinciaReferencial.id,count(a) from Airport a where a.provinciaReferencial.id in :ids and a.activo=true group by a.provinciaReferencial.id",ids),
+   // Cuenta los aeropuertos inactivos cuya provincia referencial es cada provincia
    airportsInactive=grouped("select a.provinciaReferencial.id,count(a) from Airport a where a.provinciaReferencial.id in :ids and (a.activo=false or a.activo is null) group by a.provinciaReferencial.id",ids),
+   // Cuenta los perfiles de comandante cuya ubicación actual es cada provincia
    commanders=grouped("select p.provinciaActual.id,count(p) from CommanderProfile p where p.provinciaActual.id in :ids group by p.provinciaActual.id",ids);
   for(Long id:ids){
    Map<String,Long> current=new LinkedHashMap<>(),history=new LinkedHashMap<>();
@@ -99,6 +122,7 @@ import org.springframework.transaction.annotation.Transactional;
 
  /** Códigos de los vuelos abiertos que usan el aeropuerto como origen o destino (para explicar el bloqueo a un administrador). */
  @Transactional(readOnly=true) public List<String> openFlightCodes(Long airportId,int max){
+  // Obtiene, hasta el máximo indicado, los códigos distintos de vuelos no terminados que usan el aeropuerto como origen o destino, ordenados por código
   return em.createQuery("select distinct f.codigo from Flight f left join f.estadoVuelo e where (f.origen.id=:id or f.destino.id=:id) and (e is null or e.codigo not in :terminal) order by f.codigo",String.class)
    .setParameter("id",airportId).setParameter("terminal",TERMINAL).setMaxResults(max).getResultList();
  }

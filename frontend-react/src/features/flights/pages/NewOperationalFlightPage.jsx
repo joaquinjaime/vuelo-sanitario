@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotify } from "../../../app/providers/NotifyProvider";
 import { useOperationalData } from "../../../app/providers/OperationalDataProvider";

@@ -13,10 +13,17 @@ export function nextStep({ workspace, flight }) {
   if (workspace === "DTS") {
     if (state === "SOLICITADO") return { tone: "wait", title: "Pendiente de evaluación", text: "Operaciones debe aceptar el horario solicitado, proponer otro o rechazar la solicitud." };
     if (state === "PENDIENTE_RESPUESTA_DTS") return { tone: "action", title: "Debe responder la contrapropuesta", text: "Operaciones propuso otro horario: acéptelo o rechácelo (si lo rechaza, la solicitud se cancela).", tab: "negociacion", cta: "Responder contrapropuesta" };
-    if (state === "APROBADO") return { tone: "wait", title: "Horario acordado", text: "Operaciones asignará la aeronave y el comandante. Mientras tanto puede cargar el personal sanitario y los contactos del traslado.", tab: "equipo", cta: "Personal y contactos" };
+    if (state === "APROBADO") return { tone: "wait", title: "Horario acordado", text: "Operaciones asignará la aeronave y el comandante. Mientras tanto puede cargar el personal sanitario.", tab: "equipo", cta: "Personal sanitario" };
     if (state === "FINALIZADO") return { tone: "done", title: "Vuelo finalizado", text: "Falta el informe final del comandante y su revisión por Operaciones." };
     if (state === "EN_CURSO") return { tone: "done", title: "Vuelo en curso", text: "El traslado se está realizando." };
-    return { tone: "wait", title: "En preparación", text: "El vuelo está siendo preparado por Operaciones y el comandante. Puede mantener actualizado el personal sanitario.", tab: "equipo", cta: "Personal y contactos" };
+    return { tone: "wait", title: "En preparación", text: "El vuelo está siendo preparado por Operaciones y el comandante. Puede mantener actualizado el personal sanitario.", tab: "equipo", cta: "Personal sanitario" };
+  }
+
+  if (workspace === "COMANDANTE" && flight.miFuncion === "COPILOTO") {
+    const readOnly = "Como copiloto puede consultar el vuelo, la ruta, los documentos y los informes; las acciones las realiza el comandante.";
+    if (state === "EN_CURSO") return { tone: "done", title: "Vuelo en curso", text: readOnly };
+    if (state === "FINALIZADO") return { tone: "done", title: "Vuelo finalizado", text: "El comandante presenta el informe final." };
+    return { tone: "wait", title: "Asignado como copiloto", text: readOnly };
   }
 
   if (workspace === "COMANDANTE") {

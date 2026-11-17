@@ -23,14 +23,18 @@ public class CrewEligibilityMonitoringService {
  @Scheduled(fixedDelayString="${app.crew-eligibility.sweep-ms:3600000}",initialDelayString="${app.crew-eligibility.sweep-initial-ms:60000}")
  @Transactional
  public void sweep(){reviewOpenFlights();}
+ // reviewOpenFlights: Obtiene los vuelos en estados abiertos (pendientes de confirmación o respuesta, en replanificación, planificados o en curso)
  private void reviewOpenFlights(){for(Flight f:flights.findByEstadoVueloCodigoIn(List.of("PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PENDIENTE_REPLANIFICACION","PLANIFICADO","EN_CURSO")))review(f);}
+ // reviewFlight: Busca el vuelo por su ID
  @Transactional public void reviewFlight(Long id){flights.findById(id).ifPresent(this::review);}
  private void review(Flight f){
   if(f.getEstadoVuelo()==null||FlightStates.TERMINAL.contains(f.getEstadoVuelo().getCodigo()))return;
   Map<Long,String> current=new TreeMap<>();if(f.getComandante()!=null)current.put(f.getComandante().getId(),"COMANDANTE");
+  // Obtiene las asignaciones de tripulación vigentes (sin baja) del vuelo ordenadas por ID
   for(FlightCrew c:crews.findByFlightIdAndFechaBajaIsNullOrderByIdAsc(f.getId()))if(!"COMANDANTE".equals(c.getCrewRole().getCodigo()))current.put(c.getUser().getId(),c.getCrewRole().getCodigo());
   for(var entry:current.entrySet()){
    Long id=entry.getKey();
+   // Busca el usuario tripulante por su ID
    users.findById(id).ifPresent(u->{var result=eligibility.evaluate(f,u,entry.getValue(),false);if(result.eligible())return;
     String key="CREW_ELIGIBILITY:"+f.getId()+":"+id+":"+entry.getValue()+":"+result.code();
     String message="Revisar tripulación de "+f.getCodigo()+": "+u.getPerson().getNombre()+" "+u.getPerson().getApellido()+" ("+entry.getValue()+"). "+result.message();

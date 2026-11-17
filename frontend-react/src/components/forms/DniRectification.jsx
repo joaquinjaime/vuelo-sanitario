@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../services/api";
 
 export const dniDigits = (value) => String(value ?? "").replace(/[^0-9]/g, "");

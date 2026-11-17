@@ -8,19 +8,19 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
+    // Obtiene la aeronave por su ID bloqueando su fila para escritura (PESSIMISTIC_WRITE).
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Aircraft a where a.id = :id")
     Optional<Aircraft> lockById(@Param("id") Long id);
     /** Carga el aeropuerto actual en la misma consulta: los listados se serializan fuera de una sesión JPA (open-in-view=false). */
+    // Obtiene todas las aeronaves con su aeropuerto actual (left join fetch), ordenadas por matrícula.
     @Query("select a from Aircraft a left join fetch a.aeropuertoActual order by a.matricula")
     List<Aircraft> findAllWithCurrentAirportOrderByMatricula();
-    List<Aircraft> findByActivoTrueAndAeropuertoActualIdOrderByMatriculaAsc(Long aeropuertoId);
+    // Obtiene las aeronaves activas cuyo aeropuerto actual pertenece a la provincia indicada, con ese aeropuerto cargado, ordenadas por matrícula.
     @Query("select a from Aircraft a join fetch a.aeropuertoActual ap join ap.provinciaReferencial p where a.activo=true and p.id=:provinceId order by a.matricula")
     List<Aircraft> findActiveLocatedInProvince(@Param("provinceId") Long provinceId);
+    // Verifica si existe una aeronave con la matrícula indicada, sin distinguir mayúsculas.
     boolean existsByMatriculaIgnoreCase(String matricula);
+    // Verifica si otra aeronave (con ID distinto al indicado) ya usa la matrícula, sin distinguir mayúsculas.
     boolean existsByMatriculaIgnoreCaseAndIdNot(String matricula, Long id);
-    boolean existsByAeropuertoActualIdAndActivoTrue(Long aeropuertoId);
-    /** Tipos (categorías) de aeronave en uso y cuántas aeronaves activas tiene cada uno. */
-    @Query("select a.tipo,count(a) from Aircraft a where a.activo=true group by a.tipo order by a.tipo")
-    List<Object[]> countActiveByType();
 }

@@ -3,10 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { api } from "../../services/api";
 vi.mock("../../services/api", () => ({ api: vi.fn() }));
+const conditions=[{codigo:"BUENO",nombre:"Bueno"},{codigo:"GRAVE_ESTABLE",nombre:"Grave estable"},{codigo:"ESTABLE",nombre:"Estable"}];
 const provinces=[{id:"tuc",nombre:"Tucumán"},{id:"sal",nombre:"Salta"}];
 const tuc=[{id:"loc-tuc",nombre:"San Miguel de Tucumán",provincia:"Tucumán"},{id:"loc-yerba",nombre:"Yerba Buena",provincia:"Tucumán"}], sal=[{id:"loc-sal",nombre:"Salta",provincia:"Salta"}];
 beforeEach(() => { vi.useRealTimers(); vi.mocked(api).mockImplementation(path => path==="/catalogs/provinces"?Promise.resolve(provinces):path.includes("provinceId=tuc")?Promise.resolve(tuc):path.includes("provinceId=sal")?Promise.resolve(sal):Promise.resolve({id:"patient"})); });
-const renderDts=async(patients=[])=>{const { NewRequestForm: DTS } = await import("./components/NewRequestForm");const done=vi.fn(),msg=vi.fn();render(<DTS d={{patients,priorities:[{codigo:"ALTA",nombre:"Alta"}]}} done={done} msg={msg}/>);await waitFor(()=>expect(screen.getAllByRole("option",{name:"Tucumán"})).toHaveLength(2));return {done,msg};};
+const renderDts=async(patients=[])=>{const { NewRequestForm: DTS } = await import("./components/NewRequestForm");const done=vi.fn(),msg=vi.fn();render(<DTS d={{patients,priorities:[{codigo:"ALTA",nombre:"Alta"}],conditions}} done={done} msg={msg}/>);await waitFor(()=>expect(screen.getAllByRole("option",{name:"Tucumán"})).toHaveLength(2));return {done,msg};};
 const selectLocality=async(kind,province,locality)=>{fireEvent.change(screen.getByLabelText(`Provincia ${kind}`),{target:{value:province}});fireEvent.focus(screen.getByLabelText(`Buscar localidad ${kind}`));const option=await screen.findByRole("option",{name:locality});fireEvent.mouseDown(option);fireEvent.click(option);};
 test("typed locality is not a valid selection and sends no request",async()=>{await renderDts();fireEvent.change(screen.getByLabelText("Provincia origen"),{target:{value:"tuc"}});fireEvent.change(screen.getByLabelText("Buscar localidad origen"),{target:{value:"san mig"}});fireEvent.submit(screen.getByRole("button",{name:"Crear solicitud"}).closest("form"));expect(screen.getByText("Seleccione una localidad válida de origen y destino.")).toBeInTheDocument();expect(vi.mocked(api).mock.calls.some(([path])=>path==="/flights")).toBe(false);});
 test("locality results stay anchored to their search field",async()=>{await renderDts();fireEvent.change(screen.getByLabelText("Provincia origen"),{target:{value:"tuc"}});const input=screen.getByLabelText("Buscar localidad origen");fireEvent.focus(input);expect(input.closest(".locality-search")).toContainElement(screen.getByRole("listbox"));});
@@ -65,3 +66,4 @@ test("two immediate submits create one request",async()=>{
  release({id:1});
  await waitFor(()=>expect(done).toHaveBeenCalledTimes(1));
 });
+test("patient condition is a catalog dropdown with no preselected value",async()=>{await renderDts();const select=screen.getByLabelText("Condición");expect(select.tagName).toBe("SELECT");expect(select).toBeRequired();expect(select).toHaveValue("");expect(Array.from(select.options).map(o=>[o.value,o.textContent])).toEqual([["","Seleccione la condición"],["BUENO","Bueno"],["GRAVE_ESTABLE","Grave estable"],["ESTABLE","Estable"]]);fireEvent.change(select,{target:{value:"GRAVE_ESTABLE"}});expect(select).toHaveValue("GRAVE_ESTABLE");});

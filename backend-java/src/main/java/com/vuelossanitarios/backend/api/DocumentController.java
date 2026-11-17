@@ -2,7 +2,6 @@ package com.vuelossanitarios.backend.api;
 import com.vuelossanitarios.backend.api.dto.DocumentDtos.*;
 import com.vuelossanitarios.backend.security.CurrentUser;
 import com.vuelossanitarios.backend.service.DocumentService;
-import jakarta.validation.Valid;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;

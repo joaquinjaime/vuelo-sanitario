@@ -1,4 +1,3 @@
-import React from "react";
 
 /** Nombres comprensibles de los estados de vuelo/solicitud. El valor interno del servidor nunca se muestra tal cual. */
 export const FLIGHT_STATE_LABEL = Object.freeze({

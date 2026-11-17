@@ -47,10 +47,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RequestIsolationIntegrationTest {
  @Autowired MockMvc mvc; @Autowired PasswordEncoder encoder; @Autowired PlatformTransactionManager txm;
  @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roles; @Autowired UserRoleRepository userRoles;
- @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired FlightPriorityRepository priorities; @Autowired FlightTypeRepository types;
+ @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired FlightPriorityRepository priorities; @Autowired PatientConditionRepository patientConditions; @Autowired FlightTypeRepository types;
  @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightStatusRepository flightStatuses; @Autowired FlightRepository flights; @Autowired SanitaryFlightRepository sanitaryFlights;
  @Autowired DocumentTypeRepository documentTypes; @Autowired DocumentItemRepository items; @Autowired FlightDocumentRepository versions; @Autowired CancellationReasonRepository reasons;
  @Autowired FlightScheduleNegotiationRepository negotiations; @Autowired AuditEventRepository events; @Autowired com.vuelossanitarios.backend.service.FlightAuthorizationService access;
+ @Autowired FlightCrewRepository crews; @Autowired CrewRoleRepository crewRoles;
  private static int seq=0; private static final String PASSWORD="ClaveSegura-12345";
  private static Long originId,destinationId,reasonId;
  private record Account(long userId,String token){}
@@ -105,6 +106,7 @@ class RequestIsolationIntegrationTest {
    Locality b=new Locality();b.setCodigoOficial("IL2");b.setNombre("Destino");b.setProvincia(pr);b.setActivo(true);localities.save(b);
    originId=a.getId();destinationId=b.getId();
    FlightPriority p=new FlightPriority();p.setCodigo("ALTA");p.setNombre("Alta");p.setActivo(true);p.setOrden((short)1);priorities.save(p);
+   PatientCondition pc=new PatientCondition();pc.setCodigo("ESTABLE");pc.setNombre("Estable");pc.setOrden((short)1);patientConditions.save(pc);
    FlightType t=new FlightType();t.setCodigo("SANITARIO");t.setNombre("Sanitario");types.save(t);
    short order=1;for(String code:List.of("SOLICITADO","PENDIENTE_RESPUESTA_DTS","APROBADO","RECHAZADO","CANCELADO")){SanitaryRequestStatus s=new SanitaryRequestStatus();s.setCodigo(code);s.setNombre(code);s.setOrden(order++);requestStatuses.save(s);}
    order=1;for(String code:List.of("PLANIFICADO","EN_CURSO","FINALIZADO","COMPLETADO","CANCELADO")){FlightStatus s=new FlightStatus();s.setCodigo(code);s.setNombre(code);s.setOrden(order++);flightStatuses.save(s);}
@@ -138,7 +140,7 @@ class RequestIsolationIntegrationTest {
   long flight=newRequest(a);setRequestState(flight,"APROBADO");long item=document(flight,ops.userId()),version=versionOf(item);
   String f="/api/flights/"+flight;
   assertMayRead(flight,a);
-  for(String path:List.of(f,f+"/weather",f+"/route",f+"/health-staff",f+"/transfer-contacts",f+"/documents",f+"/documents/access","/api/audit/flights/"+flight,"/api/documents/"+item+"/versions","/api/documents/"+item+"/lock")){
+  for(String path:List.of(f,f+"/weather",f+"/route",f+"/health-staff",f+"/documents",f+"/documents/access","/api/audit/flights/"+flight,"/api/documents/"+item+"/versions","/api/documents/"+item+"/lock")){
    call("GET",path,b.token(),null).andExpect(status().isForbidden());
    if(!path.equals(f))call("GET",path,a.token(),null).andExpect(status().isOk());
   }
@@ -162,11 +164,10 @@ class RequestIsolationIntegrationTest {
   long flight=newRequest(a);String f="/api/flights/"+flight;
   call("POST",f+"/schedule/counterproposal",ops.token(),"{\"salida\":\""+LocalDateTime.now().plusDays(12).withNano(0)+"\",\"motivo\":\"Otro día\"}").andExpect(status().isOk());
   assertEquals("PENDIENTE_RESPUESTA_DTS",requestStateOf(flight));long proposal=proposalId(flight),eventsBefore=negotiationEvents(flight);
-  // B intenta aceptar, rechazar (cancelar), cancelar y gestionar contactos y personal sanitario de la solicitud de A
+  // B intenta aceptar, rechazar (cancelar), cancelar y gestionar el personal sanitario de la solicitud de A
   call("POST",f+"/schedule/response",b.token(),"{\"propuestaId\":"+proposal+",\"aceptar\":true}").andExpect(status().isForbidden());
   call("POST",f+"/schedule/response",b.token(),"{\"propuestaId\":"+proposal+",\"aceptar\":false,\"motivoCancelacionId\":"+reasonId+"}").andExpect(status().isForbidden());
   call("POST",f+"/cancel",b.token(),"{\"motivoCancelacionId\":"+reasonId+"}").andExpect(status().isForbidden());
-  call("POST",f+"/transfer-contacts",b.token(),"{\"relacion\":\"PACIENTE\",\"pais\":\"AR\",\"telefono\":\"3815550101\"}").andExpect(status().isForbidden());
   call("POST",f+"/health-staff",b.token(),"{\"personalSanitarioId\":1}").andExpect(status().isForbidden());
   call("POST",f+"/evaluation",b.token(),"{\"aprobar\":true}").andExpect(status().isForbidden()); // acciones de Operaciones
   assertEquals("PENDIENTE_RESPUESTA_DTS",requestStateOf(flight),"el estado de la solicitud no cambió");
@@ -286,6 +287,38 @@ class RequestIsolationIntegrationTest {
   assertFalse(listed(both,"").contains(foreign));
   assertEquals(List.of(own),listed(both,"?scope=mine"));
   call("GET","/api/flights/"+foreign,both.token(),null).andExpect(status().isForbidden());
+ }
+
+ private void assignCopilot(long flightId,long userId){tx(()->{CrewRole r=crewRoles.findByCodigo("COPILOTO").orElseGet(()->{CrewRole x=new CrewRole();x.setCodigo("COPILOTO");x.setNombre("Copiloto");return crewRoles.save(x);});
+  FlightCrew c=new FlightCrew();c.setFlight(flights.findById(flightId).orElseThrow());c.setUser(users.findById(userId).orElseThrow());c.setCrewRole(r);c.setCreatedAt(LocalDateTime.now());return crews.saveAndFlush(c);});}
+ private List<String> functions(Account who) throws Exception {return JsonPath.read(call("GET","/api/flights",who.token(),null).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),"$[*].miFuncion");}
+
+ // ---------------------------------------------------------------- 8. copiloto: ve el vuelo asignado, sólo en consulta
+ @Test void anAssignedCopilotSeesTheFlightInItsListAndReadsItWithoutOperatingIt() throws Exception {
+  Account dts=account("Julia","DTS"),cmd=account("Javier","COMANDANTE"),copilot=account("Joel","COMANDANTE"),otherCopilot=account("Jorge","COMANDANTE");
+  long assigned=newRequest(dts),other=newRequest(dts);setRequestState(assigned,"APROBADO");setRequestState(other,"APROBADO");
+  setFlight(assigned,"PLANIFICADO",cmd.userId());setFlight(other,"PLANIFICADO",cmd.userId());
+  assignCopilot(assigned,copilot.userId());assignCopilot(other,otherCopilot.userId());
+  long item=document(assigned,cmd.userId());
+  // listado propio con su función en el vuelo
+  assertEquals(List.of(assigned),listed(copilot,""));
+  assertEquals(List.of("COPILOTO"),functions(copilot));
+  assertEquals(List.of("COMANDANTE","COMANDANTE"),functions(cmd));
+  // lectura del vuelo, su tripulación, hangar, bitácora y coordinaciones
+  assertMayRead(assigned,copilot);
+  String f="/api/flights/"+assigned;
+  for(String path:List.of(f+"/crew",f+"/hangar",f+"/airport-coordinations",f+"/route",f+"/weather"))call("GET",path,copilot.token(),null).andExpect(status().isOk());
+  // sin acceso a vuelos ajenos
+  call("GET","/api/flights/"+other,copilot.token(),null).andExpect(status().isForbidden());
+  call("GET","/api/flights/"+other+"/crew",copilot.token(),null).andExpect(status().isForbidden());
+  // no opera: documentos, aceptación de la asignación y meteorología siguen siendo del comandante
+  upload("/api/documents/"+item+"/versions/pdf",copilot.token()).andExpect(status().isForbidden());
+  mvc.perform(MockMvcRequestBuilders.multipart(f+"/documents/pdf").file(new MockMultipartFile("file","parte.pdf","application/pdf","%PDF-1.7".getBytes())).param("documentTypeCode","AUTORIZACION").param("nombreDocumento","Del copiloto").header("Authorization","Bearer "+copilot.token())).andExpect(status().isForbidden());
+  call("POST",f+"/weather",copilot.token(),"{\"condiciones\":\"Despejado\",\"favorable\":true}").andExpect(status().isForbidden());
+  // al darse de baja de la tripulación deja de verlo
+  tx(()->{crews.findByUserIdAndFechaBajaIsNull(copilot.userId()).forEach(c->{c.darDeBaja(LocalDateTime.now(),null,"Retirado");crews.saveAndFlush(c);});return null;});
+  assertEquals(List.of(),listed(copilot,""));
+  call("GET",f+"/crew",copilot.token(),null).andExpect(status().isForbidden());
  }
 
  @Test void theLegacyHelperRolesAreComputedFromTheAuthenticatedUser() {

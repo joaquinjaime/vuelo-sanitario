@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
@@ -43,12 +43,3 @@ export function Modal({ title, eyebrow, onClose, children, dismissible = true, w
   );
 }
 
-/** Confirmación de una acción que no se puede deshacer. */
-export function ConfirmDialog({ title, children, confirmLabel = "Confirmar", cancelLabel = "Cancelar", danger = false, busy = false, onConfirm, onCancel }) {
-  return (
-    <Modal title={title} onClose={onCancel} dismissible={!busy}
-      footer={<><button type="button" className="secondary-action" disabled={busy} onClick={onCancel}>{cancelLabel}</button><button type="button" className={danger ? "danger-action" : ""} disabled={busy} data-autofocus onClick={onConfirm}>{busy ? "Procesando…" : confirmLabel}</button></>}>
-      {children}
-    </Modal>
-  );
-}

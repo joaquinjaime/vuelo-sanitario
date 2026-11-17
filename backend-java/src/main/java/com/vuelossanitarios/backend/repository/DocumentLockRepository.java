@@ -5,5 +5,6 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DocumentLockRepository extends JpaRepository<DocumentLock,Long> {
+ // Obtiene el registro de bloqueo (DocumentLock) asociado al documento indicado.
  Optional<DocumentLock> findByDocumentItemId(Long itemId);
 }

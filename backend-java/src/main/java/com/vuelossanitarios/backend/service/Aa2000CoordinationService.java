@@ -33,8 +33,8 @@ public class Aa2000CoordinationService {
     private static final Set<String> STATES=Set.of("PENDIENTE","EN_SEGUIMIENTO","CONFIRMADO","RECHAZADO","CANCELADO");
     private final FlightRepository flights; private final Aa2000CoordinationRepository records;
     private final AirportRepository airports; private final AirportLocks airportLocks; private final UserRepository users; private final AuditService audit;
-    private final ObjectMapper json; private final Clock clock;
-    public Aa2000CoordinationService(FlightRepository flights,Aa2000CoordinationRepository records,AirportRepository airports,AirportLocks airportLocks,UserRepository users,AuditService audit,ObjectMapper json,Clock clock){this.flights=flights;this.records=records;this.airports=airports;this.airportLocks=airportLocks;this.users=users;this.audit=audit;this.json=json;this.clock=clock;}
+    private final ObjectMapper json; private final Clock clock; private final FlightAuthorizationService access;
+    public Aa2000CoordinationService(FlightRepository flights,Aa2000CoordinationRepository records,AirportRepository airports,AirportLocks airportLocks,UserRepository users,AuditService audit,ObjectMapper json,Clock clock,FlightAuthorizationService access){this.access=access;this.flights=flights;this.records=records;this.airports=airports;this.airportLocks=airportLocks;this.users=users;this.audit=audit;this.json=json;this.clock=clock;}
 
     @Transactional(readOnly=true) public View get(Long id,Long actor){Flight f=flight(id,false);User u=user(actor);if(!canRead(f,u))throw forbidden();return view(f,u);}
 
@@ -44,14 +44,18 @@ public class Aa2000CoordinationService {
         Airport airport=activeAirport(input.aeropuertoId());
         checkDuplicate(f,airport,input.finalidad(),null);
         Aa2000Coordination r=new Aa2000Coordination();r.setGestionId(UUID.randomUUID());r.setFlight(f);r.setVersion(1);
+        // Guarda la nueva gestión de coordinación AA2000 (versión 1) y fuerza su escritura inmediata para obtener su ID
         fill(r,f,u,airport,input);records.saveAndFlush(r);audit.record(f,u,"AA2000_COORDINATION",r.getId(),"CREATE",null,serialize(snapshot(r,f)));
         return snapshot(r,f);
     }
 
     @Transactional public Version update(Long id,UUID group,Long actor,Input input){
+        // Busca con consulta nativa, sin bloqueo, la versión vigente de la gestión AA2000 del vuelo según su identificador de gestión
         Aa2000Coordination preview=records.findByFlightIdAndGestionIdAndEsVersionActualTrue(id,group).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Gestión inexistente"));
         boolean legacy=preview.getAeropuerto()==null||preview.getFinalidad()==null;
+        // Carga el vuelo por su ID con bloqueo pesimista de escritura si la gestión es heredada, o con bloqueo pesimista de lectura en caso contrario
         Flight f=(legacy?flights.lockById(id):flights.readLockedById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));User u=user(actor);if(!operations(u))throw forbidden();requireMutable(f);validate(input);
+        // Bloquea con consulta nativa (UPDLOCK, ROWLOCK) y obtiene la versión vigente de la gestión AA2000 del vuelo
         Aa2000Coordination old=records.lockCurrent(id,group).orElseThrow(()->new ApiException(HttpStatus.CONFLICT,"La gestión cambió o ya no existe; vuelva a cargarla"));
         if(input.version()!=old.getVersion())throw new ApiException(HttpStatus.CONFLICT,"La gestión cambió; vuelva a cargarla antes de guardar");
         Airport airport;
@@ -59,8 +63,10 @@ public class Aa2000CoordinationService {
         else {airport=old.getAeropuerto();if(!Objects.equals(airport.getId(),input.aeropuertoId())||!old.getFinalidad().equalsIgnoreCase(input.finalidad().trim()))throw bad("El aeropuerto y la finalidad identifican la gestión; registre otra si cambian");}
         if(!transition(old.getEstadoAutorizacion(),input.estado()))throw bad("Transición de seguimiento no permitida");
         if(input.motivoCambio()==null||input.motivoCambio().isBlank())throw bad("Indique el motivo del cambio");
+        // Guarda la versión anterior marcada como no vigente y fuerza su escritura inmediata
         String before=serialize(snapshot(old,f));old.setEsVersionActual(false);records.saveAndFlush(old);
         Aa2000Coordination r=new Aa2000Coordination();r.setFlight(f);r.setGestionId(group);r.setVersion(old.getVersion()+1);
+        // Guarda la nueva versión vigente de la gestión AA2000 y fuerza su escritura inmediata
         fill(r,f,u,airport,input);records.saveAndFlush(r);
         audit.record(f,u,"AA2000_COORDINATION",r.getId(),"UPDATE",before,serialize(snapshot(r,f)));return snapshot(r,f);
     }
@@ -75,20 +81,27 @@ public class Aa2000CoordinationService {
         if(!Set.of("CONFIRMADO","RECHAZADO").contains(i.estado())&&(i.fechaRespuesta()!=null||!blank(i.fuenteRespuesta())))throw bad("La respuesta corresponde a una confirmación o rechazo declarado");
     }
     private void fill(Aa2000Coordination r,Flight f,User u,Airport airport,Input i){r.setAeropuerto(airport);r.setFinalidad(i.finalidad().trim());r.setDescripcion(i.descripcion().trim());r.setEstadoAutorizacion(i.estado());r.setFechaSlot(i.fechaSlot());r.setContactoAa2000(clean(i.contacto()));r.setCanal(clean(i.canal()));r.setFechaComunicacion(i.fechaComunicacion());r.setFechaRespuesta(i.fechaRespuesta());r.setFuenteRespuesta(clean(i.fuenteRespuesta()));r.setReferenciaExterna(clean(i.referenciaExterna()));r.setObservaciones(clean(i.observaciones()));r.setMotivoCambio(clean(i.motivoCambio()));r.setContexto(context(f));r.setRegistradoPor(u);}
+    // view: Obtiene todas las versiones de las gestiones AA2000 del vuelo, de la más reciente a la más antigua
     private View view(Flight f,User u){boolean writable=mutable(f)&&!PreparationStageGate.pending(f);return new View(operations(u)&&writable,writable?null:PreparationStageGate.pending(f)?"Disponible cuando el horario de salida esté acordado":"El vuelo finalizado o cancelado conserva las gestiones en consulta",f.getOrigen()==null?null:f.getOrigen().getNombre(),f.getDestino()==null?null:f.getDestino().getNombre(),f.getAircraft()==null?null:f.getAircraft().getMatricula(),f.getFechaPlanificadaSalida(),f.getFechaPlanificadaLlegada(),records.findByFlightIdOrderByCreatedAtDesc(f.getId()).stream().map(r->snapshot(r,f)).toList());}
     private Version snapshot(Aa2000Coordination r,Flight f){boolean current=Boolean.TRUE.equals(r.getEsVersionActual());String validity=!current?"HISTORICA":r.getContexto()==null||!Objects.equals(r.getContexto(),context(f))?"REQUIERE_REVISION":"VIGENTE";return new Version(r.getGestionId(),r.getId(),r.getVersion(),current,id(r.getAeropuerto()),r.getAeropuerto()==null?null:r.getAeropuerto().getNombre(),r.getFinalidad(),r.getDescripcion(),r.getEstadoAutorizacion(),validity,r.getFechaSlot(),r.getContactoAa2000(),r.getCanal(),r.getFechaComunicacion(),r.getFechaRespuesta(),r.getFuenteRespuesta(),r.getReferenciaExterna(),r.getObservaciones(),r.getContexto(),r.getMotivoCambio(),r.getRegistradoPor().getUsername(),r.getCreatedAt());}
+    // checkDuplicate: Obtiene las versiones vigentes de todas las gestiones AA2000 del vuelo
     private void checkDuplicate(Flight f,Airport a,String purpose,UUID except){boolean exists=records.findByFlightIdAndEsVersionActualTrue(f.getId()).stream().anyMatch(r->!Objects.equals(r.getGestionId(),except)&&r.getAeropuerto()!=null&&Objects.equals(id(r.getAeropuerto()),id(a))&&r.getFinalidad()!=null&&r.getFinalidad().equalsIgnoreCase(purpose.trim())&&!Set.of("CANCELADO","RECHAZADO").contains(r.getEstadoAutorizacion()));if(exists)throw new ApiException(HttpStatus.CONFLICT,"Ya existe una gestión activa con ese aeropuerto y finalidad");}
     private boolean transition(String from,String to){if(Objects.equals(from,to))return !"CANCELADO".equals(from);return switch(from){case "PENDIENTE" -> Set.of("EN_SEGUIMIENTO","CONFIRMADO","RECHAZADO","CANCELADO").contains(to);case "EN_SEGUIMIENTO" -> Set.of("CONFIRMADO","RECHAZADO","CANCELADO").contains(to);case "CONFIRMADO" -> Set.of("EN_SEGUIMIENTO","CANCELADO").contains(to);case "RECHAZADO" -> "CANCELADO".equals(to);default -> false;};}
     private String context(Flight f){return String.join("|",String.valueOf(id(f.getAircraft())),String.valueOf(id(f.getOrigen())),String.valueOf(id(f.getDestino())),String.valueOf(f.getFechaPlanificadaSalida()),String.valueOf(f.getFechaPlanificadaLlegada()));}
     private Long id(BaseEntity e){return e==null?null:e.getId();}
+    // activeAirport: Bloquea con bloqueo pesimista de escritura la fila del aeropuerto indicado
+    // activeAirport: Busca el aeropuerto por su ID (luego se exige que esté activo)
     private Airport activeAirport(Long id){airportLocks.lockAll(id);return airports.findById(id).filter(a->Boolean.TRUE.equals(a.getActivo())).orElseThrow(()->bad("Aeropuerto inexistente o inactivo"));}
+    // flight: Carga el vuelo por su ID con bloqueo pesimista de escritura si se pide bloqueo, o sin bloqueo en caso contrario
     private Flight flight(Long id,boolean lock){return (lock?flights.lockById(id):flights.findById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));}
     private boolean mutable(Flight f){if(f.getEstadoVuelo()!=null)return !Set.of("CANCELADO","FINALIZADO","COMPLETADO").contains(f.getEstadoVuelo().getCodigo());return f.getSanitario()!=null&&f.getSanitario().getEstadoSolicitud()!=null&&!"RECHAZADO".equals(f.getSanitario().getEstadoSolicitud().getCodigo());}
     private void requireMutable(Flight f){PreparationStageGate.require(f,"registrar gestiones de coordinación aeroportuaria");if(!mutable(f))throw bad("El vuelo no admite cambios en su estado actual");}
+    // user: Busca el usuario por su ID
+    // user: Carga el mismo usuario por su nombre de usuario junto con sus roles asignados
     private User user(Long id){User u=users.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));return users.findWithRolesByUsername(u.getUsername()).orElseThrow();}
     private boolean role(User u,String... codes){return u.getUserRoles().stream().anyMatch(r->Arrays.asList(codes).contains(r.getRole().getCodigo()));}
     private boolean operations(User u){return role(u,"OPERACIONES","CENTRO_OPERACIONES");}
-    private boolean canRead(Flight f,User u){return operations(u)||FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(u))||role(u,"COMANDANTE")&&f.getComandante()!=null&&Objects.equals(id(f.getComandante()),id(u));}
+    private boolean canRead(Flight f,User u){return operations(u)||FlightAuthorizationService.adminWithoutDts(FlightAuthorizationService.roleCodes(u))||role(u,"COMANDANTE")&&f.getComandante()!=null&&Objects.equals(id(f.getComandante()),id(u))||access.copilotOf(f,u.getId());}
     private boolean blank(String s){return s==null||s.isBlank();} private String clean(String s){return blank(s)?null:s.trim();}
     private String serialize(Object o){try{return json.writeValueAsString(o);}catch(JsonProcessingException e){throw new IllegalStateException(e);}}
     private ApiException bad(String s){return new ApiException(HttpStatus.BAD_REQUEST,s);}private ApiException forbidden(){return new ApiException(HttpStatus.FORBIDDEN,"No tiene permiso para las coordinaciones de este vuelo");}

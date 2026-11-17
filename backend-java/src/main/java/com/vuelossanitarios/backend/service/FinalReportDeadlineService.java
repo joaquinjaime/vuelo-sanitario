@@ -26,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
  /** @return cantidad de notificaciones nuevas emitidas. */
  public int sweep(){
+  // Obtiene las obligaciones de informe final vigentes en estado PENDIENTE o DEVUELTO, ordenadas por vencimiento ascendente
   List<Long> ids=tx.execute(s->obligations.findByStatusInAndCurrentTrueOrderByDueAtAsc(List.of(FinalReportStatus.PENDIENTE,FinalReportStatus.DEVUELTO)).stream().map(FinalReportObligation::getId).toList());
   int created=0;
   for(Long id:ids){Integer n=tx.execute(s->sweepOne(id));created+=n==null?0:n;}
@@ -33,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  }
 
  private int sweepOne(Long id){
+  // Carga la obligación de informe final por su ID con bloqueo pesimista de escritura
   FinalReportObligation o=obligations.lockById(id).orElse(null);
   if(o==null||!Boolean.TRUE.equals(o.getCurrent())||(o.getStatus()!=FinalReportStatus.PENDIENTE&&o.getStatus()!=FinalReportStatus.DEVUELTO))return 0;
   OffsetDateTime now=OffsetDateTime.ofInstant(Instant.now(clock),ZoneOffset.UTC);Flight f=o.getFlight();String cycle=o.getId()+":"+o.getDueAt().toEpochSecond();int created=0;

@@ -1,4 +1,5 @@
 import { flightStage, STAGE, visibleSections } from "../flightStages";
+import { isCopilotFlight } from "../../../utils/flightAdapter";
 
 /**
  * Pestañas del detalle de una solicitud/vuelo. Qué pestañas existen para cada área y cuáles están habilitadas se deriva del
@@ -9,7 +10,7 @@ export const TAB_DEFS = Object.freeze({
   resumen: { label: "Resumen", sections: ["resumen"] },
   negociacion: { label: "Negociación", sections: ["negociacion"] },
   planificacion: { label: "Planificación", sections: ["aeropuertos", "recursos", "aeronave", "ruta", "hangar", "coordinaciones", "clima"] },
-  equipo: { label: "Tripulación y contactos", sections: ["tripulacion", "personal", "contactos"] },
+  equipo: { label: "Tripulación y contactos", sections: ["tripulacion", "personal"] },
   documentos: { label: "Documentos", sections: ["documentos"] },
   operacion: { label: "Ejecución y cierre", sections: ["ciclo", "bitacora", "cierre"] },
   historial: { label: "Historial", sections: ["auditoria"] },
@@ -19,8 +20,10 @@ const ORDER = {
   OPERACIONES: ["resumen", "negociacion", "planificacion", "equipo", "documentos", "operacion", "historial"],
   DTS: ["resumen", "negociacion", "equipo", "documentos", "historial"],
   COMANDANTE: ["resumen", "planificacion", "equipo", "documentos", "operacion", "historial"],
+  // The copilot only consults the flight; the audit history belongs to the commander and Operations.
+  COPILOTO: ["resumen", "planificacion", "equipo", "documentos", "operacion"],
 };
-const LABEL_OVERRIDE = { DTS: { equipo: "Personal y contactos" }, COMANDANTE: { equipo: "Tripulación" } };
+const LABEL_OVERRIDE = { DTS: { equipo: "Personal sanitario" }, COMANDANTE: { equipo: "Tripulación" } };
 const ALL_SECTIONS = Object.values(TAB_DEFS).flatMap((tab) => tab.sections);
 
 const lockReason = (stage) => {
@@ -36,7 +39,7 @@ const lockReason = (stage) => {
 export function tabsFor({ workspace, flight, events = [] }) {
   const stage = flightStage(flight, events);
   const show = workspace === "COMANDANTE" ? new Set(ALL_SECTIONS) : visibleSections(flight, events, workspace === "DTS" ? "DTS" : "OPERACIONES");
-  const order = ORDER[workspace] || ORDER.OPERACIONES;
+  const order = (workspace === "COMANDANTE" && isCopilotFlight(flight) ? ORDER.COPILOTO : ORDER[workspace]) || ORDER.OPERACIONES;
   const tabs = order.map((key) => {
     const locked = !TAB_DEFS[key].sections.some((section) => show.has(section));
     return { key, label: LABEL_OVERRIDE[workspace]?.[key] || TAB_DEFS[key].label, locked, reason: locked ? lockReason(stage) : undefined };

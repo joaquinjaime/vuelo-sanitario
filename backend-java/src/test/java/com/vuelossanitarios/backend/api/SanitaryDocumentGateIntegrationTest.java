@@ -44,7 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class SanitaryDocumentGateIntegrationTest {
  @Autowired MockMvc mvc; @Autowired PasswordEncoder encoder; @Autowired PlatformTransactionManager txm;
  @Autowired UserRepository users; @Autowired PersonRepository persons; @Autowired RoleRepository roles; @Autowired UserRoleRepository userRoles;
- @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired FlightPriorityRepository priorities; @Autowired FlightTypeRepository types;
+ @Autowired ProvinceRepository provinces; @Autowired LocalityRepository localities; @Autowired FlightPriorityRepository priorities; @Autowired PatientConditionRepository patientConditions; @Autowired FlightTypeRepository types;
  @Autowired SanitaryRequestStatusRepository requestStatuses; @Autowired FlightRepository flights; @Autowired SanitaryFlightRepository sanitaryFlights;
  @Autowired DocumentTypeRepository documentTypes; @Autowired DocumentItemRepository items; @Autowired FlightDocumentRepository versions;
  @Autowired FlightScheduleNegotiationRepository negotiations;
@@ -118,6 +118,7 @@ class SanitaryDocumentGateIntegrationTest {
    Locality b=new Locality();b.setCodigoOficial("GL2");b.setNombre("Destino");b.setProvincia(pr);b.setActivo(true);localities.save(b);
    originId=a.getId();destinationId=b.getId();
    FlightPriority p=new FlightPriority();p.setCodigo("ALTA");p.setNombre("Alta");p.setActivo(true);p.setOrden((short)1);priorities.save(p);
+   PatientCondition pc=new PatientCondition();pc.setCodigo("ESTABLE");pc.setNombre("Estable");pc.setOrden((short)1);patientConditions.save(pc);
    FlightType t=new FlightType();t.setCodigo("SANITARIO");t.setNombre("Sanitario");types.save(t);
    short order=1;for(String code:List.of("SOLICITADO","PENDIENTE_RESPUESTA_DTS","APROBADO","RECHAZADO","CANCELADO")){SanitaryRequestStatus s=new SanitaryRequestStatus();s.setCodigo(code);s.setNombre(code);s.setOrden(order++);requestStatuses.save(s);}
    DocumentType d=new DocumentType();d.setCodigo("AUTORIZACION");d.setNombre("Autorización de vuelo");documentTypes.save(d);

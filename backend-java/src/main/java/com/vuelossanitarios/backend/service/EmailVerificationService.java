@@ -88,6 +88,7 @@ import org.springframework.transaction.support.TransactionTemplate;
   Map<Long,String> out=new HashMap<>();if(list==null||list.isEmpty())return out;
   Map<Long,EmailVerification> latest=new HashMap<>();
   var ids=list.stream().filter(x->!x.isVerificado()).map(EmailContact::getId).toList();
+  // Obtiene la última verificación (mayor ID) de cada uno de los correos indicados, en una sola consulta.
   if(!ids.isEmpty())for(EmailVerification v:verifications.findLatestByEmailIds(ids))latest.put(v.getEmail().getId(),v);
   LocalDateTime now=now();
   for(EmailContact e:list)out.put(e.getId(),e.isVerificado()?VERIFIED:stateOf(latest.get(e.getId()),now));
@@ -115,23 +116,33 @@ import org.springframework.transaction.support.TransactionTemplate;
  }
 
  private Phase prepare(Long userId,Long emailId,boolean resend,String origin){
+  // Carga el usuario por su ID junto con su persona; si no existe responde 404.
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  // Bloquea para escritura (PESSIMISTIC_WRITE) la persona del usuario para serializar el mantenimiento de sus contactos.
   persons.lockById(u.getPerson().getId());
+  // Busca el correo vigente (sin baja) con ese ID que pertenezca a la persona; si no existe responde 404.
   EmailContact e=emails.findActiveByIdAndPersonId(emailId,u.getPerson().getId()).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Correo inexistente"));
   if(e.isVerificado())throw new ApiException(HttpStatus.CONFLICT,"EMAIL_ALREADY_VERIFIED","Este correo ya está verificado",Map.of());
   if(!mail.configured())return new Phase(NOT_CONFIGURED,null,0);
   LocalDateTime now=now();
+  // Obtiene la fecha de emisión del último código generado para el correo.
   long wait=verifications.lastIssuedAt(emailId).map(last->Math.max(0,resendSeconds-Duration.between(last,now).getSeconds())).orElse(0L);
+  // Cuenta los códigos emitidos para el correo en las últimas 24 horas.
+  // Cuenta los códigos solicitados por el usuario en las últimas 24 horas.
+  // Cuenta los códigos solicitados desde el mismo origen (huella de la dirección remota) en las últimas 24 horas.
   boolean limited=wait>0||verifications.countIssuedSince(emailId,now.minusHours(24))>=maxPerEmail||verifications.countIssuedByUserSince(userId,now.minusHours(24))>=maxPerUser||verifications.countIssuedByOriginSince(origin,now.minusHours(24))>=maxPerOrigin;
   if(limited){
    audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_RATE_LIMITED",null,json("valor",ContactNormalizer.maskEmail(e.getDireccion())));
    return new Phase(RATE_LIMITED,null,wait>0?wait:resendSeconds);
   }
   boolean replaced=false;
+  // Busca la verificación abierta (no usada ni invalidada) del correo, si existe.
   EmailVerification open=verifications.findOpenByEmailId(emailId).orElse(null);
+  // Guarda la invalidación (REPLACED) de la verificación abierta anterior y sincroniza de inmediato con la base.
   if(open!=null){open.invalidar(now,EmailVerification.REPLACED);verifications.saveAndFlush(open);replaced=true;}
   String code=newCode();
   EmailVerification v=new EmailVerification();v.setEmail(e);v.setSolicitante(u);v.setDireccionNormalizada(e.getDireccionNormalizada());v.setOrigenHuella(origin);v.setCodigoHash(hash(emailId,e.getDireccionNormalizada(),code));v.setCreadaEn(now);v.setVenceEn(now.plusMinutes(codeMinutes));
+  // Inserta la nueva verificación con el código hasheado y sincroniza de inmediato con la base.
   v=verifications.saveAndFlush(v);
   audit.record(null,u,"PERSON_EMAIL",emailId,(resend||replaced)?"VERIFY_RESEND":"VERIFY_REQUEST",null,json("valor",ContactNormalizer.maskEmail(e.getDireccion())));
   return new Phase("OK",new Pending(v.getId(),e.getDireccion(),code),0);
@@ -139,10 +150,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
  /** Registra el resultado del envío: aceptado por el servidor SMTP, o código invalidado si falló (para que no quede un código que nadie recibió). */
  private void settle(Long userId,Long emailId,Long verificationId,String result){
+  // Busca la verificación por su ID; si no existe o ya no está abierta, no hace nada.
   EmailVerification v=verifications.findById(verificationId).orElse(null);if(v==null||!v.isAbierta())return;
   LocalDateTime now=now();
+  // Guarda la fecha de envío del código y sincroniza de inmediato con la base.
   if(SENT.equals(result)){v.setEnviadaEn(now);verifications.saveAndFlush(v);return;}
+  // Guarda la invalidación de la verificación por falla de envío (SEND_FAILED).
   v.invalidar(now,EmailVerification.SEND_FAILED);verifications.saveAndFlush(v);
+  // Busca el usuario por su ID para registrar la auditoría de la falla de envío.
   User u=users.findById(userId).orElseThrow();
   audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_SEND_FAILED",null,json("valor",ContactNormalizer.maskEmail(v.getEmail().getDireccion())));
  }
@@ -164,26 +179,37 @@ import org.springframework.transaction.support.TransactionTemplate;
  }
 
  private Confirmation confirmInTransaction(Long userId,Long emailId,String rawCode){
+  // Carga el usuario por su ID junto con su persona; si no existe responde 404.
   User u=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
+  // Bloquea para escritura (PESSIMISTIC_WRITE) la persona del usuario para serializar el mantenimiento de sus contactos.
   persons.lockById(u.getPerson().getId());
+  // Busca el correo vigente (sin baja) con ese ID que pertenezca a la persona; si no existe responde 404.
   EmailContact e=emails.findActiveByIdAndPersonId(emailId,u.getPerson().getId()).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Correo inexistente"));
   if(e.isVerificado())throw new ApiException(HttpStatus.CONFLICT,"EMAIL_ALREADY_VERIFIED","Este correo ya está verificado",Map.of());
   LocalDateTime now=now();
+  // Busca la verificación abierta (no usada ni invalidada) del correo, si existe.
   EmailVerification v=verifications.findOpenByEmailId(emailId).orElse(null);
   if(v==null)return new Confirmation(NO_CODE,0);
+  // Guarda la invalidación de la verificación porque la dirección del correo cambió (ADDRESS_CHANGED).
   if(!v.getDireccionNormalizada().equals(e.getDireccionNormalizada())){v.invalidar(now,EmailVerification.ADDRESS_CHANGED);verifications.saveAndFlush(v);return new Confirmation(NO_CODE,0);}
   String masked=ContactNormalizer.maskEmail(e.getDireccion());
+  // Guarda la invalidación de la verificación por código vencido (EXPIRED).
   if(!now.isBefore(v.getVenceEn())){v.invalidar(now,EmailVerification.EXPIRED);verifications.saveAndFlush(v);audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_EXPIRED",null,json("valor",masked));return new Confirmation(EXPIRED_CODE,0);}
+  // Guarda la invalidación de la verificación por intentos agotados (EXHAUSTED).
   if(v.getIntentosFallidos()>=maxAttempts){v.invalidar(now,EmailVerification.EXHAUSTED);verifications.saveAndFlush(v);return new Confirmation(LOCKED,0);}
   String candidate=normalizeCode(rawCode);
   boolean match=candidate.length()==CODE_LENGTH&&MessageDigest.isEqual(hash(emailId,e.getDireccionNormalizada(),candidate).getBytes(StandardCharsets.US_ASCII),v.getCodigoHash().getBytes(StandardCharsets.US_ASCII));
   if(!match){
    v.registrarIntentoFallido();
+   // Guarda la invalidación de la verificación al agotar los intentos con este fallo (EXHAUSTED).
    if(v.getIntentosFallidos()>=maxAttempts){v.invalidar(now,EmailVerification.EXHAUSTED);verifications.saveAndFlush(v);audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_LOCKED",null,json("valor",masked));return new Confirmation(LOCKED,0);}
+   // Guarda el nuevo contador de intentos fallidos de la verificación.
    verifications.saveAndFlush(v);
    return new Confirmation(WRONG,maxAttempts-v.getIntentosFallidos());
   }
+  // Guarda la verificación como usada con la fecha de confirmación.
   v.setUsadaEn(now);verifications.saveAndFlush(v);
+  // Guarda la fecha de verificación del correo de contacto.
   e.setFechaVerificacion(now);emails.saveAndFlush(e);
   audit.record(null,u,"PERSON_EMAIL",emailId,"VERIFY_CONFIRM",json("verificacion",UNVERIFIED),json("valor",masked,"verificacion",VERIFIED));
   return new Confirmation(OK,0);
@@ -192,6 +218,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  // ---- invalidaciones por cambios del correo (se llaman dentro de la transacción de PersonContactService) ----
  /** Invalida el código abierto del correo (cambió la dirección o se retiró). */
  public void invalidateOpen(Long emailId,String reason){
+  // Busca la verificación abierta (no usada ni invalidada) del correo, si existe.
+  // Guarda la invalidación de esa verificación abierta con el motivo indicado.
   verifications.findOpenByEmailId(emailId).ifPresent(v->{v.invalidar(now(),reason);verifications.saveAndFlush(v);});
  }
 

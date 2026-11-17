@@ -1,4 +1,3 @@
-import React from "react";
 import { NegotiationPanel, NegotiationHistory, RequestSummary } from "../negotiation";
 import { Card } from "../../../components/ui/Card";
 import { CommanderProposalResponse } from "../components/CommanderProposalResponse";

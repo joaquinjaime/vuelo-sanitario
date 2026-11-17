@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { DEFAULT_COUNTRY, countryName, emailProblem, phoneProblem, toNational } from "../../utils/contactRules";
 import { PhoneField } from "../../components/forms/PhoneField";

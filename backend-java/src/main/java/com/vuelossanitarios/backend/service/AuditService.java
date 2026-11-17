@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  @Transactional(propagation=Propagation.MANDATORY)
  public AuditEvent record(Flight f, User actor,String type,Long id,String op,String before,String after){
   AuditEvent e=new AuditEvent();e.setFlight(f);e.setActor(actor);e.setEntityType(type);e.setEntityId(id);e.setOperation(op);e.setOldValues(before);e.setNewValues(after);
+  // Guarda el nuevo evento de auditoría con su vuelo, actor, entidad, operación, valores anteriores y nuevos, y la fecha en UTC
   e.setOccurredAt(LocalDateTime.ofInstant(clock.instant(),ZoneOffset.UTC));return events.save(e);
  }
 }

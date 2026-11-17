@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { api } from "../../../services/api";
 import { useSession } from "../../../app/providers/SessionProvider";
@@ -17,6 +17,7 @@ import { dt, locationLabel } from "../../../utils/format";
 import { Urgency } from "../components/Urgency";
 import { CANCELLABLE_REQUEST } from "../components/CancellationNote";
 import { tabsFor, TAB_DEFS } from "./flightTabs";
+import { isCopilotFlight } from "../../../utils/flightAdapter";
 import { useFlightDraftGuard } from "./useFlightDraftGuard";
 import { useFlightDetail } from "./useFlightDetail";
 import { CancelFlightDialog } from "./CancelFlightDialog";
@@ -83,7 +84,10 @@ export function FlightDetailPage() {
   const Content = CONTENT[activeKey];
   const sanitary = Boolean(flight.datosSanitarios);
 
-  const ctx = { workspace, commanderBlocked, flight, detail, events, show: model.show, stage: model.stage, tabs, defaultKey: model.defaultKey, id, notify, reasons: reasonsResource.data || [], call, respond, busy,
+  const copilot = workspace === "COMANDANTE" && isCopilotFlight(flight);
+  // The copilot, like a commander blocked by an overdue report, only consults: the server rejects any change.
+  const commanderReadOnly = commanderBlocked || copilot;
+  const ctx = { workspace, commanderBlocked, commanderReadOnly, copilot, flight, detail, events, show: model.show, stage: model.stage, tabs, defaultKey: model.defaultKey, id, notify, reasons: reasonsResource.data || [], call, respond, busy,
     reload, done, logRevision, routeRevision, afterChange, afterRouteChange };
 
   const canCancel = workspace === "DTS" ? CANCELLABLE_REQUEST.includes(flight.estado) : workspace === "OPERACIONES" && model.show.has("cancelar") && !OPS_NOT_CANCELLABLE.includes(flight.estado);
@@ -111,6 +115,7 @@ export function FlightDetailPage() {
         </>}
       />
       {sanitary && <ProcessStepper stage={model.stage} />}
+      {copilot && <Alert tone="info" title="Asignado como copiloto">Puede consultar el vuelo; la carga de documentos, la ruta y las demás acciones corresponden al comandante.</Alert>}
       {commanderBlocked && <Alert tone="warning" title="Operaciones restringidas por informe vencido"><Link to={appPath("informes")}>Consultar informes finales</Link></Alert>}
       <RouteTabs tabs={tabs} label={`Secciones de ${flight.codigo || "la solicitud"}`} />
       <div className="tab-panel" id="tab-panel" role="region" aria-label={current?.label || TAB_DEFS[activeKey]?.label}>

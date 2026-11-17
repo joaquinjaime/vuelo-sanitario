@@ -55,7 +55,7 @@ test("una solicitud rechazada conserva sólo su resumen y su historial; un vuelo
 test("el DTS nunca tiene herramientas operativas y el comandante tiene todas sus pestañas", () => {
   const dts = stageTabs("DTS", "APROBADO", { salida: "2026-11-10T09:00:00" });
   expect(dts.tabs.map((tab) => tab.key)).toEqual(["resumen", "negociacion", "equipo", "documentos", "historial"]);
-  expect(dts.tabs.find((tab) => tab.key === "equipo").label).toBe("Personal y contactos");
+  expect(dts.tabs.find((tab) => tab.key === "equipo").label).toBe("Personal sanitario");
   const cmd = tabsFor({ workspace: "COMANDANTE", flight: adaptFlight(operational(1, "PLANIFICADO")), events: [] });
   expect(cmd.tabs.map((tab) => tab.key)).toEqual(["resumen", "planificacion", "equipo", "documentos", "operacion", "historial"]); expect(enabled(cmd)).toHaveLength(6);
 });
@@ -179,7 +179,7 @@ test("el DTS ve únicamente las pestañas de su área y nunca las herramientas d
   serve({ vuelo: sanitary(1, "APROBADO", { salida: "2026-11-10T09:00:00" }), negociacion: [] });
   renderApp("/app/solicitudes/1", { roles: [ROLE.dts] });
   const tabs = await screen.findByRole("navigation", { name: /Secciones de SAN-1/ });
-  expect(within(tabs).getAllByRole("link").map((a) => a.textContent)).toEqual(["Resumen", "Negociación", "Personal y contactos", "Documentos", "Historial"]);
+  expect(within(tabs).getAllByRole("link").map((a) => a.textContent)).toEqual(["Resumen", "Negociación", "Personal sanitario", "Documentos", "Historial"]);
   expect(screen.queryByRole("button", { name: /Cancelar vuelo/ })).toBeNull();
   expect(screen.getByRole("button", { name: "Cancelar solicitud" })).toBeInTheDocument();
 });
@@ -273,4 +273,32 @@ test.each([ROLE.ops, ROLE.cmd])("el rol %s consulta aeropuertos y recursos de un
   expect(screen.getByText("LV-UX", { exact: true })).toBeVisible();
   expect(screen.getByText("Ana Pérez")).toBeVisible();
   expect(screen.queryByRole("button", { name: /Cambiar comandante|Cambiar aeronave|Seleccionar copiloto/ })).toBeNull();
+});
+
+// ---- Copiloto: ve el vuelo asignado, sólo en consulta ----
+
+test("el copiloto ve sus pestañas de consulta, sin historial ni tareas del comandante", () => {
+  const copilot = adaptFlight(operational(1, "PENDIENTE_CONFIRMACION_COMANDANTE", { miFuncion: "COPILOTO" }));
+  expect(tabsFor({ workspace: "COMANDANTE", flight: copilot, events: [] }).tabs.map((tab) => tab.key)).toEqual(["resumen", "planificacion", "equipo", "documentos", "operacion"]);
+  for (const state of ["PENDIENTE_CONFIRMACION_COMANDANTE", "PLANIFICADO", "FINALIZADO"]) {
+    const step = nextStep({ workspace: "COMANDANTE", flight: adaptFlight(operational(1, state, { miFuncion: "COPILOTO" })) });
+    expect(step.tone).not.toBe("action");
+  }
+  expect(nextStep({ workspace: "COMANDANTE", flight: adaptFlight(operational(1, "PLANIFICADO", { miFuncion: "COMANDANTE" })) }).tone).toBe("action");
+});
+
+test("el copiloto consulta el vuelo pero no puede aceptar la asignación, registrar clima ni cargar la ruta", async () => {
+  serve({ vuelo: operational(1, "PENDIENTE_CONFIRMACION_COMANDANTE", { miFuncion: "COPILOTO" }), recursos: {}, negociacion: [] }, (path) => {
+    if (path === "/flights/1/route") return Promise.resolve({ estado: "SIN_PLANIFICAR", versiones: [], editable: false, causas: [] });
+    return undefined;
+  });
+  renderApp("/app/vuelos/1", { roles: [ROLE.cmd] });
+  expect((await screen.findAllByText("Asignado como copiloto")).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: "Aceptar asignación" })).toBeNull();
+  expect(screen.queryByText("Confirme la asignación")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Historial" })).toBeNull();
+  fireEvent.click(screen.getByRole("link", { name: "Planificación" }));
+  fireEvent.click(await screen.findByText("Ruta operativa", { selector: ".planning-title" }));
+  expect(screen.queryByRole("button", { name: "Registrar ruta" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Registrar clima" })).toBeNull();
 });

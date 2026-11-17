@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { api } from "../../../services/api";
 import { dt } from "../../../utils/format";
 import { useResource } from "../../../hooks/useResource";

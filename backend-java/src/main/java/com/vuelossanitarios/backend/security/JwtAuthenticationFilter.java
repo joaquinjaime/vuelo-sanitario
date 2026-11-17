@@ -22,6 +22,7 @@ import java.util.*;
   if(header!=null&&header.startsWith("Bearer ")&&SecurityContextHolder.getContext().getAuthentication()==null) try {
    Claims c=jwt.parse(header.substring(7)); String username=c.get("username",String.class); Long id=Long.parseLong(c.getSubject());
    if(username==null||username.isBlank())throw new IllegalArgumentException("JWT sin username");
+   // Carga el usuario del token por su nombre de usuario junto con sus roles asignados
    User user=users.findWithRolesByUsername(username).orElseThrow(()->new IllegalArgumentException("Usuario JWT inexistente"));
    Long tokenVersion=c.get("credentialVersion",Long.class);
    if(!id.equals(user.getId())||!Boolean.TRUE.equals(user.getActivo())||!"ACTIVO".equals(user.getEstadoCuenta())||tokenVersion==null||!tokenVersion.equals(user.getVersionCredenciales()))throw new IllegalArgumentException("Usuario JWT no habilitado o credenciales invalidadas");

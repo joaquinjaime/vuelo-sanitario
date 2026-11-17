@@ -56,13 +56,17 @@ public class PersonIdentityService {
   if(next.length()<7||next.length()>12)throw bad("El DNI debe tener entre 7 y 12 dígitos");
   String previous=person.getDni();
   if(next.equals(previous))throw bad("El DNI nuevo es igual al actual");
+  // Busca la cuenta de usuario vinculada a la persona, si existe
   User account=users.findByPersonId(person.getId()).orElse(null);
   if(account!=null&&!Boolean.TRUE.equals(request.confirmaCuenta()))throw new ApiException(HttpStatus.BAD_REQUEST,"DNI_ACCOUNT_CONFIRMATION_REQUIRED","La persona tiene una cuenta de usuario: confirme que el cambio de DNI no altera sus credenciales ni sus accesos",Map.of());
+  // Verifica si ya existe otra persona registrada con el DNI nuevo
   if(persons.existsByDni(next))throw duplicate();
   person.setDni(next);
+  // Envía a la base de datos el nuevo DNI de la persona, validando su versión y el índice único de DNI
   try{persons.flush();} // la versión detecta cambios simultáneos y el índice único, un DNI tomado entre la consulta y la escritura
   catch(DataIntegrityViolationException e){throw duplicate();}
   catch(OptimisticLockingFailureException e){throw stale();}
+  // Busca la ficha de paciente vinculada a la persona, si existe
   Patient patient=patients.findByPersonId(person.getId()).orElse(null);
   Map<String,Object> before=new LinkedHashMap<>(),after=new LinkedHashMap<>();
   before.put("terminacionAnterior",previous==null?null:tail(previous));
@@ -71,6 +75,7 @@ public class PersonIdentityService {
   // Un solo criterio para ambos puntos de entrada: el evento cuelga de la ficha de paciente si la hay (misma historia que I-1) y, si no, de la cuenta.
   String entityType=patient!=null?"PATIENT_IDENTITY":"USER";
   Long entityId=patient!=null?patient.getId():account!=null?account.getId():person.getId();
+  // Obtiene una referencia diferida al usuario actor por su ID, sin consultarlo, para registrar la auditoría
   audit.record(null,users.getReferenceById(actorId),entityType,entityId,previous==null?"ASSIGN_DNI":"RECTIFY_DNI",asJson(before),asJson(after));
   return new Outcome(person.getId(),next,person.getVersion(),account==null?null:account.getEstadoCuenta());
  }
@@ -78,6 +83,7 @@ public class PersonIdentityService {
  /** Rectificación desde el detalle de usuario: la persona se resuelve siempre desde la cuenta, nunca desde un identificador suministrado. */
  @Transactional
  public Outcome rectifyUserDni(Long userId,RectifyDni request,Long actorId){
+  // Carga el usuario por su ID junto con su persona asociada
   User user=users.findWithPersonById(userId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Usuario inexistente"));
   return rectifyDni(user.getPerson(),request,actorId);
  }

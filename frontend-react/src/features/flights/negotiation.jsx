@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StageBadge } from "./requestInbox";
 import { flightStage, pendingParty, STAGE } from "./flightStages";
 

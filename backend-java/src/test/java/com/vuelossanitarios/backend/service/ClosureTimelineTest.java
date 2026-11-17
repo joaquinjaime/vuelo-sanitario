@@ -50,7 +50,7 @@ class ClosureTimelineTest {
   when(nr.save(any())).thenAnswer(x->{Notification n=x.getArgument(0);sent.add(n);return n;});
   NotificationService notifications=new NotificationService(nr,ur); AuditService audit=mock(AuditService.class);
   access=new CommanderReportAccessService(or,clock);
-  workflow=new FinalReportWorkflowService(or,rr,sf,sr,ur,notifications,audit,access,mock(ReportAttachmentService.class),new ObjectMapper().findAndRegisterModules(),clock);
+  workflow=new FinalReportWorkflowService(or,rr,sf,sr,ur,notifications,audit,access,mock(ReportAttachmentService.class),new ObjectMapper().findAndRegisterModules(),clock,mock(FlightAuthorizationService.class));
   deadlines=new FinalReportDeadlineService(or,notifications,audit,clock,mock(PlatformTransactionManager.class),12);
  }
 

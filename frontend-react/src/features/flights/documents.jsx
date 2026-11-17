@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, uploadFile, downloadFile } from "../../services/api";
 
 /** Estados de sólo consulta documental: el servidor es la autoridad y rechaza cualquier escritura en ellos. */

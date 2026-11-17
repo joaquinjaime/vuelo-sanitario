@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { callingPrefix, countryName, filterCountries, formatInternational, normalizeTyped, phoneProblem, toE164 } from "../../utils/contactRules";
 
 /**

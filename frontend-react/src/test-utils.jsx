@@ -1,4 +1,3 @@
-import React from "react";
 import { act, render } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders } from "./app/App";

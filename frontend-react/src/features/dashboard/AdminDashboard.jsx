@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { useSession } from "../../app/providers/SessionProvider";
 import { appPath } from "../../app/navigation";

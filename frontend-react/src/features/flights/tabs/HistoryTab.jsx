@@ -1,4 +1,3 @@
-import React from "react";
 import { NegotiationHistory } from "../negotiation";
 import { AuditTimeline } from "../../audit/audit";
 

@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import {useEffect,useState} from "react";
 import {api} from "../../services/api";
 const problem=e=>e?.message||"No se pudo completar la operación";
 const HISTORY={VUELOS_HISTORICOS:"vuelos finalizados o cancelados",VERSIONES_RUTA_HISTORICAS:"versiones de ruta anteriores",COORDINACIONES_HISTORICAS:"coordinaciones de vuelos cerrados",REGISTROS_HANGAR:"registros de hangar",AERONAVES_INACTIVAS:"aeronaves inactivas",AEROPUERTOS_INACTIVOS:"aeropuertos inactivos",LOCALIDADES_INACTIVAS:"localidades inactivas",PERFILES_COMANDANTE:"perfiles de comandante",SOLICITUDES_CERRADAS:"solicitudes sanitarias cerradas",COMANDANTES_UBICADOS:"comandantes ubicados en la localidad"};
