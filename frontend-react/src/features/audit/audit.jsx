@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../services/api";
+import { SegmentedControl } from "../../components/ui/Tabs";
+import { StatusBadge } from "../../components/ui/StatusBadge";
+import { Pagination, paginate } from "../../components/ui/data";
 
 const message = (e, fallback = "No se pudo cargar la auditoría") => e?.message || fallback;
 const LOCAL_DATETIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/;
@@ -66,18 +69,18 @@ export function AuditEventDetail({ id, onClose, headingLevel = "h4" }) {
 }
 
 /** Historial contextual de un vuelo o solicitud. Los eventos, campos y responsables visibles los decide el servidor según el rol. */
-export function AuditTimeline({ flightId, title = "Historial de actividad", pageSize = 20 }) {
+export function AuditTimeline({ flightId, title = "Historial de actividad", pageSize = 20, order = "desc" }) {
   const [page, setPage] = useState(0), [data, setData] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [open, setOpen] = useState(null), [attempt, setAttempt] = useState(0);
   useEffect(() => { setPage(0); setOpen(null); }, [flightId]);
   useEffect(() => {
     if (!flightId) return undefined;
     let active = true; setLoading(true); setError("");
-    api(`/audit/flights/${flightId}?page=${page}&size=${pageSize}&order=desc`)
+    api(`/audit/flights/${flightId}?page=${page}&size=${pageSize}&order=${order}`)
       .then((d) => { if (active) setData(d); })
       .catch((e) => { if (active) { setData(null); setError(message(e)); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [flightId, page, pageSize, attempt]);
+  }, [flightId, page, pageSize, order, attempt]);
   const items = data?.items || [];
   return <section className="wide detail-actions audit-timeline-section" aria-label={title}>
     <h4>{title}</h4>
@@ -91,15 +94,15 @@ export function AuditTimeline({ flightId, title = "Historial de actividad", page
       {e.hasDetail && <button type="button" className="secondary-action" aria-expanded={open === e.id} onClick={() => setOpen(open === e.id ? null : e.id)}>{open === e.id ? "Ocultar cambios" : "Ver cambios"}</button>}
       {open === e.id && <AuditEventDetail id={e.id} onClose={() => setOpen(null)} />}
     </li>)}</ol>}
-    {data && data.totalPages > 1 && <p className="audit-pager"><button type="button" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Más recientes</button> Página {page + 1} de {data.totalPages} · {data.total} eventos <button type="button" disabled={page + 1 >= data.totalPages || loading} onClick={() => setPage(page + 1)}>Más antiguos</button></p>}
+    {data && data.totalPages > 1 && <p className="audit-pager"><button type="button" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>{order === "asc" ? "Más antiguos" : "Más recientes"}</button> Página {page + 1} de {data.totalPages} · {data.total} eventos <button type="button" disabled={page + 1 >= data.totalPages || loading} onClick={() => setPage(page + 1)}>{order === "asc" ? "Más recientes" : "Más antiguos"}</button></p>}
   </section>;
 }
 
 const EMPTY = { from: "", to: "", actorId: "", entityType: "", operation: "", flightId: "", entityId: "", order: "desc" };
 const contextLink = (e) => e.entityType === "AIRCRAFT" ? { to: "/app/aeronaves", label: "Ver aeronaves" } : e.entityType === "USER" ? { to: "/app/usuarios", label: "Ver usuarios" } : null;
 
-/** Sección Auditoría del administrador: tabla paginada con filtros ejecutados en el backend y acceso al detalle de cada evento. */
-export function AdminAudit() {
+/** Búsqueda general de auditoría: tabla paginada con todos los filtros ejecutados en el backend y acceso al detalle de cada evento. */
+export function AuditSearch() {
   const [options, setOptions] = useState({ entityTypes: [], operations: [], actors: [], maxPageSize: 100 }), [form, setForm] = useState(EMPTY), [applied, setApplied] = useState(EMPTY);
   const [actorQuery, setActorQuery] = useState(""), [actorOptions, setActorOptions] = useState([]), [actorPage, setActorPage] = useState(0), [actorMore, setActorMore] = useState(false), [actorLoading, setActorLoading] = useState(false), [actorError, setActorError] = useState("");
   const [page, setPage] = useState(0), [data, setData] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [selected, setSelected] = useState(null), [attempt, setAttempt] = useState(0);
@@ -159,5 +162,124 @@ export function AdminAudit() {
     </table>}
     {selected && <AuditEventDetail id={selected} onClose={() => setSelected(null)} headingLevel="h3" />}
     {data && data.totalPages > 0 && <p className="audit-pager"><button type="button" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Anterior</button> Página {page + 1} de {data.totalPages} · {data.total} eventos <button type="button" disabled={page + 1 >= data.totalPages || loading} onClick={() => setPage(page + 1)}>Siguiente</button></p>}
+  </section>;
+}
+
+/** Subpaneles de la sección Auditoría del administrador. Cada uno acota la consulta a lo que audita y a quienes cargan esos datos. */
+const PANELS = [
+  { value: "flights", label: "Vuelos" },
+  { value: "users", label: "Usuarios", entityTypes: ["USER", "USER_ROLE"], description: "Altas de cuentas, modificaciones y cambios de perfiles de los usuarios." },
+  { value: "aircraft", label: "Aeronaves", entityTypes: ["AIRCRAFT"], actorRole: "ADMINISTRADOR", description: "Altas y modificaciones de aeronaves. Las carga la administración, por eso sólo se ofrecen administradores como responsables." },
+  { value: "healthStaff", label: "Personal sanitario", entityTypes: ["HEALTH_STAFF"], actorRole: "DTS", description: "Altas y modificaciones del personal sanitario. Lo carga DTS, por eso sólo se ofrecen usuarios DTS como responsables." },
+  { value: "search", label: "Búsqueda general" },
+];
+
+/** Sección Auditoría del administrador: separada por defecto en subpaneles (vuelos, usuarios, aeronaves y personal sanitario) más la búsqueda general. */
+export function AdminAudit() {
+  const [panel, setPanel] = useState("flights");
+  const current = PANELS.find((p) => p.value === panel);
+  return <>
+    <SegmentedControl label="Secciones de auditoría" options={PANELS.map(({ value, label }) => ({ value, label }))} value={panel} onChange={setPanel} />
+    {panel === "flights" && <FlightAuditPanel />}
+    {panel === "search" && <AuditSearch />}
+    {current.entityTypes && <EntityAuditPanel key={panel} title={current.label} description={current.description} entityTypes={current.entityTypes} actorRole={current.actorRole} />}
+  </>;
+}
+
+const FLIGHT_PAGE = 20;
+const flightDay = (f) => String(f.salida || "").slice(0, 10);
+
+/** Vuelos: lista de todos los vuelos; al elegir uno se muestra su historial completo (incluida la tripulación) del más antiguo al más reciente. */
+function FlightAuditPanel() {
+  const [flights, setFlights] = useState(null), [error, setError] = useState(""), [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(0), [selected, setSelected] = useState(null);
+  useEffect(() => {
+    let active = true; setError("");
+    api("/flights").then((list) => { if (active) setFlights(Array.isArray(list) ? list : []); }).catch((e) => { if (active) setError(message(e, "No se pudieron cargar los vuelos")); });
+    return () => { active = false; };
+  }, [attempt]);
+  const term = query.trim().toLowerCase();
+  const visible = (flights || [])
+    .filter((f) => !term || [f.codigo, f.origen, f.destino, f.tipo?.nombre].some((v) => String(v || "").toLowerCase().includes(term)))
+    .filter((f) => (!from || flightDay(f) >= from) && (!to || flightDay(f) <= to))
+    .sort((a, b) => String(b.salida || "").localeCompare(String(a.salida || "")) || b.id - a.id);
+  const paged = paginate(visible, page, FLIGHT_PAGE);
+  const filter = (setter) => (e) => { setter(e.target.value); setPage(0); };
+  return <section className="card audit-admin" aria-label="Auditoría de vuelos">
+    <p className="eyebrow">TRAZABILIDAD</p><h2>Auditoría de vuelos</h2>
+    <p className="hint">Elegí un vuelo para ver todas las acciones registradas sobre él, incluidos los cambios de tripulación, en orden cronológico.</p>
+    <div className="grid-form audit-filters">
+      <label>Buscar vuelo<input type="search" value={query} onChange={filter(setQuery)} placeholder="Código, origen, destino o tipo" /></label>
+      <label>Salida desde<input type="date" value={from} onChange={filter(setFrom)} /></label>
+      <label>Salida hasta<input type="date" value={to} onChange={filter(setTo)} /></label>
+    </div>
+    {!flights && !error && <p role="status">Cargando vuelos…</p>}
+    {error && <p role="alert" className="error">{error} <button type="button" className="secondary-action" onClick={() => setAttempt((x) => x + 1)}>Reintentar</button></p>}
+    {flights && visible.length === 0 && <p>{flights.length ? "Ningún vuelo coincide con los filtros." : "Todavía no hay vuelos registrados."}</p>}
+    {paged.items.length > 0 && <table aria-label="Vuelos">
+      <thead><tr><th>Vuelo</th><th>Tipo</th><th>Estado</th><th>Salida</th><th>Ruta</th><th>Historial</th></tr></thead>
+      <tbody>{paged.items.map((f) => <tr key={f.id} className={selected?.id === f.id ? "audit-selected" : ""}>
+        <td>{f.codigo}</td><td>{f.tipo?.nombre || "—"}</td><td><StatusBadge state={f.estadoVuelo} /></td><td>{formatValue(f.salida)}</td><td>{f.origen || "—"} → {f.destino || "—"}</td>
+        <td><button type="button" className="secondary-action" aria-pressed={selected?.id === f.id} onClick={() => setSelected(selected?.id === f.id ? null : f)}>{selected?.id === f.id ? "Ocultar historial" : "Ver historial"}</button></td>
+      </tr>)}</tbody>
+    </table>}
+    <Pagination page={paged.current} pages={paged.pages} total={visible.length} onPage={setPage} noun="vuelos" />
+    {selected && <AuditTimeline key={selected.id} flightId={selected.id} title={`Historial del vuelo ${selected.codigo}`} pageSize={50} order="asc" />}
+  </section>;
+}
+
+const ENTITY_EMPTY = { from: "", to: "", actorId: "", order: "asc" };
+
+/** Panel de auditoría de un tipo de registro (usuarios, aeronaves, personal sanitario) con filtros de fecha y responsable, en orden cronológico por defecto. */
+function EntityAuditPanel({ title, description, entityTypes, actorRole }) {
+  const [form, setForm] = useState(ENTITY_EMPTY), [applied, setApplied] = useState(ENTITY_EMPTY);
+  const [actorQuery, setActorQuery] = useState(""), [actors, setActors] = useState([]), [actorError, setActorError] = useState("");
+  const [page, setPage] = useState(0), [data, setData] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [selected, setSelected] = useState(null), [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true; const timer = setTimeout(() => {
+      const params = new URLSearchParams(); if (actorRole) params.set("role", actorRole); params.set("q", actorQuery.trim()); params.set("page", "0"); params.set("size", "100");
+      setActorError("");
+      api(`/audit/actors?${params}`).then((r) => { if (active) setActors(r.items || []); }).catch((e) => { if (active) setActorError(message(e)); });
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [actorQuery, actorRole]);
+  useEffect(() => {
+    let active = true; setLoading(true); setError("");
+    const params = new URLSearchParams({ page: String(page), size: "20", entityType: entityTypes.join(","), order: applied.order });
+    ["from", "to", "actorId"].forEach((k) => { if (applied[k]) params.set(k, applied[k]); });
+    api(`/audit?${params}`)
+      .then((d) => { if (active) setData(d); })
+      .catch((e) => { if (active) { setData(null); setError(message(e)); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [applied, page, attempt, entityTypes]);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = (e) => { e.preventDefault(); setSelected(null); setPage(0); setApplied({ ...form }); };
+  const clear = () => { setForm(ENTITY_EMPTY); setApplied(ENTITY_EMPTY); setActorQuery(""); setPage(0); setSelected(null); };
+  const items = data?.items || [], filtered = JSON.stringify(applied) !== JSON.stringify(ENTITY_EMPTY);
+  return <section className="card audit-admin" aria-label={`Auditoría de ${title.toLowerCase()}`}>
+    <p className="eyebrow">TRAZABILIDAD</p><h2>Auditoría de {title.toLowerCase()}</h2>
+    <p className="hint">{description} Las fechas se expresan en la zona horaria {data?.timeZone || "del sistema"}.</p>
+    <form className="grid-form audit-filters" onSubmit={submit} aria-label={`Filtros de ${title.toLowerCase()}`}>
+      <label>Desde<input type="date" value={form.from} onChange={set("from")} /></label>
+      <label>Hasta<input type="date" value={form.to} onChange={set("to")} /></label>
+      <label>Buscar usuario responsable<input type="search" value={actorQuery} onChange={(e) => setActorQuery(e.target.value)} placeholder="Nombre o usuario" /></label>
+      <label>Usuario responsable<select aria-label="Usuario responsable" value={form.actorId} onChange={set("actorId")}><option value="">Todos</option>{form.actorId && !actors.some((a) => String(a.id) === form.actorId) && <option value={form.actorId}>Usuario seleccionado (ID {form.actorId})</option>}{actors.map((a) => <option key={a.id} value={a.id}>{a.name || a.username} ({a.username}){a.active ? "" : " · desactivado"}</option>)}</select>{actorError && <small role="alert" className="error">{actorError}</small>}</label>
+      <label>Orden<select value={form.order} onChange={set("order")}><option value="asc">Más antiguos primero</option><option value="desc">Más recientes primero</option></select></label>
+      <div className="wide"><button type="submit">Aplicar filtros</button> <button type="button" className="secondary-action" onClick={clear}>Limpiar filtros</button></div>
+    </form>
+    {loading && <p role="status">Cargando eventos…</p>}
+    {error && <p role="alert" className="error">{error} <button type="button" className="secondary-action" onClick={() => setAttempt((x) => x + 1)}>Reintentar</button></p>}
+    {!loading && !error && data && items.length === 0 && <p>{filtered ? "Ningún evento coincide con los filtros aplicados." : "Todavía no hay eventos registrados en esta sección."}</p>}
+    {items.length > 0 && <table aria-label={`Eventos de ${title.toLowerCase()}`}>
+      <thead><tr><th>Fecha y hora</th><th>Responsable</th><th>Acción</th><th>Registro</th><th>Descripción</th><th>Detalle</th></tr></thead>
+      <tbody>{items.map((e) => <tr key={e.id} className={selected === e.id ? "audit-selected" : ""}>
+        <td><time dateTime={e.occurredAt}>{formatInstant(e.occurredAt, data.timeZone)}</time></td>
+        <td>{e.actor.label}</td><td>{e.operationLabel}</td><td>{e.entityTypeLabel}{e.entityId ? ` #${e.entityId}` : ""}</td><td>{e.summary}</td>
+        <td><button type="button" className="secondary-action" onClick={() => setSelected(selected === e.id ? null : e.id)}>{selected === e.id ? "Cerrar" : "Ver detalle"}</button></td>
+      </tr>)}</tbody>
+    </table>}
+    {selected && <AuditEventDetail id={selected} onClose={() => setSelected(null)} headingLevel="h3" />}
+    {data && data.totalPages > 1 && <p className="audit-pager"><button type="button" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Anterior</button> Página {page + 1} de {data.totalPages} · {data.total} eventos <button type="button" disabled={page + 1 >= data.totalPages || loading} onClick={() => setPage(page + 1)}>Siguiente</button></p>}
   </section>;
 }

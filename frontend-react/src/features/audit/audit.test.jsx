@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import "@testing-library/jest-dom/vitest";
 import { api } from "../../services/api";
 import { MemoryRouter } from "react-router-dom";
-import { AdminAudit, AuditTimeline, formatInstant } from "./audit";
+import { AuditSearch, AuditTimeline, formatInstant } from "./audit";
 import { renderApp, ROLE } from "../../test-utils";
 vi.mock("../../services/api", () => ({ api: vi.fn(), uploadFile: vi.fn(), downloadFile: vi.fn(), credentialFile: vi.fn() }));
 
@@ -70,7 +70,7 @@ const adminApi = (rows = [event(2), event(1, { actor: actor({ id: 8, username: "
 
 test("el administrador ve la tabla paginada, los usuarios desactivados y abre el detalle con datos enmascarados", async () => {
   vi.mocked(api).mockImplementation(adminApi());
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   const table = await screen.findByRole("table", { name: "Eventos de auditoría" });
   expect(vi.mocked(api)).toHaveBeenCalledWith("/audit?page=0&size=20&order=desc");
   expect(within(table).getByText("Beto Baja (usuario desactivado)")).toBeInTheDocument();
@@ -92,7 +92,7 @@ test("el selector de actores busca de forma remota y conserva el filtro seleccio
     if (path.startsWith("/audit?")) return Promise.resolve(page([]));
     return Promise.reject(new Error("ruta inesperada " + path));
   });
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   const select = await screen.findByLabelText("Usuario responsable");
   fireEvent.change(screen.getByLabelText("Buscar usuario responsable"), { target: { value: "zz" } });
   const actorOption = await screen.findByRole("option", { name: /Actor histórico \(zzhistorico\).*desactivado/ });
@@ -114,7 +114,7 @@ test("una respuesta antigua del selector no reemplaza los resultados de la búsq
     if (path.startsWith("/audit?")) return Promise.resolve(page([]));
     return Promise.reject(new Error("ruta inesperada " + path));
   });
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   const input = screen.getByLabelText("Buscar usuario responsable");
   fireEvent.change(input, { target: { value: "primera" } });
   await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
@@ -128,7 +128,7 @@ test("una respuesta antigua del selector no reemplaza los resultados de la búsq
 
 test("los filtros se envían al servidor combinados y la paginación pide la página siguiente", async () => {
   vi.mocked(api).mockImplementation(adminApi([event(2)], { total: 45, totalPages: 3 }));
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   await screen.findByRole("table", { name: "Eventos de auditoría" });
   await screen.findByRole("option", { name: /Ana Ops \(ops1\)/ });
   fireEvent.change(screen.getByLabelText("Desde"), { target: { value: "2033-03-09" } }); fireEvent.change(screen.getByLabelText("Hasta"), { target: { value: "2033-03-10" } });
@@ -146,13 +146,13 @@ test("los filtros se envían al servidor combinados y la paginación pide la pá
 
 test("sin resultados con filtros, sin eventos y con error del servidor se informa cada caso", async () => {
   vi.mocked(api).mockImplementation(adminApi([]));
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   expect(await screen.findByText("Todavía no hay eventos de auditoría.")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Acción"), { target: { value: "CANCEL" } }); fireEvent.click(screen.getByRole("button", { name: "Aplicar filtros" }));
   expect(await screen.findByText("Ningún evento coincide con los filtros aplicados.")).toBeInTheDocument(); cleanup();
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation((path) => path === "/audit/filters" ? Promise.resolve(options) : Promise.reject(Object.assign(new Error("Acceso denegado"), { status: 403 })));
-  render(<MemoryRouter><AdminAudit /></MemoryRouter>);
+  render(<MemoryRouter><AuditSearch /></MemoryRouter>);
   expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
 });
 

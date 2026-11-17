@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Consulta de auditoría. Sólo lectura: no existen operaciones para crear, editar ni borrar eventos desde la API.
  * Las fechas {@code from}/{@code to} son días civiles de la zona de negocio (ambos inclusive).
+ * {@code entityType} admite varios tipos (separados por coma o repetidos) para que un panel agrupe registros relacionados; {@code role} limita los responsables a un perfil.
  */
 @RestController @RequestMapping("/api/audit")
 public class AuditController {
@@ -31,7 +32,7 @@ public class AuditController {
  public AuditFilterOptions filters(@AuthenticationPrincipal CurrentUser user){return service.filterOptions(user.id());}
 
  @GetMapping("/actors") @PreAuthorize("hasRole('ADMINISTRADOR')")
- public AuditActorPage actors(@RequestParam(required=false) String q,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="30") int size,@AuthenticationPrincipal CurrentUser user){return service.actorOptions(user.id(),q,page,size);}
+ public AuditActorPage actors(@RequestParam(required=false) String q,@RequestParam(required=false) String role,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="30") int size,@AuthenticationPrincipal CurrentUser user){return service.actorOptions(user.id(),q,role,page,size);}
 
  @GetMapping("/flights/{id}") @PreAuthorize(VIEWERS)
  public AuditPage flight(@PathVariable Long id,@RequestParam(required=false) String entityType,@RequestParam(required=false) String operation,@RequestParam(required=false) String order,

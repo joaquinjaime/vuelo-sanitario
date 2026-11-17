@@ -58,6 +58,7 @@ public class AuditQueryService {
  /** Historial de un vuelo según el vínculo del usuario con él (administración, operaciones, comandante actual o DTS solicitante). */
  @Transactional(readOnly=true)
  public AuditPage byFlight(Long flightId,Long viewerId,Search s){
+  // Busca el vuelo por su ID
   Flight flight=flights.findById(flightId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"Vuelo inexistente"));
   List<Audience> audiences=audiences(flight,viewerId);
   Search scoped=new Search(s.from(),s.to(),s.actorId(),s.entityType(),s.operation(),flightId,s.entityId(),s.order(),s.page(),s.size());
@@ -67,11 +68,13 @@ public class AuditQueryService {
  /** Detalle de un evento. Para quien no pueda verlo (ajeno, fuera de su perfil o inexistente) la respuesta es la misma: 404. */
  @Transactional(readOnly=true)
  public AuditEventDetail detail(Long eventId,Long viewerId){
+  // Obtiene el evento de auditoría por su ID con su vuelo, actor y persona del actor
   Row row=repo.find(eventId).orElseThrow(AuditQueryService::missingEvent);
   Audience audience;
   if(isAdministrator(viewerId))audience=Audience.ADMIN;
   else{
    if(row.flightId()==null)throw missingEvent();
+   // Busca el vuelo asociado al evento de auditoría
    Flight flight=flights.findById(row.flightId()).orElseThrow(AuditQueryService::missingEvent);
    List<Audience> audiences;
    try{audiences=audiences(flight,viewerId);}catch(ApiException e){throw missingEvent();}
@@ -84,26 +87,32 @@ public class AuditQueryService {
  @Transactional(readOnly=true)
  public AuditFilterOptions filterOptions(Long viewerId){
   AuditDiagnostics.measure("authorization_and_filtering",()->requireAdministrator(viewerId));
+  // Obtiene los tipos de entidad distintos registrados en los eventos de auditoría, ordenados alfabéticamente
   Set<String> types=new TreeSet<>(AuditCatalog.ENTITY_TYPES.keySet());types.addAll(repo.entityTypes());
+  // Obtiene las operaciones distintas registradas en los eventos de auditoría, ordenadas alfabéticamente
   Set<String> ops=new TreeSet<>(repo.operations());
   return new AuditFilterOptions(types.stream().map(t->new AuditOption(t,AuditCatalog.entityType(t))).sorted(Comparator.comparing(AuditOption::label)).toList(),
    ops.stream().map(o->new AuditOption(o,AuditCatalog.operation(o))).sorted(Comparator.comparing(AuditOption::label)).toList(),
-   repo.actors(null,0,MAX_ACTOR_OPTIONS).stream().map(a->new AuditActorOption(a.id(),a.username(),(nz(a.firstName())+" "+nz(a.lastName())).trim(),a.active())).toList(),
+   // Obtiene los primeros actores distintos que registraron eventos de auditoría, ordenados por apellido, nombre e ID
+   repo.actors(null,null,0,MAX_ACTOR_OPTIONS).stream().map(a->new AuditActorOption(a.id(),a.username(),(nz(a.firstName())+" "+nz(a.lastName())).trim(),a.active())).toList(),
    clock.getZone().getId(),MAX_PAGE_SIZE);
  }
 
  @Transactional(readOnly=true)
- public AuditActorPage actorOptions(Long viewerId,String query,int page,int size){
+ public AuditActorPage actorOptions(Long viewerId,String query,String role,int page,int size){
   AuditDiagnostics.measure("authorization_and_filtering",()->requireAdministrator(viewerId));
   if(page<0||size<1||size>100||(long)page*size>MAX_OFFSET)throw bad("La paginación de actores no es válida");
   String term=query==null?null:query.trim();if(term!=null&&term.length()>100)throw bad("La búsqueda supera los 100 caracteres");
-  List<AuditQueryRepository.ActorRow> found=repo.actors(term,page*size,size+1);
+  String roleCode=code(role,"El perfil es inválido");
+  // Obtiene una página de actores distintos de eventos de auditoría que coinciden con el término por usuario, nombre o apellido y, si se indica, con el perfil (pide uno extra para saber si hay más)
+  List<AuditQueryRepository.ActorRow> found=repo.actors(term,roleCode,page*size,size+1);
   List<AuditActorOption> rows=found.stream().limit(size).map(a->new AuditActorOption(a.id(),a.username(),(nz(a.firstName())+" "+nz(a.lastName())).trim(),a.active())).toList();
   return new AuditActorPage(rows,page,size,found.size()>size);
  }
 
  // ---------------------------------------------------------------- acceso
  private static ApiException missingEvent(){return new ApiException(HttpStatus.NOT_FOUND,"Evento inexistente");}
+ // viewer: Carga el usuario consultante por su ID junto con sus roles asignados
  private User viewer(Long id){return users.findWithRolesById(id).orElseThrow(()->new ApiException(HttpStatus.FORBIDDEN,"Acceso denegado"));}
  private static Set<String> roles(User u){Set<String> r=new HashSet<>();u.getUserRoles().forEach(x->r.add(x.getRole().getCodigo()));return r;}
  private boolean isAdministrator(Long id){return roles(viewer(id)).contains("ADMINISTRADOR");}
@@ -128,15 +137,17 @@ public class AuditQueryService {
   if((long)page*size>MAX_OFFSET)throw bad("La consulta supera el límite de resultados navegables ("+MAX_OFFSET+"); acote la búsqueda con filtros");
   String order=s.order()==null||s.order().isBlank()?"desc":s.order().toLowerCase(Locale.ROOT);
   if(!order.equals("asc")&&!order.equals("desc"))throw bad("El orden debe ser asc o desc");
-  String type=code(s.entityType(),"El tipo de entidad es inválido"),operation=code(s.operation(),"La acción es inválida");
+  List<String> types=codes(s.entityType(),"El tipo de entidad es inválido");String operation=code(s.operation(),"La acción es inválida");
   if(s.from()!=null&&s.to()!=null&&s.from().isAfter(s.to()))throw bad("La fecha inicial no puede ser posterior a la final");
   ZoneId zone=clock.getZone();
   // El día civil de la zona de negocio se traduce a un intervalo UTC [inicio, inicio del día siguiente): una operación a las 23:30 locales pertenece a ese día.
   LocalDateTime from=s.from()==null?null:LocalDateTime.ofInstant(s.from().atStartOfDay(zone).toInstant(),ZoneOffset.UTC);
   LocalDateTime to=s.to()==null?null:LocalDateTime.ofInstant(s.to().plusDays(1).atStartOfDay(zone).toInstant(),ZoneOffset.UTC);
   List<Visibility> visibility=audiences.contains(Audience.ADMIN)?null:audiences.stream().map(this::visibility).toList();
-  AuditQueryRepository.Filter filter=new AuditQueryRepository.Filter(forcedFlight!=null?forcedFlight:s.flightId(),s.actorId(),type,operation,s.entityId(),from,to,visibility,order.equals("asc"));
+  AuditQueryRepository.Filter filter=new AuditQueryRepository.Filter(forcedFlight!=null?forcedFlight:s.flightId(),s.actorId(),types,operation,s.entityId(),from,to,visibility,order.equals("asc"));
+  // Cuenta los eventos de auditoría que cumplen los filtros y la visibilidad del consultante
   long total=AuditDiagnostics.measure("count_repository_total",()->repo.count(filter));
+  // Obtiene la página de eventos de auditoría filtrados, ordenados por fecha e ID en la dirección pedida
   List<Row> rows=total==0||(long)page*size>=total?List.of():AuditDiagnostics.measure("page_repository_total",()->repo.page(filter,page*size,size));
   List<AuditEventView> items=AuditDiagnostics.measure("transform_sanitize_and_enrich",()->render(rows,viewerId,a->true,audiences).stream().map(r->r.view).toList());
   return new AuditPage(items,total,page,size,(int)((total+size-1)/size),order,zone.getId());
@@ -151,6 +162,12 @@ public class AuditQueryService {
  private static String code(String v,String message){
   if(v==null||v.isBlank())return null;
   String t=v.trim();if(!CODE.matcher(t).matches())throw bad(message);return t.toUpperCase(Locale.ROOT);
+ }
+ /** Uno o varios códigos separados por coma (Spring une así un parámetro repetido); null si no hay ninguno. */
+ private static List<String> codes(String v,String message){
+  if(v==null||v.isBlank())return null;
+  List<String> out=new ArrayList<>();for(String part:v.split(",")){String c=code(part,message);if(c==null)throw bad(message);if(!out.contains(c))out.add(c);}
+  return out;
  }
  private static String nz(String v){return v==null?"":v;}
 
@@ -177,7 +194,11 @@ public class AuditQueryService {
    }
    if(p.audience==Audience.DTS&&p.row.actorId()!=null&&!p.row.actorId().equals(viewerId))staffIds.add(p.row.actorId());
   }
+  // Obtiene nombre y apellido de los usuarios referenciados en los eventos
+  // Obtiene las matrículas de las aeronaves referenciadas en los eventos
+  // Obtiene nombre y código IATA de los aeropuertos referenciados en los eventos
   Map<Long,String> userNames=repo.userNames(userIds),plates=repo.aircraftPlates(aircraftIds),airports=repo.airportNames(airportIds);
+  // Obtiene los códigos de rol de cada usuario del personal que actuó en los eventos
   Map<Long,Set<String>> staffRoles=repo.roleCodes(staffIds);
   List<Rendered> out=new ArrayList<>();
   for(Parsed p:parsed){

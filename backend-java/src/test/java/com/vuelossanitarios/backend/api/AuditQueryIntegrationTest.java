@@ -155,6 +155,36 @@ class AuditQueryIntegrationTest {
  }
  private int total(String path,RequestPostProcessor a) throws Exception {return ((Number)JsonPath.read(json(path,a,200),"$.total")).intValue();}
 
+ @Test void theGlobalListAcceptsSeveralEntityTypesSoOnePanelGroupsRelatedRecords() throws Exception {
+  event(null,admin,"USER","CREATE",null,"{\"username\":\"nuevo\"}",LocalDateTime.of(2034,1,1,12,0));
+  event(null,admin,"USER_ROLE","UPDATE",null,"{\"roles\":[\"DTS\"]}",LocalDateTime.of(2034,1,1,13,0));
+  event(null,admin,"AIRCRAFT","CREATE",null,"{\"matricula\":\"LV-X\"}",LocalDateTime.of(2034,1,1,14,0));
+  RequestPostProcessor a=as(admin,"ADMINISTRADOR");
+  assertEquals(2,total("/api/audit?from=2034-01-01&to=2034-01-01&entityType=USER,USER_ROLE",a),"ambos tipos del panel de usuarios");
+  assertEquals(2,total("/api/audit?from=2034-01-01&to=2034-01-01&entityType=USER&entityType=user_role",a),"también como parámetro repetido");
+  assertEquals(1,total("/api/audit?from=2034-01-01&to=2034-01-01&entityType=USER",a),"un único tipo conserva su comportamiento");
+  String asc=json("/api/audit?from=2034-01-01&to=2034-01-01&entityType=USER,USER_ROLE&order=asc",a,200);
+  assertEquals("USER",JsonPath.read(asc,"$.items[0].entityType"),"orden cronológico ascendente");
+  json("/api/audit?entityType=USER,bad-type",a,400);
+ }
+
+ @Test void actorOptionsCanBeLimitedToTheRoleThatLoadsTheAuditedData() throws Exception {
+  event(null,admin,"AIRCRAFT","CREATE",null,"{}",LocalDateTime.of(2034,2,1,12,0));
+  event(null,dts,"HEALTH_STAFF","CREATE",null,"{}",LocalDateTime.of(2034,2,1,13,0));
+  event(sanitary,ops,"FLIGHT","START",null,"{}",LocalDateTime.of(2034,2,1,14,0));
+  RequestPostProcessor a=as(admin,"ADMINISTRADOR");
+  // La base de pruebas se comparte entre casos: se verifica por prefijo de rol (los usuarios se crean como <rol><n>) y por presencia de los actores de este caso.
+  List<String> dtsActors=JsonPath.read(json("/api/audit/actors?role=DTS&size=100",a,200),"$.items[*].username");
+  assertTrue(dtsActors.contains(dts.getUsername()),"incluye al DTS que cargó personal sanitario");
+  assertTrue(dtsActors.stream().allMatch(x->x.startsWith("dts")),"sólo actores con rol DTS: "+dtsActors);
+  List<String> adminActors=JsonPath.read(json("/api/audit/actors?role=administrador&size=100",a,200),"$.items[*].username");
+  assertTrue(adminActors.contains(admin.getUsername())&&adminActors.stream().allMatch(x->x.startsWith("admin")),"sólo administradores: "+adminActors);
+  List<String> all=JsonPath.read(json("/api/audit/actors?q="+ops.getUsername(),a,200),"$.items[*].username");
+  assertEquals(List.of(ops.getUsername()),all,"sin rol se listan los actores de cualquier perfil");
+  json("/api/audit/actors?role=no-valido",a,400);
+  json("/api/audit/actors?role=DTS",as(dts,"DTS"),403);
+ }
+
  @Test void aDtsOnlySeesItsOwnRequestWithTheAllowedEventsAndFieldsAndWithoutStaffIdentity() throws Exception {
   event(sanitary,dts,"FLIGHT","CREATE_SANITARY",null,"{\"tipo\":\"SANITARIO\"}",T0);
   event(sanitary,ops,"SANITARY_REQUEST","COUNTERPROPOSE","{\"estado\":\"SOLICITADO\"}","{\"estado\":\"PENDIENTE_RESPUESTA_DTS\",\"propuestaId\":9,\"salida\":\"2031-06-01T10:00\"}",T0.plusMinutes(1));
