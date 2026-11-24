@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeropuertos, condiciones_paciente, localidades, motivos_cancelacion,
+ *   prioridades_vuelo, provincias, roles_tripulacion, tipos_documento, tipos_vuelo.
+ * Carga o modifica datos en: aeropuertos.
+ * Las rutas /aircraft delegan en AircraftAdminService (aeronaves).
+ */
 package com.vuelossanitarios.backend.api;
 
 import com.vuelossanitarios.backend.api.dto.AircraftDtos.*;

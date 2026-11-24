@@ -1,3 +1,15 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, aeropuertos, condiciones_paciente, estados_solicitud_sanitaria,
+ *   estados_vuelo, excepciones_geograficas_comandante, informacion_medica_vuelo,
+ *   informes_finales_vuelo, instantaneas_clima, localidades, motivos_cancelacion,
+ *   negociaciones_horario_vuelo, pacientes, prioridades_vuelo, roles_tripulacion, tipos_vuelo,
+ *   usuarios, vuelos, vuelos_personal_sanitario, vuelos_sanitarios, vuelos_tripulantes.
+ * Carga o modifica datos en: excepciones_geograficas_comandante, informacion_medica_vuelo,
+ *   instantaneas_clima, negociaciones_horario_vuelo, vuelos, vuelos_sanitarios, vuelos_tripulantes,
+ *   aeronaves, perfiles_comandante, eventos_auditoria (vía AuditService), notificaciones (vía
+ *   NotificationService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;

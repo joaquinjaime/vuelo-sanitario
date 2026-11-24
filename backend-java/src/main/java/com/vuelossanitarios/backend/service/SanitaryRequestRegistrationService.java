@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, vuelos.
+ * Carga o modifica datos en: eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.dto.FlightDtos.CreateFlight;

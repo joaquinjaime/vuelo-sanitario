@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: correos_electronicos, personas, telefonos, usuarios.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -45,6 +52,7 @@ export function CrewContacts({ flightId, state, crewKey }) {
     const mine = ++request.current;
     setLoading(true); setError(""); setNotice("");
     try {
+      // Lee los contactos de la tripulación del vuelo (GET): usuarios, personas, correos_electronicos y telefonos; sólo lectura.
       const result = await api(`/flights/${flightId}/crew/contacts`);
       if (mine !== request.current) return;
       if (!result || !Array.isArray(result.tripulantes)) throw new Error("Respuesta de contactos inválida");

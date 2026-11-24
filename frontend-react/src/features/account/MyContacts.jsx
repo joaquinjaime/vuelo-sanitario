@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: correos_electronicos, personas, telefonos, usuarios.
+ * Carga o modifica datos en: correos_electronicos, telefonos, verificaciones_correo.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { DEFAULT_COUNTRY, countryName, emailProblem, phoneProblem, toNational } from "../../utils/contactRules";
@@ -41,6 +48,7 @@ function ContactList({ kind, items, refresh, notify, busy, setBusy }) {
   const run = async (path, options, success) => {
     setBusy(true); setError("");
     try {
+      // Altas, cambios y bajas de correos y teléfonos propios (POST/PUT/DELETE bajo /auth/me/correos y /auth/me/telefonos): el backend escribe en correos_electronicos, telefonos y verificaciones_correo. Recibe el contacto resultante.
       const result = await api(path, options);
       if (success) notify(success);
       await refresh();
@@ -152,7 +160,9 @@ function ContactList({ kind, items, refresh, notify, busy, setBusy }) {
  */
 export function MyContacts({ notify = () => {} }) {
   const [me, setMe] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  // Lee el perfil propio (GET /auth/me): usuarios, personas, correos_electronicos y telefonos.
   const refresh = useCallback(async () => { setMe(await api("/auth/me")); setError(""); }, []);
+  // Carga inicial del perfil propio (GET /auth/me): usuarios, personas, correos_electronicos y telefonos.
   useEffect(() => { let alive = true; api("/auth/me").then((v) => { if (alive) setMe(v); }).catch((e) => { if (alive) setError(message(e, "No se pudieron cargar sus datos de contacto")); }); return () => { alive = false; }; }, []);
   if (error && !me) return <section className="card"><h2>Mis datos de contacto</h2><p role="alert" className="error">{error}</p></section>;
   if (!me) return <section className="card"><h2>Mis datos de contacto</h2><p role="status">Cargando contactos…</p></section>;

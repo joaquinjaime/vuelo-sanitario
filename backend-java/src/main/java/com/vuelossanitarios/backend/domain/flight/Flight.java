@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla vuelos: cada instancia es una fila.
+ * Trae datos: la leen 15 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   Aa2000CoordinationService, AircraftAdminService, AirportCandidateService).
+ * Carga o modifica datos: FinalReportWorkflowService, FlightService, HealthStaffService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.catalog.*;

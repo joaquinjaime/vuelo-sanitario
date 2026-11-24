@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla roles: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. AuthService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.user;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -8,6 +15,9 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code roles}. Catálogo de roles de acceso (DTS, OPERACIONES, CENTRO_OPERACIONES, COMANDANTE, ADMINISTRADOR). Se asignan a los usuarios mediante usuarios_roles.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_roles"))
 @Table(name = "roles")

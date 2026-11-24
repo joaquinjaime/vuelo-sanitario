@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: correos_electronicos, roles_tripulacion, telefonos, usuarios, vuelos,
+ *   vuelos_tripulantes.
+ * Carga o modifica datos en: eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import static com.vuelossanitarios.backend.api.dto.CrewContactDtos.*;

@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla aeropuertos: cada instancia es una fila.
+ * Trae datos: la leen 7 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   Aa2000CoordinationService, AircraftAdminService, AirportCandidateService).
+ * Carga o modifica datos: CatalogController, GeographicCatalogService.
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -10,6 +17,9 @@ import jakarta.persistence.ManyToOne;
 
 import java.math.BigDecimal;
 
+/**
+ * Tabla {@code aeropuertos}. Aeropuerto o aeródromo del catálogo geográfico: códigos OACI/IATA, coordenadas, localidad y provincia. Lo referencian los vuelos (origen, destino y alterno), las rutas y las aeronaves; se da de baja de forma lógica.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_aeropuertos"))
 @Table(name = "aeropuertos")

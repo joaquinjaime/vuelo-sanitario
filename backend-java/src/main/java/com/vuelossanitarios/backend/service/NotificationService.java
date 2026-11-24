@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: notificaciones, usuarios.
+ * Carga o modifica datos en: notificaciones.
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.api.ApiException;import com.vuelossanitarios.backend.api.dto.NotificationDtos.*;import com.vuelossanitarios.backend.domain.flight.Flight;import com.vuelossanitarios.backend.domain.notification.Notification;import com.vuelossanitarios.backend.domain.user.User;import com.vuelossanitarios.backend.repository.*;import org.springframework.data.domain.*;import org.springframework.http.HttpStatus;import org.springframework.stereotype.Service;import org.springframework.transaction.annotation.Transactional;import java.util.*;
 // create: Guarda la nueva notificación para el usuario destinatario

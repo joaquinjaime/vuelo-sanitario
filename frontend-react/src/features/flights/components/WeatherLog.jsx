@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: instantaneas_clima.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { api } from "../../../services/api";
 import { useResource } from "../../../hooks/useResource";
@@ -41,6 +48,7 @@ function WeatherEditor({ path, onSaved }) {
     setBusy(true);
     setError("");
     try {
+      // Envía las condiciones meteorológicas registradas (POST): el backend inserta en instantaneas_clima.
       await api(path, { method: "POST", body: JSON.stringify(form) });
       close();
       await onSaved();

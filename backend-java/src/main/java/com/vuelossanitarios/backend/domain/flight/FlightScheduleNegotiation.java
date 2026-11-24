@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla negociaciones_horario_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. FlightService).
+ * Carga o modifica datos: FlightService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +11,9 @@ import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code negociaciones_horario_vuelo}. Historial de propuestas y respuestas de horario de un vuelo (salida y llegada propuestas, motivo, usuario que actúa y a qué propuesta responde). Sólo se agregan filas; el acuerdo de horario habilita las etapas siguientes.
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_negociaciones_horario_vuelo"))
 @Table(name="negociaciones_horario_vuelo")
 public class FlightScheduleNegotiation extends BaseEntity {

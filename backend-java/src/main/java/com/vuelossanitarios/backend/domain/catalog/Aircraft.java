@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla aeronaves: cada instancia es una fila.
+ * Trae datos: la leen 3 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   AircraftAdminService, FlightService, HangarInfoService).
+ * Carga o modifica datos: AircraftAdminService, FlightService.
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -11,6 +18,9 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code aeronaves}. Aeronave de la flota: matrícula, modelo, capacidades de pacientes y tripulación, aeropuerto donde se encuentra y si está activa. La lee y la modifica el módulo de aeronaves y la asignación de recursos de un vuelo.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_aeronaves"))
 @Table(name = "aeronaves")

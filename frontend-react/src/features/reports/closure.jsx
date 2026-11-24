@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: informes_finales_vuelo, obligaciones_informe_final, vuelos.
+ * Carga o modifica datos en: informes_finales_vuelo, obligaciones_informe_final, vuelos.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, downloadFile, uploadFile } from "../../services/api";
@@ -36,6 +43,7 @@ export const decisionNote = (v) => v.origenDecision === "HISTORICA_OBLIGACION" ?
 function Versions({ versions, onError = () => {} }) {
   const download = async (attachment, version) => {
     try {
+      // Descarga el PDF adjunto del informe (GET): el backend lee el archivo del volumen de documentos.
       const blob = await downloadFile(attachment.urlDescarga.replace("/api", ""));
       const url = URL.createObjectURL(blob), a = document.createElement("a");
       a.href = url; a.download = `informe-final-v${version}.pdf`; a.click(); URL.revokeObjectURL(url);
@@ -65,6 +73,7 @@ export function ReportHistory({ obligationId, trigger = 0, onError = () => {} })
   const [detail, setDetail] = useState(null), [error, setError] = useState("");
   useEffect(() => {
     let active = true;
+    // Lee el detalle de la obligación y el informe final (GET): obligaciones_informe_final e informes_finales_vuelo.
     api(`/final-reports/${obligationId}`).then((x) => active && setDetail(x)).catch((e) => active && setError(e.message));
     return () => { active = false; };
   }, [obligationId, trigger]);
@@ -77,6 +86,7 @@ const emptyForm = { texto: "", horasVuelo: "", combustibleConsumidoLitros: "", i
 export function CommanderReports({ msg, renderLog = () => null }) {
   const [items, setItems] = useState(null), [forms, setForms] = useState({}), [open, setOpen] = useState({}), [busy, setBusy] = useState(false), [revision, setRevision] = useState(0);
   const load = async () => {
+    // Lee las obligaciones de informe final del comandante (GET): obligaciones_informe_final y vuelos.
     try { setItems(await api("/final-reports/mine")); } catch (e) { setItems([]); msg(e.message, true); }
   };
   useEffect(() => { load(); }, []);
@@ -95,8 +105,10 @@ export function CommanderReports({ msg, renderLog = () => null }) {
         if (f.horasVuelo !== "") fields.horasVuelo = f.horasVuelo;
         if (f.combustibleConsumidoLitros !== "") fields.combustibleConsumidoLitros = f.combustibleConsumidoLitros;
         if (f.incidentes) fields.incidentes = f.incidentes;
+        // Presenta el informe final con su PDF adjunto (POST multipart): el backend guarda el archivo e inserta en informes_finales_vuelo y actualiza obligaciones_informe_final.
         await uploadFile(`/final-reports/${x.id}/submit`, f.archivo, fields);
       } else {
+        // Presenta el informe final sin adjunto (POST): el backend inserta en informes_finales_vuelo y actualiza obligaciones_informe_final.
         await api(`/final-reports/${x.id}/submit`, {
           method: "POST",
           body: JSON.stringify({
@@ -115,6 +127,7 @@ export function CommanderReports({ msg, renderLog = () => null }) {
   };
   const extend = async (x) => {
     setBusy(true);
+    // Solicita la prórroga de 24 h (POST): el backend actualiza obligaciones_informe_final (vencimiento y prórroga utilizada).
     try { await api(`/final-reports/${x.id}/extension`, { method: "POST" }); msg("Prórroga de 24 h concedida"); await load(); }
     catch (e) { msg(e.message, true); await load(); } finally { setBusy(false); }
   };
@@ -183,6 +196,7 @@ export function OperationsReports({ msg }) {
   const [presented, setPresented] = useState(null), [awaiting, setAwaiting] = useState(null), [reason, setReason] = useState({}), [open, setOpen] = useState({}), [busy, setBusy] = useState(false), [revision, setRevision] = useState(0);
   const load = async () => {
     try {
+      // Lee los informes pendientes de revisión y los que esperan al comandante (GET): informes_finales_vuelo y obligaciones_informe_final.
       const [a, b] = await Promise.all([api("/final-reports/pending-review"), api("/final-reports/awaiting-commander")]);
       setPresented(a); setAwaiting(b);
     } catch (e) { setPresented((p) => p || []); setAwaiting((p) => p || []); msg(e.message, true); }
@@ -193,6 +207,7 @@ export function OperationsReports({ msg }) {
     if (!confirmAction(text)) return;
     setBusy(true);
     try {
+      // Envía la aprobación o devolución del informe con el motivo (POST): el backend actualiza informes_finales_vuelo y obligaciones_informe_final.
       await api(`/final-reports/${x.id}/review`, { method: "POST", body: JSON.stringify({ aprobar, motivoDevolucion: reason[x.id] }) });
       msg(aprobar ? "Informe aprobado y vuelo completado" : "Informe devuelto");
       setRevision((n) => n + 1);
@@ -306,6 +321,7 @@ export const NOTIFICATION_LABEL = {
 /** `linkFor(notificación)` (opcional) devuelve la ruta del vuelo al que se refiere el aviso, para abrirlo desde la lista. */
 export function NotificationsPanel({ items = [], unread = 0, msg, reload, linkFor }) {
   const mark = async (path) => {
+    // Envía la acción de cierre del vuelo (POST a la ruta indicada): el backend actualiza vuelos y obligaciones_informe_final.
     try { await api(path, { method: "POST" }); await reload(); } catch (e) { msg(e.message, true); }
   };
   return (

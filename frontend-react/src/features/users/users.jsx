@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria, perfiles_comandante, personas, usuarios, usuarios_roles.
+ * Carga o modifica datos en: activaciones_cuenta, eventos_auditoria, personas, roles, usuarios,
+ *   usuarios_roles.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { formatInstant } from "../audit/audit";
@@ -29,6 +37,7 @@ function UserHistory({ userId, patientId, refresh }) {
   const [items, setItems] = useState(null), [error, setError] = useState(""), [zone, setZone] = useState("America/Argentina/Tucuman");
   useEffect(() => {
     let active = true; setItems(null); setError("");
+    // Lee el historial de la cuenta (GET /audit): eventos_auditoria de los tipos USER, USER_ROLE y PATIENT_IDENTITY.
     Promise.all([["USER", userId], ["USER_ROLE", userId], ...(patientId ? [["PATIENT_IDENTITY", patientId]] : [])].map(([t, entity]) => api(`/audit?entityType=${t}&entityId=${entity}&size=20`)))
       .then((pages) => { if (!active) return; setZone(pages[0]?.timeZone || zone); setItems(pages.flatMap((p) => p?.items || []).sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt) || b.id - a.id)); })
       .catch((e) => { if (active) setError(message(e, "No se pudo cargar el historial")); });
@@ -44,6 +53,7 @@ function UserHistory({ userId, patientId, refresh }) {
 export function UserDetail({ id, roleOptions, notify, onChanged, onClose }) {
   const [detail, setDetail] = useState(null), [error, setError] = useState(""), [form, setForm] = useState(null), [busy, setBusy] = useState(false), [reason, setReason] = useState(""), [secret, setSecret] = useState(null), [refresh, setRefresh] = useState(0), [blockers, setBlockers] = useState([]);
   const load = async () => {
+    // Lee el detalle de la cuenta (GET): usuarios, personas, usuarios_roles, perfiles_comandante y sus bloqueos de baja.
     try { const d = await api(`/auth/users/${id}`); setDetail(d); setError("");
       setForm({ nombre: d.nombre, apellido: d.apellido, fechaNacimiento: d.fechaNacimiento || "", licenciaAeronautica: d.licenciaAeronautica || "", roles: [...(d.roles || [])] }); }
     catch (e) { setError(message(e, "No se pudo cargar el usuario")); }
@@ -61,13 +71,18 @@ export function UserDetail({ id, roleOptions, notify, onChanged, onClose }) {
   const d = detail, inactive = !d.activo, pending = d.estado === "PENDIENTE_ACTIVACION", name = `${d.nombre} ${d.apellido}`;
   const toggleRole = (r) => setForm({ ...form, roles: form.roles.includes(r) ? form.roles.filter((x) => x !== r) : [...form.roles, r] });
   const save = (e) => { e.preventDefault(); if (!form.roles.length) { notify("La cuenta debe conservar al menos un rol", true); return; }
+    // Envía los datos y roles editados de la cuenta (PUT): el backend actualiza personas, usuarios y usuarios_roles y registra eventos_auditoria.
     run(() => api(`/auth/users/${id}`, { method: "PUT", body: JSON.stringify({ ...form, fechaNacimiento: form.fechaNacimiento || null, licenciaAeronautica: form.licenciaAeronautica || null, activo: d.activo }) }), "Datos de la cuenta guardados"); };
   const deactivate = () => { if (!window.confirm(`¿Desactivar a ${name}? Se cerrarán sus sesiones y se conservará todo su historial.`)) return;
+    // Envía la baja lógica de la cuenta con el motivo (PATCH): el backend actualiza usuarios y registra eventos_auditoria.
     run(() => api(`/auth/users/${id}/deactivate`, { method: "PATCH", body: JSON.stringify({ motivo: reason.trim() || null }) }), "Usuario desactivado"); };
   const reactivate = (e) => { e.preventDefault(); if (!window.confirm(`¿Reactivar a ${name}? Se generará una contraseña temporal y deberá cambiarla al ingresar.`)) return;
+    // Envía la reactivación de la cuenta con los datos corregidos (PATCH): el backend actualiza usuarios, personas y activaciones_cuenta; devuelve una contraseña temporal.
     run(async () => { const r = await api(`/auth/users/${id}/reactivate`, { method: "PATCH", body: JSON.stringify({ ...form, fechaNacimiento: form.fechaNacimiento || null, licenciaAeronautica: form.licenciaAeronautica || null }) }); setSecret({ kind: "reactivation", username: d.username, secret: r.contrasenaTemporal }); return r; }, "Usuario reactivado. Guardá la contraseña temporal antes de cerrar el aviso."); };
   const reset = () => { if (!window.confirm(`¿Restablecer las credenciales de ${name}? Se cerrarán sus sesiones y deberá cambiar la contraseña temporal al ingresar.`)) return;
+    // Pide restablecer las credenciales (POST): el backend actualiza usuarios (hash y versión de credenciales) y devuelve una contraseña temporal.
     run(async () => { const r = await api(`/auth/users/${id}/credential-reset`, { method: "POST" }); setSecret({ kind: "reset", username: d.username, secret: r.contrasenaTemporal }); return r; }, "Credenciales restablecidas. Guardá la contraseña temporal antes de cerrar el aviso."); };
+  // Pide un nuevo código de activación (POST): el backend inserta en activaciones_cuenta y devuelve el código.
   const regenerate = () => run(async () => { const r = await api(`/auth/users/${id}/activation-code`, { method: "POST" }); setSecret({ kind: "activation", secret: r.codigo }); return r; }, "Código de activación regenerado");
   const blockedReason = d.esUsted ? "No puede desactivar su propia cuenta." : d.ultimoAdministrador ? "Es el último administrador activo del sistema." : d.impedimentosBaja.length ? "Tiene responsabilidades operativas vigentes." : "";
   return <section className="card user-detail" aria-label={`Detalle de ${name}`}>

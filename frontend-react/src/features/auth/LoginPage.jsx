@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: personas, usuarios, usuarios_roles (valida el usuario y la contraseña al iniciar sesión).
+ * Carga o modifica datos en: activaciones_cuenta, usuarios (activación de una cuenta nueva con su código).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
@@ -37,10 +44,12 @@ export function LoginPage({ onSignedIn }) {
         setActivationSubmitted(true);
         if (Object.keys(errors).length) return;
         setBusy(true);
+        // Envía el código de activación y la contraseña elegida (POST); el backend valida activaciones_cuenta y activa la cuenta en usuarios.
         await api("/auth/activar-cuenta", { method: "POST", body: JSON.stringify(form) });
         setActivate(false); se({ type: "success", text: "Cuenta activada correctamente. Ya puede iniciar sesión." }); return;
       }
       setBusy(true);
+      // Envía usuario y contraseña (POST); el backend consulta usuarios, personas y usuarios_roles y devuelve el token de sesión y los datos del usuario.
       const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) });
       signIn(r);
       if (onSignedIn) onSignedIn(r);

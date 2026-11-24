@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla excepciones_geograficas_comandante: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CrewItineraryService, FlightService).
+ * Carga o modifica datos: FlightService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 import com.vuelossanitarios.backend.domain.catalog.Airport;
 import com.vuelossanitarios.backend.domain.catalog.Locality;

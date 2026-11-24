@@ -1,9 +1,18 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla activaciones_cuenta: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. AuthService).
+ * Carga o modifica datos: AuthService.
+ */
 package com.vuelossanitarios.backend.domain.user;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code activaciones_cuenta}. Código de activación de una cuenta nueva: hash del token y código numérico, vencimiento, fecha de uso, intentos fallidos y administrador que lo generó. Se consume en el primer ingreso.
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_activaciones_cuenta"))
 @Table(name = "activaciones_cuenta")
 public class AccountActivation extends BaseEntity {

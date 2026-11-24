@@ -1,8 +1,18 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla estados_solicitud_sanitaria: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. FlightService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 
+/**
+ * Tabla {@code estados_solicitud_sanitaria}. Catálogo de estados de una solicitud sanitaria (solicitado, pendiente de respuesta DTS, aprobado, rechazado). Sólo se lee; la solicitud guarda una referencia a su estado.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_estados_solicitud_sanitaria"))
 @Table(name = "estados_solicitud_sanitaria")

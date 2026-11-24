@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: usuarios.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
@@ -21,6 +28,7 @@ export function MyAccountPage() {
   const submit = async (e) => {
     e.preventDefault(); if (busy) return;
     setBusy(true);
+    // Envía la contraseña nueva (POST /auth/me/password); el backend guarda el hash en usuarios. Después se cierra la sesión.
     try { await api("/auth/me/password", { method: "POST", body: JSON.stringify(password) }); signOut(); navigate("/login", { replace: true }); }
     catch (x) { notify(x.message, true); setBusy(false); }
   };

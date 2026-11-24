@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla perfiles_comandante: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. AuthService).
+ * Carga o modifica datos: AuthService, CommanderLocationService, FlightService.
+ */
 package com.vuelossanitarios.backend.domain.person;
 import jakarta.persistence.*;
 import com.vuelossanitarios.backend.domain.catalog.Province;

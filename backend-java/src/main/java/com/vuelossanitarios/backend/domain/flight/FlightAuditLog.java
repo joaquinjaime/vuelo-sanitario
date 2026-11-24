@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla bitacora_vuelos: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   FlightLogService).
+ * Carga o modifica datos: FlightLogService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;

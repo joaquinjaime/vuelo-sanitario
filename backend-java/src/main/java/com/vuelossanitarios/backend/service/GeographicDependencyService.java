@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, vuelos, estados_vuelo, rutas_vuelo, aeropuertos, localidades,
+ *   perfiles_comandante.
+ * No carga ni modifica datos (sólo lectura).
+ * Sólo lectura: cuenta las referencias vigentes y las históricas para decidir si una provincia,
+ *   localidad o aeropuerto puede darse de baja.
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.dto.GeographicCatalogDtos.DependencyView;

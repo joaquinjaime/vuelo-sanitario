@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: aeronaves, eventos_auditoria.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../services/api";
@@ -28,7 +35,9 @@ function AircraftForm({ editing, airports }) {
     setBusy(true); setFormError("");
     try {
       const common = { matricula: form.matricula.trim(), modelo: form.modelo.trim(), tipo: form.tipo.trim(), capacidadPacientes: Number(form.capacidadPacientes), capacidadTripulacion: Number(form.capacidadTripulacion), equipamientoMedico: form.equipamientoMedico };
+      // Envía los datos editados de la aeronave (PUT): el backend actualiza aeronaves y registra eventos_auditoria.
       if (editing) await api(`/catalogs/aircraft/${editing.id}`, { method: "PUT", body: JSON.stringify(common) });
+      // Envía los datos de la aeronave nueva (POST): el backend inserta en aeronaves y registra eventos_auditoria.
       else await api("/catalogs/aircraft", { method: "POST", body: JSON.stringify({ ...common, aeropuertoActualId: Number(form.aeropuertoActualId), activo: form.activo }) });
       notify(editing ? "Aeronave actualizada" : "Aeronave registrada");
       navigate(back);

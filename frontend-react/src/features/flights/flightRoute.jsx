@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeropuertos, rutas_vuelo.
+ * Carga o modifica datos en: eventos_auditoria, rutas_vuelo.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { PlanningPanel } from "./components/PlanningPanel";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
@@ -51,6 +58,7 @@ export function FlightRoute({ flightId, revision, canEdit = false, canReview = f
   const load = async () => {
     const mine = ++latest.current;
     try {
+      // Lee la ruta vigente del vuelo (GET): rutas_vuelo y sus tramos.
       const d = await api(`/flights/${flightId}/route`);
       if (mine !== latest.current) return;
       if (!d || typeof d.estado !== "string" || !Array.isArray(d.versiones)) throw new Error("Respuesta de ruta inválida");
@@ -61,6 +69,7 @@ export function FlightRoute({ flightId, revision, canEdit = false, canReview = f
   useEffect(() => {
     if (!canEdit || mode !== "edit") return;
     let active = true;
+    // Busca aeropuertos para la ruta (GET): aeropuertos.
     api(`/catalogs/airports?q=${encodeURIComponent(airportQuery)}`).then((a) => { if (active) setAirports(a); }).catch((e) => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [canEdit, mode, airportQuery]);
@@ -76,6 +85,7 @@ export function FlightRoute({ flightId, revision, canEdit = false, canReview = f
     if (busy) return;
     setBusy(true);
     try {
+      // Envía la propuesta o aprobación de la ruta (POST/PUT): el backend escribe en rutas_vuelo y registra eventos_auditoria.
       await api(`/flights/${flightId}/route${path}`, options);
       setMode(null); await load(); msg(success); onChanged();
     } catch (e) {

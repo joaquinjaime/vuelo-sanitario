@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla rutas_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   FlightRouteService).
+ * Carga o modifica datos: FlightRouteService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;

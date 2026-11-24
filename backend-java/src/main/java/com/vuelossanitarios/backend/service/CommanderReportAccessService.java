@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: obligaciones_informe_final.
+ * No carga ni modifica datos (sólo lectura).
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.domain.flight.FinalReportStatus;

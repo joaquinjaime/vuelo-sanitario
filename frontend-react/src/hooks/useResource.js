@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: la ruta GET que reciba cada pantalla (la tabla consultada depende de la ruta).
+ * No carga ni modifica datos.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../services/api";
 
@@ -16,6 +21,7 @@ export function useResource(path, { map = (value) => value, revision } = {}) {
     if (!path) { setState({ data: null, error: "", loading: false }); return null; }
     if (!quiet) setState((previous) => ({ ...previous, loading: true, error: "" }));
     try {
+      // Lee un recurso del backend (GET a la ruta indicada); la tabla que consulta depende de la ruta. No envía datos.
       const value = mapRef.current(await api(path));
       if (mine === latest.current) setState({ data: value, error: "", loading: false });
       return value;

@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, aeropuertos, informacion_medica_vuelo, vuelos, vuelos_sanitarios.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../services/api";
 import { adaptDetail } from "../../../utils/flightAdapter";
@@ -15,6 +22,7 @@ export function useFlightDetail(id, flights = []) {
     if (!target) return null;
     const mine = ++latest.current;
     try {
+      // Lee el detalle completo del vuelo (GET): vuelos, vuelos_sanitarios, informacion_medica_vuelo, aeronaves, aeropuertos y estados; sólo lectura.
       const value = adaptDetail(await api(`/flights/${target}`));
       if (mine === latest.current) setState({ detail: value, error: "", loading: false });
       return value;

@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria, pacientes, personas.
+ * Carga o modifica datos en: eventos_auditoria, personas.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { DniRectification, dniProblem, dniDigits } from "../../components/forms/DniRectification";
@@ -16,6 +23,7 @@ export function PatientSearch({ onSelect, onReset = () => {}, selectedId, refres
     const query = new URLSearchParams({ page: String(page), size: "10" });
     if (next.dni) query.set("dni", next.dni);
     else { query.set("nombre", next.nombre); query.set("apellido", next.apellido); }
+    // Busca pacientes (GET): pacientes y personas.
     try { const response = await api(`/patients/search?${query}`); if (number === sequence.current) setResult(response); }
     catch (failure) { if (number === sequence.current) setError(failure.message || "No se pudo buscar pacientes"); }
     finally { if (number === sequence.current) { busy.current = false; setLoading(false); } }
@@ -53,6 +61,7 @@ export function PatientMaintenance({ notify = () => {} }) {
   const load = async (patient) => {
     const number = ++sequence.current; setSelected(patient); setDetail(null); setHistory(null); setForm(null); setError(""); setLoading(true);
     try {
+      // Lee la ficha del paciente (pacientes y personas) y su historial de correcciones de identidad (eventos_auditoria, tipo PATIENT_IDENTITY) con GET.
       const [identity, events] = await Promise.all([api(`/patients/${patient.id}`), api(`/patients/${patient.id}/corrections?page=0&size=10`)]);
       if (number !== sequence.current) return;
       setDetail(identity); setHistory(events); setForm({ nombre: identity.nombre, apellido: identity.apellido, fechaNacimiento: identity.fechaNacimiento || "", motivo: "" });
@@ -63,9 +72,11 @@ export function PatientMaintenance({ notify = () => {} }) {
     event.preventDefault(); if (!detail || saving) return;
     setSaving(true); setError("");
     try {
+      // Envía la corrección de identidad con la versión leída (PUT): el backend actualiza personas y registra el cambio en eventos_auditoria.
       const updated = await api(`/patients/${detail.id}/identity`, { method: "PUT", body: JSON.stringify({ ...form, fechaNacimiento: form.fechaNacimiento || null, version: detail.version }) });
       const next = { ...selected, nombre: updated.nombre, apellido: updated.apellido, anioNacimiento: updated.fechaNacimiento ? Number(updated.fechaNacimiento.slice(0, 4)) : null };
       setSelected(next); setDetail(updated); setForm({ nombre: updated.nombre, apellido: updated.apellido, fechaNacimiento: updated.fechaNacimiento || "", motivo: "" });
+      // Vuelve a leer el historial de correcciones (GET): eventos_auditoria del paciente.
       setHistory(await api(`/patients/${updated.id}/corrections?page=0&size=10`)); setRefreshToken(value => value + 1); notify("Identidad corregida");
     } catch (failure) { setError(failure.message || "No se pudo corregir la identidad"); }
     finally { setSaving(false); }
@@ -80,6 +91,7 @@ export function PatientMaintenance({ notify = () => {} }) {
       <DniRectification key={detail.id} path={`/patients/${detail.id}/dni`} current={{ dni: detail.dni, version: detail.version, cuentaEstado: detail.cuentaEstado }} scope={detail.cuentaEstado ? "ficha de paciente y cuenta de usuario" : "ficha de paciente"} notify={notify}
         onReload={() => load(selected)} onChanged={async (updated) => {
           setDetail(updated); setSelected({ ...selected, dniTerminacion: "••••" + String(updated.dni).slice(-4) });
+          // Vuelve a leer el historial de correcciones tras rectificar el DNI (GET): eventos_auditoria del paciente.
           setHistory(await api(`/patients/${updated.id}/corrections?page=0&size=10`)); setRefreshToken(value => value + 1);
         }} />
       <form className="grid-form" onSubmit={save}>

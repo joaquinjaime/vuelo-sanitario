@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: pacientes, personal_sanitario, personas, usuarios, vuelos,
+ *   vuelos_personal_sanitario, vuelos_sanitarios.
+ * Carga o modifica datos en: personal_sanitario, personas, vuelos_personal_sanitario, vuelos,
+ *   eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;

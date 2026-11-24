@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: personas, roles, usuarios, usuarios_roles.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../services/api";
@@ -27,6 +34,7 @@ export function UsersListPage() {
   const [text, setText] = useState(query.q), [data, setData] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [roleOptions, setRoleOptions] = useState([]), [attempt, setAttempt] = useState(0);
   const estado = STATUS[query.estado] ? query.estado : "activos", page = Number(query.pagina) || 0;
 
+  // Lee los roles disponibles (GET): roles.
   useEffect(() => { let on = true; api("/auth/roles").then((r) => { if (on) setRoleOptions(Array.isArray(r) ? r : []); }).catch(() => { if (on) setRoleOptions(Object.keys(ROLE_LABEL).filter((c) => c !== "OPERACIONES").map((codigo) => ({ codigo, nombre: ROLE_LABEL[codigo] }))); }); return () => { on = false; }; }, []);
   useEffect(() => { const t = setTimeout(() => { if (text.trim() !== query.q) setQuery({ q: text.trim() }); }, 300); return () => clearTimeout(t); }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -34,6 +42,7 @@ export function UsersListPage() {
     const params = new URLSearchParams({ status: STATUS[estado], page: String(page), size: String(PAGE_SIZE) });
     if (query.q) params.set("q", query.q);
     if (query.rol) params.set("role", query.rol);
+    // Busca usuarios con filtros y paginación (GET): usuarios, personas y usuarios_roles.
     api(`/auth/users/search?${params}`).then((d) => { if (on) setData(d); }).catch((e) => { if (on) { setData(null); setError(message(e, "No se pudo cargar los usuarios")); } }).finally(() => { if (on) setLoading(false); });
     return () => { on = false; };
   }, [estado, query.q, query.rol, page, attempt]);

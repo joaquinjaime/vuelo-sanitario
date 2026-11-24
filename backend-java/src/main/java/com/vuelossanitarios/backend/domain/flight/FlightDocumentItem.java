@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla documentos_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej. DocumentService).
+ * Carga o modifica datos: DocumentService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.catalog.DocumentType;
@@ -6,6 +12,9 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code documentos_vuelo}. Documento lógico de un vuelo, con su tipo y nombre estable; sus versiones están en versiones_documento_vuelo. Se retira con baja lógica (fecha, usuario y motivo), conservando el registro y sus archivos.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_documentos_vuelo"))
 @Table(name = "documentos_vuelo")

@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: personal_sanitario, vuelos, vuelos_personal_sanitario.
+ * Carga o modifica datos en: eventos_auditoria, personal_sanitario, personas,
+ *   vuelos_personal_sanitario.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -25,7 +33,9 @@ export function HealthStaffCatalog({ notify = () => {} }) {
   const submit = async (event) => {
     event.preventDefault(); if (busy) return; setBusy(true); setError("");
     try {
+      // Envía los datos editados del profesional y la versión leída (PUT): el backend actualiza personal_sanitario (y personas).
       if (editing) await api(`/health-staff/${editing.id}`, { method: "PUT", body: JSON.stringify({ ...form, version: editing.version }) });
+      // Envía el profesional nuevo (POST): el backend inserta en personal_sanitario (y en personas si no existía).
       else await api("/health-staff", { method: "POST", body: JSON.stringify(form) });
       notify(editing ? "Profesional actualizado" : "Profesional registrado"); reset(); await load();
     } catch (e) { await load(); setError(e.message); } finally { setBusy(false); }
@@ -34,6 +44,7 @@ export function HealthStaffCatalog({ notify = () => {} }) {
     if (busy) return;
     if (row.activo && window.confirm?.(`¿Desactivar a ${row.nombre} ${row.apellido}? Dejará de ofrecerse para nuevos vuelos; su participación anterior se conserva.`) === false) return;
     setBusy(true); setError("");
+    // Envía activar/desactivar al profesional con la versión leída (POST): el backend actualiza personal_sanitario.
     try { await api(`/health-staff/${row.id}/active`, { method: "POST", body: JSON.stringify({ activo: !row.activo, version: row.version }) }); notify(row.activo ? "Profesional desactivado" : "Profesional reactivado"); await load(); }
     catch (e) { await load(); setError(e.message); } finally { setBusy(false); }
   };
@@ -73,12 +84,14 @@ export function FlightHealthStaff({ flightId, mode = "read", state, msg = () => 
       const data = await api(`/flights/${flightId}/health-staff`); if (mine !== latest.current) return; if (!Array.isArray(data)) throw new Error("Respuesta de personal sanitario inválida"); setRows(data); setError("");
     } catch (e) { if (mine !== latest.current || quiet) return; setRows(null); setError(e.message); }
   };
+  // Lee el historial de personal sanitario del vuelo (GET): vuelos_personal_sanitario, incluidas las asignaciones retiradas.
   const loadHistory = async () => { try { const data = await api(`/flights/${flightId}/health-staff?history=true`); setHistory(Array.isArray(data) ? data : []); } catch (e) { setHistory(null); setError(e.message); } };
   useEffect(() => { setRows(null); setCandidates(null); setPick(""); setReplace(null); setShowHistory(false); setHistory(null); load(); }, [flightId, state]);
   useEffect(() => {
     if (!editable || replace === null) return undefined;
     let active = true;
     setCandidates(null);
+    // Lee los profesionales candidatos para el vuelo (GET): personal_sanitario y vuelos comprometidos.
     api(`/flights/${flightId}/health-staff/candidates`).then((list) => {
       if (active) setCandidates(Array.isArray(list) ? list : []);
     }).catch((e) => { if (active) { setError(e.message); setReplace(null); } });
@@ -88,6 +101,7 @@ export function FlightHealthStaff({ flightId, mode = "read", state, msg = () => 
   const save = async () => {
     if (busy || !pick) return; setBusy(true); setError("");
     try {
+      // Envía la asignación (POST) o el reemplazo (PUT) del profesional del vuelo: el backend escribe en vuelos_personal_sanitario y registra eventos_auditoria.
       await api(`/flights/${flightId}/health-staff${replace ? `/${replace}` : ""}`, { method: replace ? "PUT" : "POST", body: JSON.stringify({ personalSanitarioId: Number(pick) }) });
       setPick(""); setReplace(null); msg(replace ? "Profesional sustituido" : "Profesional asignado al vuelo"); await refresh();
     } catch (e) { msg(e.message, true); await refresh(); setError(e.message); } finally { setBusy(false); }
@@ -96,6 +110,7 @@ export function FlightHealthStaff({ flightId, mode = "read", state, msg = () => 
     if (busy) return;
     if (window.confirm?.(`¿Retirar a ${row.nombre} ${row.apellido} del vuelo? El registro queda en el historial.`) === false) return;
     setBusy(true); setError("");
+    // Retira al profesional del vuelo (DELETE): el backend marca baja en vuelos_personal_sanitario y registra eventos_auditoria.
     try { await api(`/flights/${flightId}/health-staff/${row.id}`, { method: "DELETE" }); msg("Profesional retirado del vuelo"); await refresh(); }
     catch (e) { msg(e.message, true); await refresh(); setError(e.message); } finally { setBusy(false); }
   };

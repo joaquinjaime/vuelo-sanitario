@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, vuelos, eventos_auditoria (vía AuditQueryRepository).
+ * No carga ni modifica datos (sólo lectura).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

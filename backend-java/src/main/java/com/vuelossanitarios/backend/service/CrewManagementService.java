@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: roles_tripulacion, usuarios, vuelos, vuelos_personal_sanitario,
+ *   vuelos_tripulantes.
+ * Carga o modifica datos en: vuelos_tripulantes, eventos_auditoria (vía AuditService),
+ *   notificaciones (vía NotificationService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;

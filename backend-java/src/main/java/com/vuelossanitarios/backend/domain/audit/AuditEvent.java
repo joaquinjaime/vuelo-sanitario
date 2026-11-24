@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla eventos_auditoria: cada instancia es una fila.
+ * Trae datos: la leen 3 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   AircraftAdminService, AuditService, PatientDirectoryService).
+ * Carga o modifica datos: AuditService.
+ */
 package com.vuelossanitarios.backend.domain.audit;
 
 import com.vuelossanitarios.backend.domain.flight.Flight;

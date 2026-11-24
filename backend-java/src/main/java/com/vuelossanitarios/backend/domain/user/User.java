@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla usuarios: cada instancia es una fila.
+ * Trae datos: la leen 27 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   Aa2000CoordinationService, AircraftAdminService, AirportCandidateService).
+ * Carga o modifica datos: AuthService.
+ */
 package com.vuelossanitarios.backend.domain.user;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -16,6 +23,9 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Tabla {@code usuarios}. Cuenta de acceso al sistema: usuario, hash de contraseña, estado de cuenta, si debe cambiar la contraseña, versión de credenciales y baja lógica. Pertenece a una persona (personas) y recibe roles por usuarios_roles.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_usuarios"))
 @Table(name = "usuarios")

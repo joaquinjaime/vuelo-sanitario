@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos.
+ * No carga ni modifica datos (sólo lectura).
+ * No lee ni escribe tablas de negocio: define con qué cuenta SQL aplica Flyway las migraciones
+ *   (cambios de esquema).
+ */
 package com.vuelossanitarios.backend.config;
 
 import org.slf4j.Logger;

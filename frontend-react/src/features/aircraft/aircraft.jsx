@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, aeropuertos, eventos_auditoria, vuelos.
+ * Carga o modifica datos en: eventos_auditoria, vuelos.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { api } from "../../services/api";
 
@@ -17,6 +24,7 @@ export function AirportPicker({ label, value, onChange, exclude, initial = [], c
     let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
+      // Busca aeropuertos por texto (GET): lee aeropuertos.
       try { const rows = await api(`/catalogs/airports?q=${encodeURIComponent(query)}`); if (active) { setOptions(Array.isArray(rows) ? rows : []); setError(""); } }
       catch (e) { if (active) setError(text(e)); }
       finally { if (active) setLoading(false); }
@@ -43,7 +51,9 @@ export function AircraftActivity({ aircraft }) {
   useEffect(() => {
     let active = true;
     setFlights(null); setHistory(null); setFlightsError(""); setHistoryError("");
+    // Lee los vuelos que comprometen la aeronave (GET): aeronaves y vuelos.
     api(`/catalogs/aircraft/${aircraft.id}/flights`).then((rows) => { if (active) setFlights(Array.isArray(rows) ? rows : []); }).catch((e) => { if (active) setFlightsError(text(e)); });
+    // Lee el historial de la aeronave (GET): eventos_auditoria del tipo AIRCRAFT.
     api(`/catalogs/aircraft/${aircraft.id}/history`).then((rows) => { if (active) setHistory(Array.isArray(rows) ? rows : []); }).catch((e) => { if (active) setHistoryError(text(e)); });
     return () => { active = false; };
   }, [aircraft.id, aircraft.estadoOperativo, aircraft.aeropuertoActualId, aircraft.activo]);
@@ -71,6 +81,7 @@ export function AircraftActivity({ aircraft }) {
 export function FlightAircraft({ flight, recursos, canManage = true, actionOnly = false, done = async () => {}, msg = () => {}, reload = async () => {} }) {
   const [open, setOpen] = useState(false), [candidates, setCandidates] = useState(null), [error, setError] = useState(""), [selected, setSelected] = useState(""), [reason, setReason] = useState(""), [busy, setBusy] = useState(false);
   const changeable = canManage && Boolean(recursos?.aircraftId) && ["PLANIFICADO", "PENDIENTE_CONFIRMACION_COMANDANTE"].includes(flight?.estado);
+  // Lee las aeronaves candidatas para el vuelo (GET): aeronaves, aeropuertos y vuelos comprometidos.
   const loadCandidates = async () => { setCandidates(null); setError(""); try { const rows = await api(`/flights/${flight.id}/aircraft-candidates`); setCandidates(Array.isArray(rows) ? rows : []); } catch (e) { setCandidates([]); setError(text(e)); } };
   useEffect(() => { setOpen(false); setCandidates(null); setSelected(""); setReason(""); setError(""); }, [flight?.id, recursos?.aircraftId]);
   const start = async () => { setOpen(true); await loadCandidates(); };
@@ -80,6 +91,7 @@ export function FlightAircraft({ flight, recursos, canManage = true, actionOnly 
     if (busy || !chosen) return;
     if (window.confirm?.(`¿Cambiar la aeronave del vuelo ${flight.codigo} a ${chosen.matricula}?`) === false) return;
     setBusy(true); setError("");
+    // Envía el cambio de aeronave del vuelo (POST) con la aeronave elegida y el motivo; el backend actualiza vuelos y registra la auditoría en eventos_auditoria.
     try { await api(`/flights/${flight.id}/aircraft`, { method: "POST", body: JSON.stringify({ aircraftId: Number(selected), motivo: reason.trim() || null }) }); msg(`Aeronave del vuelo cambiada a ${chosen.matricula}`); setOpen(false); setSelected(""); setReason(""); await done(); await reload(); }
     catch (e) { await loadCandidates(); setError(text(e)); } finally { setBusy(false); }
   };

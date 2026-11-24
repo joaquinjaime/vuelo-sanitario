@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeropuertos, localidades, provincias, usuarios.
+ * Carga o modifica datos en: aeropuertos, localidades, provincias, eventos_auditoria (vía
+ *   AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;

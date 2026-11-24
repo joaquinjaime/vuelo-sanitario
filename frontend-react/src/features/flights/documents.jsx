@@ -1,3 +1,12 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: bloqueos_documento_vuelo, documentos_vuelo, negociaciones_horario_vuelo,
+ *   tipos_documento, versiones_documento_vuelo, vuelos.
+ * Carga o modifica datos en: bloqueos_documento_vuelo, documentos_vuelo, eventos_auditoria,
+ *   versiones_documento_vuelo.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api, uploadFile, downloadFile } from "../../services/api";
 
@@ -48,6 +57,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   };
   const load = async () => {
     try {
+      // Lee los documentos activos del vuelo (GET): documentos_vuelo y su versión vigente en versiones_documento_vuelo.
       const rows = await api(`/flights/${flightId}/documents`);
       if (!Array.isArray(rows)) throw Error("Respuesta documental inválida");
       setDocuments(rows); setError("");
@@ -55,16 +65,19 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
     } catch (e) { setDocuments(null); if (lockedBy(e)) return []; setError(e.message); return []; }
   };
   const inspect = async (id) => {
+    // Lee el bloqueo de edición del documento (GET): bloqueos_documento_vuelo.
     try { const x = await api(`/documents/${id}/lock`); if (current.current.selected?.id === id) setLock(x); return x; }
     catch (e) { if (!lockedBy(e)) setError(e.message); return null; }
   };
   /** Libera sin esperar respuesta: si falla, el vencimiento del servidor sigue siendo la garantía. */
   const releaseQuietly = () => {
     const { selected: item, lock: held } = current.current;
+    // Libera el bloqueo de edición del documento (DELETE): elimina la fila de bloqueos_documento_vuelo.
     if (item && held?.active && held.mine) api(`/documents/${item.id}/lock`, { method: "DELETE" }).catch(() => {});
   };
   const loadRetired = async () => {
     try {
+      // Lee los documentos retirados del vuelo (GET): documentos_vuelo con baja lógica.
       const rows = await api(`/flights/${flightId}/documents/retired`);
       if (!Array.isArray(rows)) throw Error("Respuesta de documentos retirados inválida");
       setRetired(rows);
@@ -75,6 +88,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
     const mine = ++choice.current;
     setSelected(item); current.current.selected = item; setHistory(null); setLock(null); setVersionFile(null); setReplacing(false); setRetiring(false); setReason("");
     try {
+      // Lee el historial de versiones del documento (GET): versiones_documento_vuelo.
       const h = await api(`/documents/${item.id}/versions`);
       if (!h || !Array.isArray(h.versiones)) throw Error("Respuesta de versiones inválida");
       if (mine !== choice.current) return;
@@ -86,6 +100,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   /** Consulta si el horario está acordado. Si la consulta falla se continúa: las operaciones reales las rechazará el servidor con el motivo exacto. */
   const checkGate = async () => {
     try {
+      // Lee si el vuelo admite cargar documentos según su estado (GET): vuelos y negociaciones_horario_vuelo.
       const x = await api(`/flights/${flightId}/documents/access`);
       const open = !x || x.disponible !== false;
       setGate(open ? { disponible: true } : x);
@@ -94,6 +109,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   };
   const start = () => {
     load();
+    // Lee los tipos de documento permitidos para el vuelo (GET): tipos_documento.
     if (canEdit) api(`/flights/${flightId}/documents/types`).then((x) => setTypes(Array.isArray(x) ? x : [])).catch((e) => { setTypes([]); if (!lockedBy(e)) setError(e.message); });
   };
   const startRef = useRef(start); startRef.current = start;
@@ -137,18 +153,23 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   const create = () => {
     if (!createFile || !typeCode || !name.trim()) return;
     return run(async () => {
+      // Sube un PDF nuevo (POST multipart): el backend guarda el archivo en el volumen de documentos e inserta en documentos_vuelo y versiones_documento_vuelo.
       const created = await uploadFile(`/flights/${flightId}/documents/pdf`, createFile, { documentTypeCode: typeCode, nombreDocumento: name.trim() });
       setName(""); setTypeCode(""); setCreateFile(null); setCreating(false);
       await load(); await choose(created); msg("Documento registrado");
     });
   };
+  // Toma el bloqueo de edición (POST): inserta en bloqueos_documento_vuelo.
   const acquire = () => selected && run(async () => { const x = await api(`/documents/${selected.id}/lock`, { method: "POST" }); setLock(x); msg("Bloqueo documental adquirido"); });
+  // Libera el bloqueo de edición (DELETE): elimina de bloqueos_documento_vuelo.
   const release = () => selected && run(async () => { await api(`/documents/${selected.id}/lock`, { method: "DELETE" }); await inspect(selected.id); msg("Bloqueo documental liberado"); });
   const addVersion = () => selected && versionFile && run(async () => {
+    // Sube una versión nueva del documento (POST multipart): guarda el PDF e inserta una fila en versiones_documento_vuelo (la anterior deja de ser la actual).
     const updated = await uploadFile(`/documents/${selected.id}/versions/pdf`, versionFile);
     setVersionFile(null); await load(); await choose(updated); msg("Nueva versión documental guardada");
   });
   const retire = () => selected && reason.trim() && run(async () => {
+    // Envía la baja lógica del documento con su motivo (POST): actualiza documentos_vuelo (esta_activo, fecha_baja, motivo_baja) y registra eventos_auditoria.
     await api(`/flights/${flightId}/documents/${selected.id}/deactivate`, { method: "POST", body: JSON.stringify({ motivo: reason.trim() }) });
     choice.current++; setSelected(null); setHistory(null); setLock(null); setRetiring(false); setReason("");
     await load(); if (retired !== null) await loadRetired();
@@ -157,6 +178,7 @@ export function FlightDocuments({ flightId, canEdit = false, canViewRetired = fa
   const toggleRetired = () => { if (retired === null) loadRetired(); else setRetired(null); };
   const download = async (version) => {
     try {
+      // Descarga el PDF de una versión (GET): el backend lee ubicacion_almacenamiento en versiones_documento_vuelo y devuelve el archivo del volumen de documentos.
       const blob = await downloadFile(apiRelative(version.urlDescarga));
       const url = URL.createObjectURL(blob), a = document.createElement("a");
       a.href = url; a.download = version.nombreArchivoOriginal; a.click(); URL.revokeObjectURL(url);

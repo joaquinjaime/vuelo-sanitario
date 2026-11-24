@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Repositorio de la tabla obligaciones_informe_final.
+ * Trae datos: con las consultas declaradas en esta interfaz y las de JpaRepository (findById,
+ *   findAll, etc.).
+ * Carga o modifica datos: con save/delete de JpaRepository, usados desde
+ *   FinalReportWorkflowService.
+ */
 package com.vuelossanitarios.backend.repository;
 import com.vuelossanitarios.backend.domain.flight.*;
 import jakarta.persistence.LockModeType;

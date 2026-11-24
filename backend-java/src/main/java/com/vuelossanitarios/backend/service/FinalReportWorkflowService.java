@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: estados_vuelo, informes_finales_vuelo, obligaciones_informe_final, usuarios,
+ *   vuelos_sanitarios.
+ * Carga o modifica datos en: informes_finales_vuelo, obligaciones_informe_final, vuelos,
+ *   eventos_auditoria (vía AuditService), notificaciones (vía NotificationService).
+ */
 package com.vuelossanitarios.backend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

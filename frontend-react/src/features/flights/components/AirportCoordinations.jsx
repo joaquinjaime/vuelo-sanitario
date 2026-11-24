@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: coordinaciones_aa2000.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { api } from "../../../services/api";
 import { useResource } from "../../../hooks/useResource";
@@ -114,6 +121,7 @@ function CoordinationEditor({ path, item, onCancel, onSaved }) {
     setError("");
     try {
       const dates = Object.fromEntries(DATES.map((key) => [key, form[key] || null]));
+      // Envía el alta (POST) o la edición (PUT) de una coordinación con el aeropuerto; el backend escribe en coordinaciones_aa2000.
       await api(item ? `${path}/${item.gestionId}` : path, {
         method: item ? "PUT" : "POST",
         body: JSON.stringify({ ...form, ...dates, version: item?.version ?? 0, aeropuertoId: Number(form.aeropuertoId) }),

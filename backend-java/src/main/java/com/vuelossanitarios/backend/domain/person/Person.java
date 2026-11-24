@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla personas: cada instancia es una fila.
+ * Trae datos: la leen 6 clase(s) de servicio mediante sus repositorios (p. ej. AuthService,
+ *   EmailVerificationService, HealthStaffService).
+ * Carga o modifica datos: AuthService, HealthStaffService, PatientDirectoryService,
+ *   PatientService, PersonIdentityService.
+ */
 package com.vuelossanitarios.backend.domain.person;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -13,6 +21,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code personas}. Datos de identidad de una persona (nombre, apellido, DNI, fecha de nacimiento). Un usuario, un paciente, un comandante o el personal sanitario son roles de la misma persona, vinculados por id_personas.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_personas"))
 @Table(name = "personas")

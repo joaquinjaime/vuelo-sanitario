@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, vuelos, vuelos_tripulantes.
+ * Carga o modifica datos en: eventos_auditoria (vía AuditService), notificaciones (vía
+ *   NotificationService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.domain.flight.Flight;

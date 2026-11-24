@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: localidades.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { api } from "../../../services/api";
 import { locationLabel } from "../../../utils/format";
@@ -12,6 +19,7 @@ export function LocalityPicker({ title, provinces, provinceId, setProvinceId, se
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
+        // Busca localidades de una provincia por texto (GET): localidades.
         const results = await api(`/catalogs/localities?provinceId=${provinceId}&q=${encodeURIComponent(query)}`);
         if (!cancelled) setOptions(results);
       } catch {

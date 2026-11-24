@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla tipos_documento: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CatalogController, DocumentService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +13,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+/**
+ * Tabla {@code tipos_documento}. Catálogo de tipos de documento PDF que admite un vuelo (autorización, parte médico, plan de vuelo, otro); algunos sólo se admiten en vuelos con extensión sanitaria. Sólo se lee al cargar documentos.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_tipos_documento"))
 @Table(name = "tipos_documento")

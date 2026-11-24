@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: informacion_hangar.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { api } from "../../../services/api";
 import { dt } from "../../../utils/format";
@@ -30,6 +37,7 @@ function HangarEditor({ path, current, observing, canComplete, onCancel, onSaved
     setError("");
     try {
       const body = observing ? { observaciones: form.observaciones } : form;
+      // Envía la información de hangar (o la observación del comandante) del vuelo (POST/PUT): el backend escribe en informacion_hangar. Recibe el registro guardado.
       const saved = await api(path + (observing ? "/commander-observation" : ""), {
         method: "PUT", body: JSON.stringify({ version: current?.version ?? 0, ...body }),
       });

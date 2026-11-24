@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: activaciones_cuenta, correos_electronicos, pacientes, perfiles_comandante,
+ *   personas, provincias, roles, telefonos, usuarios.
+ * Carga o modifica datos en: activaciones_cuenta, correos_electronicos, perfiles_comandante,
+ *   personas, telefonos, usuarios, usuarios_roles, eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.api.dto.AuthDtos.*;

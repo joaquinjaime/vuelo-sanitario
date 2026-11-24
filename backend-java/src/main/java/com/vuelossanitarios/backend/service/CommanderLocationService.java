@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, usuarios_roles, roles, personas, perfiles_comandante, provincias.
+ * Carga o modifica datos en: perfiles_comandante (provincia actual del comandante),
+ *   eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.api.dto.CommanderLocationDtos.*;

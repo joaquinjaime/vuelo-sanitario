@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeropuertos, localidades, perfiles_comandante, provincias, usuarios, vuelos.
+ * Carga o modifica datos en: aeropuertos, eventos_auditoria, rutas_vuelo, vuelos.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -21,6 +28,7 @@ export function AirportPicker({ flightId, kind, selectedId, onSelect, disabled =
   const requests = useRef(0);
   const load = async (text = "") => {
     const mine = ++requests.current; setLoading(true); setError("");
+    // Lee los aeropuertos candidatos de salida o llegada (GET): aeropuertos, localidades, provincias y datos del vuelo.
     try { const value = await api(`/flights/${flightId}/airport-candidates?tipo=${kind}&q=${encodeURIComponent(text)}`); if (mine === requests.current) setData(value); }
     catch (e) { if (mine === requests.current) { setData(null); setError(e.message); } }
     finally { if (mine === requests.current) setLoading(false); }
@@ -72,6 +80,7 @@ function Proposal({ flight, kind, msg, onChanged, onClose }) {
     setResolution("none"); setReplacement(""); setCandidates(null); setExceptionReason("");
     if (!commanderOut || !picked) return undefined;
     let active = true;
+    // Lee los comandantes candidatos para el aeropuerto de salida elegido (GET): usuarios, perfiles_comandante y vuelos comprometidos.
     api(`/flights/${flight.id}/commander-candidates?q=&aeropuertoSalidaId=${picked.id}`).then((v) => { if (active) setCandidates(v); }).catch((e) => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [picked?.id, commanderOut]);
@@ -83,6 +92,7 @@ function Proposal({ flight, kind, msg, onChanged, onClose }) {
     const body = { origenId: kind === "SALIDA" ? picked.id : null, destinoId: kind === "LLEGADA" ? picked.id : null, justificacion: outside ? reason.trim() : null,
       nuevoComandanteId: commanderOut && resolution === "replace" ? Number(replacement) : null, excepcionGeografica: commanderOut && resolution === "exception" ? { motivo: exceptionReason.trim() } : null };
     try {
+      // Envía la propuesta o confirmación de aeropuertos (PUT); el backend actualiza vuelos (origen, destino y su estado) y registra eventos_auditoria.
       await api(`/flights/${flight.id}/airports`, { method: "PUT", body: JSON.stringify(body) });
       msg(`Aeropuerto de ${kind === "SALIDA" ? "salida" : "llegada"} propuesto: queda pendiente de confirmación del comandante`);
       onClose(); await onChanged();
@@ -157,6 +167,7 @@ function CommanderAirportEditor({ flight, plan, onSaved, msg, onClose }) {
     if (lock.current || !ready) return;
     lock.current = true; setBusy(true); setError("");
     try {
+      // Envía el aeropuerto de origen, de destino y la llegada del vuelo operativo (POST); el backend actualiza vuelos y rutas_vuelo.
       await api(`/flights/${flight.id}/operational-planning`, { method: "POST", body: JSON.stringify({ origenId: origin.id, destinoId: destination.id, llegada: arrival, justificacion: showReason ? reason.trim() : null }) });
       msg("Aeropuertos confirmados y planificación guardada");
       onClose();

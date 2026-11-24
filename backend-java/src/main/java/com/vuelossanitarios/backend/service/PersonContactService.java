@@ -1,3 +1,9 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: correos_electronicos, personas, telefonos, usuarios.
+ * Carga o modifica datos en: correos_electronicos, telefonos, eventos_auditoria (vía
+ *   AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;

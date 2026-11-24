@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: eventos_auditoria, personas, usuarios.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -33,6 +40,7 @@ export function DniRectification({ path, current, scope, onChanged, onReload, re
     if (problem) { setError({ message: problem }); return; }
     busy.current = true; setSaving(true); setError(null);
     try {
+      // Envía la rectificación del DNI (PUT) con el DNI nuevo, la versión leída, el motivo y el cotejo documental; el backend actualiza personas (y usuarios si hay cuenta) y registra el hecho en eventos_auditoria. Recibe la ficha actualizada.
       const result = await api(path, { method: "PUT", body: JSON.stringify({ dniNuevo: form.dniNuevo.trim(), version: current.version, motivo: form.motivo.trim(), cotejoDocumental: form.cotejo, confirmaCuenta: current.cuentaEstado ? form.cuenta : null }) });
       close(); await onChanged?.(result); notify("DNI rectificado");
     } catch (failure) { setError({ message: failure.message || "No se pudo rectificar el DNI", code: failure.code }); }

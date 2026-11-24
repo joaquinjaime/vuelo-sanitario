@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: vuelos_tripulantes.
+ * Carga o modifica datos en: eventos_auditoria, vuelos_tripulantes.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../services/api";
 import { dt } from "../../../utils/format";
@@ -12,10 +19,12 @@ export function FlightCrew({ flightId, canManage=false, state, copilot=false, ms
   const latest=useRef(0);
  /** Sólo la respuesta de la consulta más reciente se aplica: una respuesta tardía (de un vuelo o estado anterior) nunca pisa a una más nueva. {@code quiet}: refresco de fondo, que ante una falla conserva lo que ya se ve. */
  const load=async(quiet=false)=>{const mine=++latest.current;try{const data=await api(`/flights/${flightId}/crew`);if(mine!==latest.current)return;if(!Array.isArray(data))throw new Error("Respuesta de tripulación inválida");setRows(data);setError("");}catch(e){if(mine!==latest.current||quiet)return;setRows(null);setError(e.message);}};
+ // Lee el historial de tripulación del vuelo (GET): vuelos_tripulantes, incluidas las asignaciones retiradas.
  const loadHistory=async()=>{try{const data=await api(`/flights/${flightId}/crew?history=true`);if(!Array.isArray(data))throw new Error("Respuesta de historial inválida");setHistory(data);}catch(e){setHistory(null);setError(e.message);}};
  useEffect(()=>{setRows(null);setError("");setShowHistory(false);setHistory(null);load();},[flightId,state]);
  useEffect(()=>{const tick=()=>{if(document.visibilityState==="hidden"||busy)return;load(true);};const timer=setInterval(tick,refreshMs);window.addEventListener("focus",tick);document.addEventListener("visibilitychange",tick);return()=>{clearInterval(timer);window.removeEventListener("focus",tick);document.removeEventListener("visibilitychange",tick);};},[flightId,busy,refreshMs]);
  const refreshAll=async()=>{await load();if(showHistory)await loadHistory();};
+ // Retira un tripulante del vuelo (DELETE): el backend marca baja en vuelos_tripulantes (el registro queda en el historial) y registra eventos_auditoria.
  const remove=async row=>{if(busy)return;if(window.confirm?.(`¿Retirar a ${row.nombre} ${row.apellido} de la tripulación? El registro queda en el historial.`)===false)return;setBusy(true);try{await api(`/flights/${flightId}/crew/${row.id}`,{method:"DELETE"});await refreshAll();msg("Tripulante retirado");}catch(e){await refreshAll();setError(e.message);}finally{setBusy(false);}};
  const toggleHistory=async()=>{if(showHistory){setShowHistory(false);return;}setShowHistory(true);await loadHistory();};
  const mutable=["PENDIENTE_CONFIRMACION_COMANDANTE","PENDIENTE_RESPUESTA_OPERACIONES","PLANIFICADO","PENDIENTE_REPLANIFICACION"].includes(state);

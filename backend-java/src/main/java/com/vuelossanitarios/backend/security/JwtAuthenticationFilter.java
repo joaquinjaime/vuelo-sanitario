@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios.
+ * No carga ni modifica datos (sólo lectura).
+ * Se ejecuta en cada petición autenticada: relee el usuario para comprobar que sigue activo y que
+ *   la versión de credenciales del token es vigente. No modifica datos.
+ */
 package com.vuelossanitarios.backend.security;
 import com.vuelossanitarios.backend.domain.user.User;
 import com.vuelossanitarios.backend.repository.UserRepository;

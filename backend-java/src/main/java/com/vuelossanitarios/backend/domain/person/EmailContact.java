@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla correos_electronicos: cada instancia es una fila.
+ * Trae datos: la leen 4 clase(s) de servicio mediante sus repositorios (p. ej. AuthService,
+ *   CrewContactService, EmailVerificationService).
+ * Carga o modifica datos: AuthService, EmailVerificationService, PersonContactService.
+ */
 package com.vuelossanitarios.backend.domain.person;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +12,9 @@ import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code correos_electronicos}. Correo electrónico de una persona: dirección y su forma normalizada, tipo, si es el principal, fecha de verificación y baja lógica (fecha, usuario y motivo).
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_correos_electronicos"))
 @Table(name = "correos_electronicos")
 public class EmailContact extends BaseEntity {

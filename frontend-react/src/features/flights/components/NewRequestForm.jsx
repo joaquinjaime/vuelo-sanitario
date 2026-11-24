@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: provincias.
+ * Carga o modifica datos en: eventos_auditoria, informacion_medica_vuelo, pacientes, personas,
+ *   vuelos, vuelos_sanitarios.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../services/api";
 import { isTodayOrTomorrow } from "../../../utils/format";
@@ -30,6 +38,7 @@ export function NewRequestForm({ d, done, msg }) {
     ...(["nombre", "apellido", "dni", "fechaNacimiento"].includes(k) ? { identidadConfirmada: false } : {}),
   }));
   let todayOrTomorrow = isTodayOrTomorrow(f.solicitada);
+  // Lee las provincias para el formulario (GET): provincias.
   useEffect(() => { api("/catalogs/provinces").then(setProvinces).catch(x => msg(x.message, true)); }, []);
   return (
     <section className="form-page">
@@ -54,6 +63,7 @@ export function NewRequestForm({ d, done, msg }) {
           submitLock.current = true;
           setSubmitting(true);
           try {
+            // Envía la solicitud sanitaria (POST): con paciente existente o con paciente nuevo. El backend inserta en vuelos, vuelos_sanitarios e informacion_medica_vuelo (y en personas y pacientes si el paciente es nuevo) y registra eventos_auditoria.
             await api(patientMode === "search" ? "/flights" : "/flights/with-patient", {
               method: "POST",
               body: JSON.stringify({

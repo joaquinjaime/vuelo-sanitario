@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, aeropuertos, notificaciones, vuelos, vuelos_sanitarios.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { adaptFlight } from "../../utils/flightAdapter";
@@ -33,6 +40,7 @@ export function OperationalDataProvider({ children, scope }) {
       ["vuelos", flightsPath, (rows) => ({ flights: rows.map(adaptFlight), updatedAt: updateStamp() })],
       ["notificaciones", "/notifications", (n) => { const rows = n.items || n.content || []; return { notifications: rows, unread: n.unread ?? rows.filter((x) => !x.leido).length }; }],
     ].map(async ([label, path, map]) => {
+      // Lee del backend (GET) los catálogos que necesita la aplicación (aeronaves, aeropuertos, tipos, etc.); cada ruta consulta su tabla de catálogo y no envía datos.
       try { const values = map(await api(path)); if (generation === loadGeneration.current) setState((previous) => ({ ...previous, ...values })); }
       catch (error) { failures.push(`No se pudo cargar ${label}: ${error.message}`); }
     }));
@@ -44,6 +52,7 @@ export function OperationalDataProvider({ children, scope }) {
   const refresh = useCallback(async () => {
     const poll = ++pollGeneration.current, full = loadGeneration.current;
     try {
+      // Lee los vuelos visibles para el usuario (GET /flights: vuelos, vuelos_sanitarios y sus catálogos) y sus notificaciones (GET /notifications: notificaciones). No envía datos.
       const [rows, n] = await Promise.all([api(flightsPath), api("/notifications")]);
       if (poll !== pollGeneration.current || full !== loadGeneration.current || !Array.isArray(rows)) return;
       setState((previous) => ({ ...previous, ...apply(rows, n), loading: false, error: "" }));

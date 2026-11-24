@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla vuelos_tripulantes: cada instancia es una fila.
+ * Trae datos: la leen 7 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   AircraftAdminService, CrewContactService, CrewEligibilityMonitoringService).
+ * Carga o modifica datos: CrewManagementService, FlightService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.catalog.CrewRole;

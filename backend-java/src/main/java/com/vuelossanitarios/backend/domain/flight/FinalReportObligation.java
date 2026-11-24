@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla obligaciones_informe_final: cada instancia es una fila.
+ * Trae datos: la leen 3 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CommanderReportAccessService, FinalReportDeadlineService, FinalReportWorkflowService).
+ * Carga o modifica datos: FinalReportWorkflowService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +12,9 @@ import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 
+/**
+ * Tabla {@code obligaciones_informe_final}. Obligación del comandante de presentar el informe final de un vuelo: vencimiento (original y vigente), prórroga, presentación, devolución, aprobación y si es la obligación actual. Se enlaza con el informe presentado.
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_obligaciones_informe_final"))
 @Table(name="obligaciones_informe_final")
 public class FinalReportObligation extends BaseEntity {

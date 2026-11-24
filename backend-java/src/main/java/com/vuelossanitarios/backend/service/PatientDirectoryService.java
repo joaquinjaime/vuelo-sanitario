@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria, pacientes, usuarios.
+ * Carga o modifica datos en: personas, eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;

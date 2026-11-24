@@ -1,3 +1,12 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, aeropuertos, excepciones_geograficas_comandante,
+ *   perfiles_comandante, roles_tripulacion, usuarios, vuelos, vuelos_tripulantes.
+ * Carga o modifica datos en: eventos_auditoria, excepciones_geograficas_comandante,
+ *   notificaciones, vuelos, vuelos_tripulantes.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { RequirementList } from "./crewRequirements";
@@ -38,6 +47,7 @@ function CommanderCard({ flight, resources, plan, msg, onChanged, editable, bloc
   const load = async (q = "", keepError = false) => {
     const mine = ++requests.current;
     setLoading(true); if (!keepError) setError("");
+    // Lee los comandantes candidatos del vuelo (GET): usuarios, perfiles_comandante, excepciones_geograficas_comandante y vuelos comprometidos.
     try { const value = await api(`/flights/${flight.id}/commander-candidates?q=${encodeURIComponent(q)}`); if (mine === requests.current) setData(value); }
     catch (e) { if (mine === requests.current) { setData(null); setError(e.message); } }
     finally { if (mine === requests.current) setLoading(false); }
@@ -52,6 +62,7 @@ function CommanderCard({ flight, resources, plan, msg, onChanged, editable, bloc
     if (exceptional && reason.trim().length < MIN_REASON) { setError(`La excepción geográfica requiere una justificación de al menos ${MIN_REASON} caracteres.`); return; }
     lock.current = true; setBusy(true); setError("");
     try {
+      // Envía el comandante elegido (PUT), con el motivo si es una excepción geográfica; el backend actualiza vuelos, escribe en excepciones_geograficas_comandante, notifica (notificaciones) y registra eventos_auditoria.
       await api(`/flights/${flight.id}/commander`, { method: "PUT", body: JSON.stringify({ comandanteId: chosen.id, excepcionGeografica: exceptional ? { motivo: reason.trim() } : null }) });
       setOpen(false);
       msg(resources.aircraftId == null ? "Comandante reservado: falta confirmar la aeronave" : "Comandante asignado");
@@ -117,6 +128,7 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
   const load = async (keepError = false) => {
     const mine = ++requests.current;
     setLoading(true); if (keepError !== true) setError("");
+    // Lee las aeronaves candidatas del vuelo (GET): aeronaves, aeropuertos y vuelos comprometidos.
     try { const value = await api(`/flights/${flight.id}/aircraft-candidates`); if (mine === requests.current) setList(Array.isArray(value) ? value : []); }
     catch (e) { if (mine === requests.current) { setList(null); setError(e.message); } }
     finally { if (mine === requests.current) setLoading(false); }
@@ -127,6 +139,7 @@ function AircraftCard({ flight, resources, msg, onChanged, editable, blockedReas
     if (lock.current || !selected) return;
     lock.current = true; setBusy(true); setError("");
     try {
+      // Envía la aeronave asignada al vuelo (PUT): el backend actualiza vuelos y registra eventos_auditoria.
       await api(`/flights/${flight.id}/assigned-aircraft`, { method: "PUT", body: JSON.stringify({ aircraftId: Number(selected) }) });
       setOpen(false);
       msg(resources.commanderId == null ? "Aeronave reservada: falta confirmar el comandante" : "Aeronave asignada");
@@ -179,6 +192,7 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
   const loadCurrent = async () => {
     if (currentCopilot !== undefined) return;
     const mine = ++currentRequests.current;
+    // Lee la tripulación vigente del vuelo (GET): vuelos_tripulantes y roles_tripulacion.
     try { const rows = await api(`/flights/${flight.id}/crew`); if (mine === currentRequests.current) setCurrent((Array.isArray(rows) ? rows : []).find((r) => r.crewRoleCode === "COPILOTO" && r.vigente !== false) || null); }
     catch (e) { if (mine === currentRequests.current) setError(e.message); }
   };
@@ -186,6 +200,7 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
   const load = async (q = "", keepError = false) => {
     const mine = ++requests.current;
     setLoading(true); if (!keepError) setError("");
+    // Lee los candidatos a copiloto del vuelo (GET): usuarios, perfiles_comandante y vuelos comprometidos.
     try { const value = await api(`/flights/${flight.id}/commander-candidates?funcion=COPILOTO&q=${encodeURIComponent(q)}`); if (mine === requests.current) setData(value); }
     catch (e) { if (mine === requests.current) { setData(null); setError(e.message); } }
     finally { if (mine === requests.current) setLoading(false); }
@@ -200,6 +215,7 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
     lock.current = true; setBusy(true); setError("");
     try {
       const body = JSON.stringify({ userId: chosen.id, crewRoleCode: "COPILOTO", excepcionGeografica: exceptional ? { motivo: reason.trim() } : null });
+      // Envía el alta (POST) o el reemplazo (PUT) del copiloto: el backend escribe en vuelos_tripulantes, notifica (notificaciones) y registra eventos_auditoria.
       await api(current ? `/flights/${flight.id}/crew/${current.id}` : `/flights/${flight.id}/crew`, { method: current ? "PUT" : "POST", body });
       setOpen(false); msg(current ? "Copiloto reemplazado" : "Copiloto asignado"); await loadCurrent(); await onChanged();
     } catch (e) { setError(e.message); msg(e.message, true); setSelected(""); await load(search, true); }
@@ -209,6 +225,7 @@ export function CopilotCard({ flight, msg = () => {}, onChanged = async () => {}
     if (lock.current || !current) return;
     if (window.confirm?.(`¿Retirar a ${current.nombre} ${current.apellido} como copiloto? El registro queda en el historial.`) === false) return;
     lock.current = true; setBusy(true); setError("");
+    // Retira al copiloto (DELETE): el backend marca baja en vuelos_tripulantes y registra eventos_auditoria.
     try { await api(`/flights/${flight.id}/crew/${current.id}`, { method: "DELETE" }); msg("Copiloto retirado"); await loadCurrent(); await onChanged(); }
     catch (e) { setError(e.message); msg(e.message, true); await loadCurrent(); } finally { lock.current = false; setBusy(false); }
   };

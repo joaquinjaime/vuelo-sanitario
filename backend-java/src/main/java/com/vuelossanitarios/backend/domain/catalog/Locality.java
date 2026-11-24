@@ -1,9 +1,19 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla localidades: cada instancia es una fila.
+ * Trae datos: la leen 3 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CatalogController, FlightService, GeographicCatalogService).
+ * Carga o modifica datos: GeographicCatalogService.
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 
+/**
+ * Tabla {@code localidades}. Localidad del catálogo geográfico, perteneciente a una provincia. Se usa para ubicar pacientes y aeropuertos; se da de baja de forma lógica.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_localidades"))
 @Table(name = "localidades")

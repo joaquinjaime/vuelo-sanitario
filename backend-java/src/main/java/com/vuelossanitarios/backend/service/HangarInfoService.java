@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeronaves, informacion_hangar, usuarios, vuelos.
+ * Carga o modifica datos en: informacion_hangar, eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;

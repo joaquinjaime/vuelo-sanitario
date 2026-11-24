@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Repositorio de la tabla vuelos.
+ * Trae datos: con las consultas declaradas en esta interfaz (que también leen vuelos_sanitarios) y
+ *   las de JpaRepository (findById, findAll, etc.).
+ * Carga o modifica datos: con save/delete de JpaRepository, usados desde
+ *   FinalReportWorkflowService, FlightService, HealthStaffService.
+ */
 package com.vuelossanitarios.backend.repository;
 import com.vuelossanitarios.backend.domain.flight.Flight;
 import jakarta.persistence.LockModeType;

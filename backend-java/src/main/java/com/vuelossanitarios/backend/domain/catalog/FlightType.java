@@ -1,8 +1,19 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla tipos_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CatalogController, FlightService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;
 
+/**
+ * Tabla {@code tipos_vuelo}. Catálogo de tipos de vuelo (sanitario, regreso a base, reposicionamiento, traslado operativo, entrenamiento, otro). Sólo se lee.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_tipos_vuelo"))
 @Table(name = "tipos_vuelo")

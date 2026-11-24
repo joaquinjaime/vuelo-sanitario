@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla usuarios_roles: cada instancia es una fila.
+ * Trae datos: se carga junto con la entidad que la referencia (relación JPA) o desde un
+ *   repositorio propio.
+ * Carga o modifica datos: AuthService.
+ */
 package com.vuelossanitarios.backend.domain.user;
 
 import jakarta.persistence.Column;

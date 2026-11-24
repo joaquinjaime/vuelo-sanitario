@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Cliente HTTP común de la aplicación (api, uploadFile, downloadFile). No accede a tablas por sí
+ *   mismo: envía y recibe lo que cada pantalla pide al backend, con el token de sesión.
+ */
 // En Docker, Nginx reenvía /api al backend y el navegador nunca conoce el
 // hostname interno del contenedor. VITE_API_URL sólo es un override local.
 const base = import.meta.env.VITE_API_URL || '/api';

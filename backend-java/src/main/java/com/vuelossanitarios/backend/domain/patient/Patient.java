@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla pacientes: cada instancia es una fila.
+ * Trae datos: la leen 6 clase(s) de servicio mediante sus repositorios (p. ej. AuthService,
+ *   FlightService, HealthStaffService).
+ * Carga o modifica datos: PatientService.
+ */
 package com.vuelossanitarios.backend.domain.patient;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -13,6 +20,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code pacientes}. Paciente: especialización de una persona (personas). Los datos de identidad viven en Person; aquí sólo se guarda el vínculo y las fechas de alta y actualización.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_pacientes"))
 @Table(name = "pacientes")

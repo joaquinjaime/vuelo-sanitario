@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla telefonos: cada instancia es una fila.
+ * Trae datos: la leen 3 clase(s) de servicio mediante sus repositorios (p. ej. AuthService,
+ *   CrewContactService, PersonContactService).
+ * Carga o modifica datos: AuthService, PersonContactService.
+ */
 package com.vuelossanitarios.backend.domain.person;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +12,9 @@ import com.vuelossanitarios.backend.domain.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code telefonos}. Teléfono de una persona: número con prefijo de país, tipo, si es el principal y baja lógica.
+ */
 @Entity @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_telefonos"))
 @Table(name = "telefonos")
 public class PhoneContact extends BaseEntity {

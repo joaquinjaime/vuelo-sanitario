@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: perfiles_comandante, personas, provincias, usuarios.
+ * Carga o modifica datos en: eventos_auditoria, perfiles_comandante.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 
@@ -19,6 +26,7 @@ function LocationEditor({ commander, provinces, onSaved, onCancel, notify }) {
     if (lock.current || !provinceId) return;
     lock.current = true; setBusy(true); setError("");
     try {
+      // Envía la provincia donde está el comandante y el motivo (PUT); el backend actualiza perfiles_comandante y registra eventos_auditoria.
       await api(`/commanders/${commander.comandanteId}/location`, { method: "PUT", body: JSON.stringify({ provinciaId: provinceId === UNKNOWN ? null : Number(provinceId), motivo: reason.trim() || null }) });
       notify(`Ubicación de ${commander.apellido}, ${commander.nombre} actualizada`);
       await onSaved();
@@ -42,6 +50,7 @@ export function CommanderLocations({ notify }) {
   const [provinces, setProvinces] = useState([]), [rows, setRows] = useState([]), [truncated, setTruncated] = useState(false), [loading, setLoading] = useState(true), [error, setError] = useState(""),
     [q, setQ] = useState(""), [provinceId, setProvinceId] = useState(""), [state, setState] = useState(""), [editing, setEditing] = useState(null), [revision, setRevision] = useState(0);
   const requests = useRef(0);
+  // Lee las provincias para el filtro (GET): provincias.
   useEffect(() => { api("/catalogs/provinces").then((x) => setProvinces(Array.isArray(x) ? x : [])).catch((e) => setError(e.message)); }, []);
   useEffect(() => {
     const mine = ++requests.current;
@@ -49,6 +58,7 @@ export function CommanderLocations({ notify }) {
       setLoading(true); setError("");
       try {
         const params = new URLSearchParams(); if (q.trim()) params.set("q", q.trim()); if (provinceId) params.set("provinceId", provinceId); if (state) params.set("estado", state);
+        // Lee los comandantes con su ubicación (GET): perfiles_comandante, usuarios, personas y provincias.
         const result = await api(`/commanders/locations?${params}`);
         if (mine === requests.current) { setRows(result?.comandantes || []); setTruncated(Boolean(result?.truncado)); }
       } catch (e) { if (mine === requests.current) { setRows([]); setError(e.message); } }

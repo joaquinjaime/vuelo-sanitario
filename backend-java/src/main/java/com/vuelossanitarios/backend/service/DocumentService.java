@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: bloqueos_documento_vuelo, documentos_vuelo, tipos_documento, usuarios,
+ *   versiones_documento_vuelo, vuelos.
+ * Carga o modifica datos en: bloqueos_documento_vuelo, documentos_vuelo,
+ *   versiones_documento_vuelo, eventos_auditoria (vía AuditService).
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;

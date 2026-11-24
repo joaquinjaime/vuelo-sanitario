@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: flyway_schema_history (última migración aplicada) y los permisos de la cuenta SQL
+ *   (IS_MEMBER, HAS_PERMS_BY_NAME), por JDBC.
+ * No carga ni modifica datos (sólo lectura).
+ * Sólo diagnóstico de preparación del entorno: no carga datos de negocio.
+ */
 package com.vuelossanitarios.backend.service;
 
 import java.nio.file.Files;

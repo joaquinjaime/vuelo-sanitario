@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios.
+ * No carga ni modifica datos (sólo lectura).
+ * La lectura y el cambio de ubicación los delegan a CommanderLocationService
+ *   (perfiles_comandante).
+ */
 package com.vuelossanitarios.backend.api;
 import com.vuelossanitarios.backend.api.dto.CommanderLocationDtos.*;
 import com.vuelossanitarios.backend.security.CurrentUser;

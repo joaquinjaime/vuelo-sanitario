@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria, personas, usuarios, vuelos.
+ * No carga ni modifica datos (sólo lectura).
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../services/api";
@@ -47,6 +54,7 @@ export function AuditEventDetail({ id, onClose, headingLevel = "h4" }) {
   const [detail, setDetail] = useState(null), [error, setError] = useState("");
   useEffect(() => {
     let active = true; setDetail(null); setError("");
+    // Lee el detalle de un evento de auditoría (GET): eventos_auditoria.
     api(`/audit/events/${id}`).then((d) => { if (active) setDetail(d); }).catch((e) => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [id]);
@@ -75,6 +83,7 @@ export function AuditTimeline({ flightId, title = "Historial de actividad", page
   useEffect(() => {
     if (!flightId) return undefined;
     let active = true; setLoading(true); setError("");
+    // Lee una página de eventos de auditoría de un vuelo (GET): eventos_auditoria filtrada por vuelo.
     api(`/audit/flights/${flightId}?page=${page}&size=${pageSize}&order=${order}`)
       .then((d) => { if (active) setData(d); })
       .catch((e) => { if (active) { setData(null); setError(message(e)); } })
@@ -106,10 +115,12 @@ export function AuditSearch() {
   const [options, setOptions] = useState({ entityTypes: [], operations: [], actors: [], maxPageSize: 100 }), [form, setForm] = useState(EMPTY), [applied, setApplied] = useState(EMPTY);
   const [actorQuery, setActorQuery] = useState(""), [actorOptions, setActorOptions] = useState([]), [actorPage, setActorPage] = useState(0), [actorMore, setActorMore] = useState(false), [actorLoading, setActorLoading] = useState(false), [actorError, setActorError] = useState("");
   const [page, setPage] = useState(0), [data, setData] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [selected, setSelected] = useState(null), [attempt, setAttempt] = useState(0);
+  // Lee las opciones de filtro de la auditoría (GET): tipos de entidad y operaciones registradas en eventos_auditoria.
   useEffect(() => { let active = true; api("/audit/filters").then((o) => { if (active) setOptions(o); }).catch((e) => { if (active) setError(message(e)); }); return () => { active = false; }; }, []);
   useEffect(() => {
     let active = true; const timer = setTimeout(() => {
       setActorLoading(true); setActorError("");
+      // Busca usuarios autores de eventos (GET): usuarios y personas; sólo lectura.
       api(`/audit/actors?q=${encodeURIComponent(actorQuery.trim())}&page=${actorPage}&size=30`)
         .then((result) => { if (!active) return; setActorOptions((old) => actorPage === 0 ? result.items : [...old, ...result.items.filter((x) => !old.some((y) => y.id === x.id))]); setActorMore(result.hasNext); })
         .catch((e) => { if (active) setActorError(message(e)); })
@@ -121,6 +132,7 @@ export function AuditSearch() {
     let active = true; setLoading(true); setError("");
     const params = new URLSearchParams({ page: String(page), size: "20" });
     Object.entries(applied).forEach(([k, v]) => { if (v !== "" && v !== null) params.set(k, v); });
+    // Lee una página de eventos de auditoría con los filtros aplicados (GET): eventos_auditoria.
     api(`/audit?${params}`)
       .then((d) => { if (active) setData(d); })
       .catch((e) => { if (active) { setData(null); setError(message(e)); } })
@@ -195,6 +207,7 @@ function FlightAuditPanel() {
   const [query, setQuery] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(0), [selected, setSelected] = useState(null);
   useEffect(() => {
     let active = true; setError("");
+    // Lee la lista de vuelos para el selector (GET /flights): vuelos.
     api("/flights").then((list) => { if (active) setFlights(Array.isArray(list) ? list : []); }).catch((e) => { if (active) setError(message(e, "No se pudieron cargar los vuelos")); });
     return () => { active = false; };
   }, [attempt]);
@@ -239,6 +252,7 @@ function EntityAuditPanel({ title, description, entityTypes, actorRole }) {
     let active = true; const timer = setTimeout(() => {
       const params = new URLSearchParams(); if (actorRole) params.set("role", actorRole); params.set("q", actorQuery.trim()); params.set("page", "0"); params.set("size", "100");
       setActorError("");
+      // Busca usuarios autores de eventos (GET): usuarios y personas; sólo lectura.
       api(`/audit/actors?${params}`).then((r) => { if (active) setActors(r.items || []); }).catch((e) => { if (active) setActorError(message(e)); });
     }, 250);
     return () => { active = false; clearTimeout(timer); };

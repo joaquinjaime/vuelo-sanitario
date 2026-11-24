@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: aeronaves, eventos_auditoria.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../services/api";
@@ -31,6 +38,7 @@ export function AircraftDetailPage() {
     const question = x.activo ? `¿Desactivar la aeronave ${x.matricula}? Conserva su historial pero dejará de poder asignarse.` : `¿Reactivar la aeronave ${x.matricula}?`;
     if (window.confirm?.(question) === false) return;
     setBusy(true);
+    // Envía activar/desactivar la aeronave (POST); el backend actualiza aeronaves (esta_activa) y registra eventos_auditoria.
     try { await api(`/catalogs/aircraft/${x.id}/active`, { method: "POST", body: JSON.stringify({ activo: !x.activo }) }); await aircraft.reload(); notify(x.activo ? `Aeronave ${x.matricula} desactivada` : `Aeronave ${x.matricula} reactivada`); }
     catch (e) { notify(text(e), true); } finally { setBusy(false); }
   };
@@ -38,6 +46,7 @@ export function AircraftDetailPage() {
   const move = async (e) => {
     e.preventDefault(); if (busy || !target) return;
     setBusy(true); setMoveError("");
+    // Envía el traslado de la aeronave a otro aeropuerto (POST) con su motivo; el backend actualiza aeronaves (aeropuerto actual) y registra eventos_auditoria.
     try { await api(`/catalogs/aircraft/${x.id}/location`, { method: "POST", body: JSON.stringify({ locationId: Number(target), motivo: reason.trim() || null }) }); setMoving(false); await aircraft.reload(); notify(`Ubicación de ${x.matricula} actualizada`); }
     catch (err) { setMoveError(text(err)); } finally { setBusy(false); }
   };

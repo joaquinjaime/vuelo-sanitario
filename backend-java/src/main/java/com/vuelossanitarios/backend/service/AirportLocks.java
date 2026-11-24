@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: aeropuertos (SELECT con bloqueo pesimista de escritura, PESSIMISTIC_WRITE).
+ * No carga ni modifica datos (sólo lectura).
+ * No inserta ni modifica filas: sólo bloquea las de aeropuertos dentro de la transacción del
+ *   llamador.
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.domain.catalog.Airport;

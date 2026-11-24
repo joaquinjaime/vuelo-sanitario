@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, personas, usuarios_roles, roles, perfiles_comandante, provincias
+ *   (Criteria y JPQL con EntityManager)
+ * No carga ni modifica datos.
+ * Sólo lectura: búsqueda paginada de usuarios y sus conteos por estado.
+ */
 package com.vuelossanitarios.backend.repository;
 
 import com.vuelossanitarios.backend.domain.user.User;

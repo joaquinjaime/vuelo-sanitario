@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: usuarios, vuelos_tripulantes.
+ * No carga ni modifica datos (sólo lectura).
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.api.ApiException;
 import com.vuelossanitarios.backend.domain.flight.Flight;

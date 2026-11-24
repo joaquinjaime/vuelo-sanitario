@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: bitacora_vuelos.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { api } from "../../../services/api";
 import { useResource } from "../../../hooks/useResource";
@@ -68,6 +75,7 @@ function FlightLogEditor({ path, target, onCancel, onSaved }) {
     try {
       const occurred = new Date(form.ocurrido);
       if (Number.isNaN(occurred.getTime())) throw Error("Fecha y hora inválidas");
+      // Envía una nueva anotación de la bitácora del vuelo (POST): el backend inserta en bitacora_vuelos.
       await api(path, { method: "POST", body: JSON.stringify({
         ...form, ocurrido: occurred.toISOString(), correccionDe: target?.id ?? null, motivoCorreccion: target ? form.motivoCorreccion : null,
       }) });

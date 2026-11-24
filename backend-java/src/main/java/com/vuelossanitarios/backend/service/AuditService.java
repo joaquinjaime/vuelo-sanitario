@@ -1,3 +1,8 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria.
+ * Carga o modifica datos en: eventos_auditoria.
+ */
 package com.vuelossanitarios.backend.service;
 import com.vuelossanitarios.backend.domain.audit.AuditEvent;
 import com.vuelossanitarios.backend.domain.flight.Flight;

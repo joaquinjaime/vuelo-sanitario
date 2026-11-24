@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: eventos_auditoria, vuelos.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useCallback, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { api } from "../../../services/api";
@@ -66,11 +73,13 @@ export function FlightDetailPage() {
 
   /** Ejecuta una operación POST y vuelve a leer el estado real. Devuelve false si falló (tras releer, por si la causa fue un estado desactualizado). */
   const call = useCallback(async (path, body, success) => {
+    // Envía una acción del flujo del vuelo (POST a la ruta indicada: aprobar, iniciar, finalizar, etc.); el backend actualiza vuelos y sus tablas asociadas y registra eventos_auditoria.
     try { await api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }); notify(success); await done(); await reload(); bumpLog(); return true; }
     catch (e) { notify(e.message, true); await reload(); return false; }
   }, [notify, done, reload]);
   const respond = useCallback(async (path, body, success) => {
     setBusy(true);
+    // Envía una acción con datos del formulario (POST a la ruta indicada); el backend actualiza vuelos y sus tablas asociadas y registra eventos_auditoria.
     try { await api(path, { method: "POST", body: JSON.stringify(body) }); notify(success); } catch (e) { notify(e.message, true); } finally { await done(); await reload(); setBusy(false); }
   }, [notify, done, reload]);
 
@@ -94,6 +103,7 @@ export function FlightDetailPage() {
   const cancelLabel = workspace === "DTS" ? "Cancelar solicitud" : "Cancelar vuelo";
   const confirmCancel = async (body) => {
     setBusy(true);
+    // Envía la cancelación con el motivo del catálogo (POST); el backend actualiza vuelos (estado y motivo) y registra eventos_auditoria.
     try { await api(`/flights/${id}/cancel`, { method: "POST", body: JSON.stringify(body) }); notify(workspace === "DTS" ? "Solicitud cancelada" : "Vuelo cancelado"); setCancelling(false); }
     catch (e) { notify(e.message, true); setCancelling(false); }
     finally { await done(); await reload(); bumpLog(); setBusy(false); }

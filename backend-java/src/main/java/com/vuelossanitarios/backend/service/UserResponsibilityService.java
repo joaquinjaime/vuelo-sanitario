@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: vuelos, estados_vuelo, vuelos_tripulantes, obligaciones_informe_final,
+ *   vuelos_sanitarios.
+ * Carga o modifica datos en: bloqueos_documento_vuelo (vence los bloqueos del usuario al darlo de
+ *   baja).
+ * Detecta los impedimentos para dar de baja a un usuario o quitarle un rol.
+ */
 package com.vuelossanitarios.backend.service;
 
 import com.vuelossanitarios.backend.api.ApiException;

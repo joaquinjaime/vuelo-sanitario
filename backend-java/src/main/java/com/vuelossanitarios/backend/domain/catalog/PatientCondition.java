@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla condiciones_paciente: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   CatalogController, FlightService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
 import jakarta.persistence.*;

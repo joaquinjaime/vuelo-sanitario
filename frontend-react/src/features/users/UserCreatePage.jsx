@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: activaciones_cuenta, correos_electronicos, perfiles_comandante,
+ *   personas, telefonos, usuarios, usuarios_roles.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
@@ -35,6 +43,7 @@ export function UserCreatePage({ provinces: provincesProp }) {
     if (problem) { notify(problem, true); return; }
     setCreating(true);
     try {
+      // Envía el usuario nuevo (POST): el backend inserta en personas, usuarios, usuarios_roles, correos_electronicos, telefonos y activaciones_cuenta (y perfiles_comandante si es comandante). Recibe el código de activación.
       receive(await api("/auth/users", { method: "POST", body: JSON.stringify(payload()) }));
       setForm(emptyForm());
       notify("Cuenta pendiente creada. Guardá el código de activación antes de continuar.");
@@ -42,6 +51,7 @@ export function UserCreatePage({ provinces: provincesProp }) {
       if (x.code === "PERSON_EXISTS_WITHOUT_ACCOUNT" && x.personaId) {
         if (x.coincideNombre && confirm("Ya existe una persona registrada con ese DNI y el mismo nombre, sin cuenta en el sistema. ¿Asociar la nueva cuenta a esa identidad existente? No se creará una persona nueva.")) {
           try {
+            // Envía el usuario nuevo vinculado a una persona ya registrada (POST): el backend inserta en usuarios, usuarios_roles y activaciones_cuenta sin duplicar personas.
             receive(await api("/auth/users", { method: "POST", body: JSON.stringify(payload({ personaExistenteId: x.personaId })) }));
             setForm(emptyForm());
             notify("Cuenta pendiente creada y asociada a la identidad existente. Guardá el código de activación antes de continuar.");

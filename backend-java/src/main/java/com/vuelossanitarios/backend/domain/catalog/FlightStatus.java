@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla estados_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   FinalReportWorkflowService, FlightService).
+ * Carga o modifica datos: no la escribe ningún servicio directamente (catálogo o dato que sólo
+ *   se persiste junto a su entidad padre).
+ */
 package com.vuelossanitarios.backend.domain.catalog;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;
@@ -5,6 +13,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+/**
+ * Tabla {@code estados_vuelo}. Catálogo de estados del ciclo de vida de un vuelo (pendientes de confirmación, PLANIFICADO, EN_CURSO, FINALIZADO, COMPLETADO, CANCELADO). Sólo se lee; el vuelo guarda una referencia a su estado actual.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_estados_vuelo"))
 @Table(name = "estados_vuelo")

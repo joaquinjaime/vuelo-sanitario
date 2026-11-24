@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Repositorio de la tabla personal_sanitario.
+ * Trae datos: con las consultas declaradas en esta interfaz y las de JpaRepository (findById,
+ *   findAll, etc.).
+ * Carga o modifica datos: con save/delete de JpaRepository, usados desde HealthStaffService.
+ */
 package com.vuelossanitarios.backend.repository;
 import com.vuelossanitarios.backend.domain.flight.HealthStaff;
 import jakarta.persistence.LockModeType;

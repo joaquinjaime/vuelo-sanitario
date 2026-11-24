@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * No trae datos propios de tablas.
+ * Carga o modifica datos en: usuarios.
+ * Lo hace a través de la API del backend (api.js); el detalle de cada llamada está comentado
+ *   junto a ella.
+ */
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
@@ -15,6 +22,7 @@ export function PasswordChangePage() {
     <AuthLayout eyebrow="SEGURIDAD DE LA CUENTA" title="Actualizá tu contraseña" lead="La contraseña temporal sólo permite este cambio antes de continuar.">
       <form className="auth-card" onSubmit={async (e) => {
         e.preventDefault();
+        // Envía la contraseña actual y la nueva (POST); el backend actualiza el hash en usuarios.
         try { await api("/auth/me/password", { method: "POST", body: JSON.stringify(form) }); signOut(); navigate("/login", { replace: true }); }
         catch (x) { setError(x.message); }
       }}>

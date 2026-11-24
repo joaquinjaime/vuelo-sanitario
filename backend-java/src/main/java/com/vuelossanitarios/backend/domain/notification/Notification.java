@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla notificaciones: cada instancia es una fila.
+ * Trae datos: la leen 1 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   NotificationService).
+ * Carga o modifica datos: NotificationService.
+ */
 package com.vuelossanitarios.backend.domain.notification;
 
 import com.vuelossanitarios.backend.domain.common.BaseEntity;

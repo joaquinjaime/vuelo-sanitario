@@ -1,3 +1,10 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Entidad JPA de la tabla informacion_medica_vuelo: cada instancia es una fila.
+ * Trae datos: la leen 2 clase(s) de servicio mediante sus repositorios (p. ej.
+ *   AircraftAdminService, FlightService).
+ * Carga o modifica datos: FlightService.
+ */
 package com.vuelossanitarios.backend.domain.flight;
 
 import com.vuelossanitarios.backend.domain.catalog.PatientCondition;
@@ -7,6 +14,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
+/**
+ * Tabla {@code informacion_medica_vuelo}. Información médica del paciente de un vuelo sanitario: diagnóstico, condición (catálogo condiciones_paciente), necesidad de equipamiento especial y observaciones.
+ */
 @Entity
 @jakarta.persistence.AttributeOverride(name="id", column=@jakarta.persistence.Column(name="id_informacion_medica_vuelo"))
 @Table(name = "informacion_medica_vuelo")

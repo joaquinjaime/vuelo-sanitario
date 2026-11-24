@@ -1,3 +1,11 @@
+/*
+ * ACCESO A BASE DE DATOS
+ * Trae datos de: eventos_auditoria, usuarios, personas, vuelos, aeronaves, aeropuertos,
+ *   usuarios_roles, roles (consultas Criteria y JPQL con EntityManager)
+ * No carga ni modifica datos.
+ * Sólo lectura: filtra y pagina los eventos de auditoría y resuelve los nombres de actores,
+ *   vuelos, aeronaves y aeropuertos.
+ */
 package com.vuelossanitarios.backend.repository;
 
 import com.vuelossanitarios.backend.domain.audit.AuditEvent;
