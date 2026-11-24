@@ -34,5 +34,10 @@ mssql-jdbc_auth*.dll
 .atl/
 __pycache__/
 
+# Local agent/tool scratch
+tmp/
+odd/
+.github/modernize/
+
 # Logs de corridas de la suite E2E (scripts/e2e-suite-completa.cjs)
 scripts/e2e-logs/
