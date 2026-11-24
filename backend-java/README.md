@@ -69,4 +69,4 @@ npm install
 npm run dev
 ```
 
-La interfaz ofrece inicio de sesión y paneles guiados para registrar solicitudes (DTS), evaluar/asignar/iniciar/finalizar (Operaciones) y planificar/informar (Comandante). El control reutilizable de lease documental está disponible tanto para Comandante como para Operaciones/Centro de Operaciones; el backend sigue validando toda escritura. El administrador dispone de las APIs de usuarios y catálogos; su mantenimiento visual detallado es una mejora pendiente. Consulte también `../docs/ESTADO_FUNCIONAL.md`.
+La interfaz ofrece inicio de sesión y paneles guiados para registrar solicitudes (DTS), evaluar/asignar/iniciar/finalizar (Operaciones) y planificar/informar (Comandante). El control reutilizable de lease documental está disponible tanto para Comandante como para Operaciones/Centro de Operaciones; el backend sigue validando toda escritura. El administrador dispone de las APIs de usuarios y catálogos; su mantenimiento visual detallado es una mejora pendiente. Consulte también `../docs/INFORME_ESTADO_ACTUAL_APLICACION.md`.
